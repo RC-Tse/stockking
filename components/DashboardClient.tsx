@@ -86,9 +86,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     setLoading(false)
 
     // Fetch quotes for all held symbols
-    const syms = [...new Set(
+    const syms = Array.from(new Set(
       txData.filter(t => t.action === 'BUY' || t.action === 'DCA').map(t => t.symbol)
-    )]
+    ))
     if (syms.length) {
       const qRes = await fetch(`/api/stocks?symbols=${syms.join(',')}`)
       if (qRes.ok) {
