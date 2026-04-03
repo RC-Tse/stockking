@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { STOCK_NAMES } from '@/types'
 import { createClient } from '@/lib/supabase/server'
+
+const TWSE_API = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
+const TPEX_API = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
 
 async function fetchYahooQuote(symbol: string, nameZh?: string) {
   try {
@@ -28,7 +30,6 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
 
     return {
       symbol,
-      name: nameZh || STOCK_NAMES[symbol] || meta.shortName || meta.longName || symbol.split('.')[0],
       name_zh: nameZh,
       price,
       prev,
@@ -45,6 +46,53 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
   }
 }
 
+async function getOrFetchNames(supabase: any, syms: string[]) {
+  const { data: cached } = await supabase
+    .from('stock_names')
+    .select('symbol, name_zh')
+    .in('symbol', syms)
+
+  const nameMap = Object.fromEntries(cached?.map((n: any) => [n.symbol, n.name_zh]) ?? [])
+  const missing = syms.filter(s => !nameMap[s])
+
+  if (missing.length > 0) {
+    try {
+      const [twseRes, tpexRes] = await Promise.all([
+        fetch(TWSE_API, { next: { revalidate: 86400 } }),
+        fetch(TPEX_API, { next: { revalidate: 86400 } })
+      ])
+      
+      const twseList = twseRes.ok ? await twseRes.json() : []
+      const tpexList = tpexRes.ok ? await tpexRes.json() : []
+      
+      const toInsert: { symbol: string; name_zh: string }[] = []
+      
+      missing.forEach(s => {
+        const code = s.split('.')[0]
+        let name = ''
+        if (s.endsWith('.TW')) {
+          name = twseList.find((i: any) => i.Code === code)?.Name
+        } else if (s.endsWith('.TWO')) {
+          name = tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)?.CompanyName || tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)?.Name
+        }
+        
+        if (name) {
+          nameMap[s] = name
+          toInsert.push({ symbol: s, name_zh: name })
+        }
+      })
+      
+      if (toInsert.length > 0) {
+        await supabase.from('stock_names').upsert(toInsert)
+      }
+    } catch (e) {
+      console.error('Fetch names error:', e)
+    }
+  }
+  
+  return nameMap
+}
+
 export async function GET(req: NextRequest) {
   const syms = (req.nextUrl.searchParams.get('symbols') ?? '')
     .split(',')
@@ -54,12 +102,7 @@ export async function GET(req: NextRequest) {
   if (!syms.length) return NextResponse.json({}, { status: 400 })
 
   const supabase = await createClient()
-  const { data: names } = await supabase
-    .from('stock_names')
-    .select('symbol, name_zh')
-    .in('symbol', syms)
-
-  const nameMap = Object.fromEntries(names?.map(n => [n.symbol, n.name_zh]) ?? [])
+  const nameMap = await getOrFetchNames(supabase, syms)
 
   const results = await Promise.all(syms.map(s => fetchYahooQuote(s, nameMap[s])))
   const data: Record<string, any> = {}

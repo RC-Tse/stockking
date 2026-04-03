@@ -218,22 +218,22 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       {(tab === 'holdings' || tab === 'transactions') && (
         <button
           onClick={() => setDrawerOpen(true)}
-          className="fixed bottom-24 right-6 md:right-[calc(50%-240px+24px)] z-30 w-14 h-14 rounded-full flex items-center justify-center text-3xl font-bold transition-all active:scale-90 bg-gradient-to-br from-[#FFD700] to-[#FF8C00] text-black shadow-[0_8px_32px_rgba(255,215,0,0.4)] border border-white/20">
+          className="fixed bottom-24 right-6 md:right-[calc(50%-240px+24px)] z-30 w-14 h-14 rounded-full flex items-center justify-center text-3xl font-bold transition-all active:scale-90 bg-gold text-base border border-white/20">
           +
         </button>
       )}
 
       {/* ══ BOTTOM NAV ══════════════════════════════════════════ */}
-      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#0d1018f5] backdrop-blur-2xl border-t border-white/10 shadow-[0_-4px_24px_rgba(0,0,0,0.5)]">
+      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#0d1018f5] backdrop-blur-2xl border-t border-white/10">
         <div className="flex h-16">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${tab === t.id ? 'text-gold' : 'text-white/30'}`}>
-              <span className="text-xl leading-none">{t.icon}</span>
+              <span className="text-[22px] leading-none" style={{ display: 'inline-block' }}>{t.icon}</span>
               <span className="font-bold text-[10px] tracking-wide uppercase">
                 {t.label}
               </span>
-              {tab === t.id && <div className="absolute bottom-1 inset-x-6 h-1 bg-gold rounded-full shadow-[0_0_8px_var(--gold)]" />}
+              {tab === t.id && <div className="absolute bottom-1 inset-x-6 h-1 bg-gold rounded-full" />}
             </button>
           ))}
         </div>
