@@ -56,7 +56,7 @@ function mockQuote(sym:string){
   const open=Math.round(base*(1+(rng(s+1)*4-2)/100)*100)/100
   const high=Math.round(Math.max(price,open)*(1+rng(s+2)*0.008)*100)/100
   const low=Math.round(Math.min(price,open)*(1-rng(s+3)*0.008)*100)/100
-  return {symbol:sym,name:undefined,price,prev:base,open,high,low,change,change_pct:Math.round(cp*10000)/100,volume:Math.floor(rng(s+4)*80000+500)}
+  return {symbol:sym,price,prev:base,open,high,low,change,change_pct:Math.round(cp*10000)/100,volume:Math.floor(rng(s+4)*80000+500)}
 }
 
 export async function GET(req:NextRequest){
@@ -65,7 +65,7 @@ export async function GET(req:NextRequest){
 
   try {
     const data = await fetchTWSEQuotes(syms)
-    const result: Record<string, ReturnType<typeof toQuote>> = {}
+    const result: Record<string, object> = {}
     for (const item of data.msgArray ?? []) {
       const q = toQuote(item)
       result[q.symbol] = q
