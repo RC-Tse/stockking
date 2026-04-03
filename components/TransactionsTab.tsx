@@ -13,10 +13,10 @@ const ACTION_LABEL: Record<string, string> = {
   BUY: '買入', SELL: '賣出', DCA: '定期定額',
 }
 const ACTION_COLOR: Record<string, string> = {
-  BUY: 'var(--red)', SELL: 'var(--grn)', DCA: 'var(--gold)',
+  BUY: 'text-red-400', SELL: 'text-green-400', DCA: 'text-gold',
 }
 const ACTION_BG: Record<string, string> = {
-  BUY: 'var(--red-dim)', SELL: 'var(--grn-dim)', DCA: 'var(--gold-dim)',
+  BUY: 'bg-red-400/10', SELL: 'bg-green-400/10', DCA: 'bg-gold/10',
 }
 
 export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
@@ -27,7 +27,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     ? txs.filter(t => 
         codeOnly(t.symbol).includes(filter.toUpperCase()) || 
         t.symbol.includes(filter.toUpperCase()) ||
-        getStockName(t.symbol).includes(filter)
+        (t.name_zh || getStockName(t.symbol)).includes(filter)
       )
     : txs
 
@@ -44,7 +44,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
   }
 
   return (
-    <div className="p-4 space-y-3">
+    <div className="p-4 space-y-3 pb-32">
       {/* Search */}
       <input
         value={filter}
@@ -55,8 +55,8 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
 
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="text-4xl">🗒️</div>
-          <p style={{ color: 'var(--t2)' }} className="text-sm">
+          <div className="text-4xl opacity-20">🗒️</div>
+          <p className="text-sm text-white/40">
             {filter ? '查無符合的紀錄' : '尚無交易紀錄'}
           </p>
         </div>
@@ -84,8 +84,8 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
   const [open, setOpen] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   
-  const color  = ACTION_COLOR[tx.action] ?? 'var(--t2)'
-  const bgColor = ACTION_BG[tx.action] ?? 'var(--bg-hover)'
+  const color  = ACTION_COLOR[tx.action] ?? 'text-white/60'
+  const bgColor = ACTION_BG[tx.action] ?? 'bg-white/5'
 
   if (isEditing) {
     return (
@@ -102,11 +102,10 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
   }
 
   return (
-    <div className="glass rounded-xl overflow-hidden" style={{ opacity: deleting ? 0.5 : 1 }}>
-      <button className="w-full flex items-center gap-3 px-4 py-3 text-left" onClick={() => setOpen(!open)}>
+    <div className={`glass rounded-xl overflow-hidden border border-white/5 transition-all ${open ? 'border-white/20' : ''}`} style={{ opacity: deleting ? 0.5 : 1 }}>
+      <button className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-white/5" onClick={() => setOpen(!open)}>
         {/* Action badge */}
-        <span className="text-xs font-bold px-2 py-1 rounded-lg shrink-0"
-          style={{ background: bgColor, color }}>
+        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${bgColor} ${color}`}>
           {ACTION_LABEL[tx.action] ?? tx.action}
         </span>
 
@@ -121,20 +120,19 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
         </div>
 
         {/* Date */}
-        <span className="text-xs flex-1 ml-1" style={{ color: 'var(--t3)' }}>{tx.trade_date}</span>
+        <span className="text-[11px] flex-1 ml-1 text-white/30">{tx.trade_date}</span>
 
         {/* Net amount */}
-        <span className="font-bold font-mono text-sm shrink-0"
-          style={{ color: tx.net_amount >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+        <span className={`font-bold font-mono text-sm shrink-0 ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
           {tx.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(tx.net_amount))}
         </span>
 
-        <span style={{ color: 'var(--t3)', fontSize: 11, transform: open ? 'rotate(180deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>▼</span>
+        <span className={`text-white/20 text-[10px] transition-transform duration-200 ${open ? 'rotate-180' : ''}`}>▼</span>
       </button>
 
       {open && (
-        <div className="px-4 pb-3 space-y-3" style={{ borderTop: '1px solid var(--border)' }}>
-          <div className="grid grid-cols-3 gap-2 pt-2">
+        <div className="px-4 pb-3 space-y-3 border-t border-white/5 bg-white/[0.02]">
+          <div className="grid grid-cols-3 gap-2 pt-3">
             <Detail label="股數"  value={`${tx.shares.toLocaleString()} 股`} />
             <Detail label="成交價" value={`${Number(tx.price).toFixed(2)}`} />
             <Detail label="金額"  value={fmtMoney(Math.round(tx.amount))} />
@@ -143,23 +141,21 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
             <Detail label="類型"  value={tx.trade_type} />
           </div>
           {tx.note && (
-            <div className="text-xs px-2 py-1.5 rounded-lg" style={{ background: 'var(--bg-hover)', color: 'var(--t2)' }}>
+            <div className="text-[11px] px-2 py-1.5 rounded-lg bg-white/5 text-white/50 border border-white/5 italic">
               💬 {tx.note}
             </div>
           )}
           
-          <div className="flex gap-2">
+          <div className="flex gap-2 pt-1">
             <button
               onClick={() => setIsEditing(true)}
-              className="btn-ghost flex-1 text-sm py-2"
-              style={{ color: 'var(--gold)', borderColor: 'var(--gold-dim)' }}>
+              className="flex-1 text-xs py-2 rounded-lg font-bold bg-gold-dim text-gold border border-gold/20 active:scale-95 transition-transform">
               ✏️ 編輯
             </button>
             <button
               onClick={onDelete}
               disabled={deleting}
-              className="btn-ghost flex-1 text-sm py-2"
-              style={{ color: 'var(--red)', borderColor: 'var(--red-dim)' }}>
+              className="flex-1 text-xs py-2 rounded-lg font-bold bg-red-400/10 text-red-400 border border-red-400/20 active:scale-95 transition-transform">
               {deleting ? '刪除中…' : '🗑️ 刪除'}
             </button>
           </div>
@@ -176,9 +172,9 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
   const [shares, setShares] = useState(tx.shares)
   const [price, setPrice]   = useState(tx.price)
   const [note, setNote]     = useState(tx.note || '')
+  const [saving, setSaving] = useState(false)
   const [tradeType, setTradeType] = useState(tx.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
   const [lots, setLots]     = useState(Math.floor(tx.shares / 1000) || 1)
-  const [saving, setSaving] = useState(false)
 
   const actualShares = tradeType === 'FULL' ? lots * 1000 : shares
   const amount = actualShares * price
@@ -199,121 +195,61 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
   }
 
   return (
-    <div className="glass rounded-xl p-4 space-y-5 border-2 border-gold/40 my-2 slide-up shadow-2xl bg-black/60">
+    <div className="glass rounded-xl p-4 space-y-5 border-2 border-gold/40 my-2 slide-up shadow-2xl bg-[#0d1018]">
       <div className="flex justify-between items-center">
-        <h3 className="font-black text-sm" style={{ color: 'var(--gold)' }}>編輯交易 - {tx.symbol}</h3>
-        <span className="text-[10px] font-bold px-2 py-0.5 rounded" 
-          style={{ background: 'var(--bg-hover)', color: 'var(--t3)' }}>
+        <h3 className="font-black text-sm text-gold">編輯交易 - {tx.symbol}</h3>
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/5 text-white/40 border border-white/5 uppercase">
           {tx.action}
         </span>
       </div>
 
-      {/* 第一區：交易日期 */}
       <div className="flex flex-col items-center">
         <Label>交易日期</Label>
-        <input 
-          type="date" 
-          value={date} 
-          onChange={e => setDate(e.target.value)} 
-          className="input-base text-center w-48 py-2 text-sm" 
-          style={{ colorScheme: 'dark' }} 
-        />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base text-center w-full py-2 text-sm" style={{ colorScheme: 'dark' }} />
       </div>
 
-      {/* 第二區：三個欄位橫排 */}
       <div className="grid grid-cols-3 gap-2">
         <div>
           <Label>方式</Label>
-          <button 
-            onClick={() => setTradeType(prev => prev === 'FULL' ? 'FRACTIONAL' : 'FULL')}
-            className="w-full h-10 rounded-lg text-[10px] font-black transition-colors border"
-            style={{ 
-              background: tradeType === 'FULL' ? 'var(--gold-dim)' : 'var(--bg-hover)',
-              color: tradeType === 'FULL' ? 'var(--gold)' : 'var(--t3)',
-              borderColor: tradeType === 'FULL' ? 'var(--gold)' : 'var(--border)'
-            }}>
-            {tradeType === 'FULL' ? '整張' : '零股'}
-          </button>
+          <button onClick={() => setTradeType(prev => prev === 'FULL' ? 'FRACTIONAL' : 'FULL')} className={`w-full h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FULL' ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>{tradeType === 'FULL' ? '整張' : '零股'}</button>
         </div>
         <div>
           <Label>{tradeType === 'FULL' ? '張數' : '股數'}</Label>
-          <input 
-            type="number" 
-            value={tradeType === 'FULL' ? lots : shares} 
-            onChange={e => {
-              const v = Math.max(1, parseInt(e.target.value) || 0)
-              tradeType === 'FULL' ? setLots(v) : setShares(v)
-            }} 
-            className="w-full input-base text-center h-10 font-mono text-sm" 
-          />
+          <input type="number" value={tradeType === 'FULL' ? lots : shares} onChange={e => { const v = Math.max(1, parseInt(e.target.value) || 0); tradeType === 'FULL' ? setLots(v) : setShares(v) }} className="w-full input-base text-center h-10 font-mono text-sm" />
         </div>
         <div>
           <Label>成交價</Label>
-          <input 
-            type="number" 
-            step="0.01" 
-            value={price} 
-            onChange={e => setPrice(Number(e.target.value))} 
-            className="w-full input-base text-center h-10 font-mono text-sm" 
-          />
+          <input type="number" step="0.01" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full input-base text-center h-10 font-mono text-sm" />
         </div>
       </div>
-      {tradeType === 'FULL' && (
-        <p className="text-[10px] text-center -mt-4 opacity-50 font-mono">
-          = {actualShares.toLocaleString()} 股
-        </p>
-      )}
 
-      {/* 第三區：備註輸入框 */}
       <div>
         <Label>備註</Label>
-        <input 
-          value={note} 
-          onChange={e => setNote(e.target.value)} 
-          className="w-full input-base py-2.5 px-3 text-sm" 
-          placeholder="點此輸入備註..." 
-        />
+        <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-2.5 px-3 text-sm" placeholder="點此輸入備註..." />
       </div>
 
-      {/* 第四區：費用試算區塊 */}
       <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 shadow-inner">
         <div className="flex justify-between text-xs">
-          <span style={{ color: 'var(--t3)' }}>手續費</span>
-          <span className="font-mono font-bold" style={{ color: 'var(--t1)' }}>{fmtMoney(Math.round(fee))}</span>
+          <span className="opacity-40">手續費</span>
+          <span className="font-mono font-bold text-white">{fmtMoney(Math.round(fee))}</span>
         </div>
         {tax > 0 && (
           <div className="flex justify-between text-xs">
-            <span style={{ color: 'var(--t3)' }}>交易稅</span>
-            <span className="font-mono font-bold" style={{ color: 'var(--t1)' }}>{fmtMoney(Math.round(tax))}</span>
+            <span className="opacity-40">交易稅</span>
+            <span className="font-mono font-bold text-white">{fmtMoney(Math.round(tax))}</span>
           </div>
         )}
-        <div className="flex justify-between items-center pt-2 border-t border-white/10">
-          <span className="text-xs font-black" style={{ color: 'var(--t2)' }}>預估淨收支</span>
-          <span className="text-lg font-black font-mono" style={{ color: net >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+        <div className="flex justify-between items-center pt-2 border-t border-white/5">
+          <span className="text-xs font-black opacity-60">預估淨收支</span>
+          <span className={`text-lg font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
             {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
           </span>
         </div>
       </div>
 
-      {/* 第五區：取消和儲存修改按鈕 */}
       <div className="flex gap-3 pt-1">
-        <button 
-          onClick={onCancel} 
-          className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 hover:bg-white/10 transition-colors border border-white/10"
-          style={{ color: 'var(--t2)' }}>
-          取消
-        </button>
-        <button 
-          onClick={handleSave} 
-          disabled={saving} 
-          className="flex-2 py-3 rounded-xl font-black text-sm transition-all active:scale-95 shadow-lg"
-          style={{ 
-            background: 'linear-gradient(135deg, var(--gold) 0%, var(--gold-bright) 100%)',
-            color: 'var(--bg-base)',
-            boxShadow: '0 4px 15px var(--gold-glow)'
-          }}>
-          {saving ? '儲存中...' : '儲存修改'}
-        </button>
+        <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 text-white/60 border border-white/10 active:scale-95 transition-transform">取消</button>
+        <button onClick={handleSave} disabled={saving} className="flex-2 py-3 rounded-xl font-black text-sm bg-gradient-to-br from-gold to-gold-bright text-base shadow-lg active:scale-95 transition-transform">{saving ? '儲存中...' : '儲存修改'}</button>
       </div>
     </div>
   )
@@ -322,12 +258,12 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
 function Detail({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div className="text-xs" style={{ color: 'var(--t3)' }}>{label}</div>
-      <div className="font-mono text-xs font-bold" style={{ color: 'var(--t1)' }}>{value}</div>
+      <div className="text-[10px] font-bold opacity-30 uppercase tracking-tighter mb-0.5">{label}</div>
+      <div className="font-mono text-[11px] font-bold text-white/80">{value}</div>
     </div>
   )
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="text-[10px] mb-1 block font-bold opacity-50 uppercase tracking-tight text-center w-full">{children}</label>
+  return <label className="text-[9px] mb-1 block font-bold opacity-30 uppercase tracking-widest text-center w-full">{children}</label>
 }

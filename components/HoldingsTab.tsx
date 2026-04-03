@@ -84,7 +84,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             持股概覽 · {holdings.length} 檔
           </span>
           <button onClick={onRefresh}
-            className="text-[10px] px-2 py-0.5 rounded-lg bg-gold-dim text-gold border border-white/10 active:opacity-60">
+            className="text-[10px] px-2 py-0.5 rounded-lg bg-gold-dim text-gold border border-white/10 active:opacity-60 font-bold">
             重整
           </button>
         </div>
@@ -110,10 +110,10 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </div>
           
           <div className="flex justify-between items-center text-xs">
-            <span className="opacity-50">年目標：{settings.year_goal > 0 ? fmtMoney(settings.year_goal) : '尚未設定'}</span>
+            <span className="opacity-50 font-bold">年目標達成</span>
             <span className="font-mono font-black text-gold">
               {yearAchieved !== null ? (
-                <>達成 {yearAchieved.toFixed(1)}% {yearAchieved >= 100 ? '🎉' : ''}</>
+                <>{fmtMoney(settings.year_goal)} · {yearAchieved.toFixed(1)}% {yearAchieved >= 100 ? '🎉' : ''}</>
               ) : (
                 <span className="opacity-30 italic font-normal">前往設定頁面</span>
               )}
@@ -121,10 +121,10 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </div>
 
           <div className="flex justify-between items-center text-xs">
-            <span className="opacity-50">總目標：{settings.total_goal > 0 ? fmtMoney(settings.total_goal) : '尚未設定'}</span>
+            <span className="opacity-50 font-bold">總目標達成</span>
             <span className="font-mono font-black text-gold">
               {totalAchieved !== null ? (
-                <>達成 {totalAchieved.toFixed(1)}% {totalAchieved >= 100 ? '🎉' : ''}</>
+                <>{fmtMoney(settings.total_goal)} · {totalAchieved.toFixed(1)}% {totalAchieved >= 100 ? '🎉' : ''}</>
               ) : (
                 <span className="opacity-30 italic font-normal">未設定</span>
               )}
@@ -199,11 +199,6 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
     return { totalPnl, totalPnlPct }
   }, [entries])
 
-  const selectedEntry = useMemo(() => {
-    if (!selectedDate) return null
-    return entries.find(e => e.entry_date === selectedDate)
-  }, [selectedDate, entries])
-
   function moveMonth(delta: number) {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1))
     setSelectedDate(null)
@@ -222,12 +217,12 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
 
   return (
     <div className="space-y-4">
-      <div className="glass rounded-2xl p-4 border border-white/5 space-y-4">
+      <div className="glass rounded-2xl p-4 border border-white/5 space-y-4 bg-black/20">
         <div className="flex flex-col gap-3">
           <div className="flex items-center justify-between">
-            <button onClick={() => moveMonth(-1)} className="p-2 text-white/40 active:text-gold">‹</button>
+            <button onClick={() => moveMonth(-1)} className="p-2 text-white/40 active:text-gold transition-colors">‹</button>
             <div className="relative">
-              <h2 className="font-black text-sm flex items-center gap-1 text-white">
+              <h2 className="font-black text-base flex items-center gap-1 text-white">
                 {year}年 {month}月 ▾
               </h2>
               <input 
@@ -237,18 +232,18 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
                 value={`${year}-${String(month).padStart(2, '0')}`}
               />
             </div>
-            <button onClick={() => moveMonth(1)} className="p-2 text-white/40 active:text-gold">›</button>
+            <button onClick={() => moveMonth(1)} className="p-2 text-white/40 active:text-gold transition-colors">›</button>
           </div>
 
           <div className="grid grid-cols-2 gap-4 text-center">
             <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase">本月總損益</div>
+              <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">本月總損益</div>
               <div className={`text-sm font-black font-mono ${stats.totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
               </div>
             </div>
             <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase">損益百分比</div>
+              <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">損益百分比</div>
               <div className={`text-sm font-black font-mono ${stats.totalPnlPct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {stats.totalPnlPct >= 0 ? '+' : ''}{stats.totalPnlPct.toFixed(2)}%
               </div>
@@ -261,7 +256,7 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
             <div key={d} className="text-center text-[10px] font-bold py-1 opacity-20">{d}</div>
           ))}
           {days.map((d, i) => {
-            if (d === null) return <div key={`empty-${i}`} className="aspect-[1.5/1]" />
+            if (d === null) return <div key={`empty-${i}`} className="aspect-[1.2/1]" />
             const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
             const entry = entryMap[d]
             const pnlPct = entry?.pnl_pct || 0
@@ -281,13 +276,16 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
             return (
               <div key={d} 
                 onClick={() => toggleDate(dateStr)}
-                className={`aspect-[1.2/1] rounded flex flex-col items-center justify-between p-1 cursor-pointer transition-all border ${isSelected ? 'border-white ring-1 ring-white' : 'border-white/5'}`}
+                className={`aspect-[1/1] rounded flex flex-col items-center justify-between p-1 cursor-pointer transition-all border ${isSelected ? 'border-white ring-1 ring-white' : 'border-white/5'}`}
                 style={{ background: bgColor }}>
-                <span className="text-[9px] font-black text-white/60 self-start">{d}</span>
-                {entry && entry.pnl !== 0 && (
-                  <div className="w-full text-center flex flex-col justify-end flex-1">
-                    <div className="text-[8px] font-black text-white leading-none mb-0.5">
-                      {shortMoney(entry.pnl)}
+                <span className="text-[11px] font-black text-white/80 self-start leading-none">{d}</span>
+                {entry && (
+                  <div className="w-full text-center flex flex-col justify-end flex-1 space-y-0.5 pb-0.5">
+                    <div className="text-[8px] font-black text-white leading-none scale-90">
+                      {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
+                    </div>
+                    <div className="text-[7px] font-bold text-white/60 leading-none scale-75">
+                      {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                     </div>
                   </div>
                 )}
@@ -296,41 +294,6 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
           })}
         </div>
       </div>
-
-      {/* Daily Details Card */}
-      {selectedEntry && (
-        <div className="glass rounded-2xl p-4 border border-gold/30 slide-up bg-black/40">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="font-black text-sm text-gold">
-              📅 {selectedEntry.entry_date} 明細
-            </h3>
-            <span className={`text-xs font-mono font-bold ${selectedEntry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {selectedEntry.pnl >= 0 ? '+' : ''}{fmtMoney(selectedEntry.pnl)} ({selectedEntry.pnl_pct}%)
-            </span>
-          </div>
-          
-          <div className="space-y-2">
-            {selectedEntry.details?.map(s => (
-              <div key={s.symbol} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/10">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black text-white truncate">{s.name}</span>
-                    <span className="text-[10px] font-mono opacity-30">{codeOnly(s.symbol)}</span>
-                  </div>
-                  <div className="text-[10px] opacity-50 mt-0.5">
-                    持股 {s.shares.toLocaleString()} 股
-                  </div>
-                </div>
-                <div className="text-right">
-                  <div className={`text-xs font-black font-mono ${s.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                    {s.pnl >= 0 ? '+' : ''}{fmtMoney(s.pnl)}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -349,7 +312,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-black text-base text-white">{q?.name_zh || q?.name || h.symbol}</span>
+              <span className="font-black text-base text-white leading-tight">{q?.name_zh || h.symbol}</span>
               <span className="font-mono px-1.5 py-0.5 rounded-md text-[10px] bg-white/5 text-white/40">
                 {codeOnly(h.symbol)}
               </span>
@@ -362,7 +325,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
             </div>
           </div>
           <div className="text-right shrink-0">
-            <div className="font-black text-lg font-mono text-white">
+            <div className="font-black text-lg font-mono text-white leading-tight">
               {h.current_price > 0 ? h.current_price.toFixed(2) : '—'}
             </div>
             {q && q.change !== undefined && (
@@ -527,7 +490,7 @@ function StatBox({ label, value, upDown }: { label: string; value: string; upDow
   const col = upDown === undefined ? 'text-white' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
   return (
     <div className="flex flex-col">
-      <div className="text-[10px] mb-0.5 opacity-40 font-bold uppercase">{label}</div>
+      <div className="text-[10px] mb-0.5 opacity-40 font-bold uppercase tracking-tighter">{label}</div>
       <div className={`font-black font-mono text-sm md:text-base leading-tight ${col}`}>{value}</div>
     </div>
   )

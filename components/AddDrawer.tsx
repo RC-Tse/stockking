@@ -28,8 +28,8 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   const [symbol,    setSymbol]    = useState('')
   const [stockName, setStockName] = useState('')
   const [fetchingName, setFetchingName] = useState(false)
-  const [lots,      setLots]      = useState<number | ''>(1)
-  const [shares,    setShares]    = useState<number | ''>(1)
+  const [lots,      setLots]      = useState<number | ''>('')
+  const [shares,    setShares]    = useState<number | ''>('')
   const [price,     setPrice]     = useState<number | ''>('')
   const [date,      setDate]      = useState(today)
   const [note,      setNote]      = useState('')
@@ -40,7 +40,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     if (open) {
       setMode('SELECT')
       setAction('BUY'); setTradeType('FULL'); setSymbol(''); setStockName('')
-      setLots(1); setShares(1); setPrice('')
+      setLots(''); setShares(''); setPrice('')
       setDate(today); setNote(''); setSaving(false)
     }
   }, [open, today])
@@ -61,7 +61,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
         const data = await res.json()
         setStockName(data.name_zh)
       } else {
-        setStockName('代號不正確')
+        setStockName('')
       }
     } catch (err) {
       setStockName('')
@@ -114,7 +114,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     }
   }
 
-  const canSubmit = symbol.trim() !== '' && finalShares > 0 && safePrice > 0
+  const canSubmit = symbol.trim() !== '' && finalShares > 0 && safePrice > 0 && stockName !== ''
 
   function onBackdrop(e: React.MouseEvent) {
     if (e.target === e.currentTarget) onClose()
@@ -125,11 +125,11 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   return (
     <div
       className="fixed inset-0 z-50 flex items-end"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
+      style={{ background: 'rgba(0,0,0,0.7)' }}
       onClick={onBackdrop}
     >
       <div
-        className="w-full slide-up rounded-t-2xl pb-safe overflow-hidden flex flex-col md:max-w-[480px] md:mx-auto"
+        className="w-full slide-up rounded-t-[2.5rem] pb-safe overflow-hidden flex flex-col md:max-w-[480px] md:mx-auto"
         style={{
           background: '#0d1018',
           border: '1px solid rgba(255,255,255,0.1)',
@@ -138,88 +138,93 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
         }}
         onClick={e => e.stopPropagation()}
       >
-        <div className="flex justify-center pt-3 pb-1 shrink-0">
-          <div className="w-10 h-1 rounded-full bg-white/10" />
+        <div className="flex justify-center pt-4 pb-2 shrink-0">
+          <div className="w-12 h-1.5 rounded-full bg-white/10" />
         </div>
 
-        <div className="px-5 pt-2 pb-6 overflow-y-auto overflow-x-hidden flex-1 w-full">
+        <div className="px-6 pt-2 pb-8 overflow-y-auto overflow-x-hidden flex-1 w-full">
           
           {mode === 'SELECT' && (
-            <div className="space-y-6 py-6">
-              <h2 className="font-black text-xl text-center text-white">選擇交易類型</h2>
+            <div className="space-y-8 py-8">
+              <div className="text-center space-y-2">
+                <h2 className="font-black text-2xl text-white">選擇交易類型</h2>
+                <p className="text-sm text-white/30 font-medium tracking-wide">請選擇您要記錄的投資方式</p>
+              </div>
               <div className="grid grid-cols-2 gap-4">
-                <button onClick={() => setMode('ORDER')} className="glass rounded-2xl p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform border border-white/5">
-                  <div className="text-4xl text-white">📝</div>
-                  <div className="font-bold text-white">單筆下單</div>
+                <button onClick={() => setMode('ORDER')} className="group glass rounded-3xl p-8 flex flex-col items-center gap-4 active:scale-95 transition-all border border-white/5 hover:border-gold/30">
+                  <div className="text-5xl group-hover:scale-110 transition-transform duration-300">📝</div>
+                  <div className="font-black text-white text-lg tracking-tight">單筆下單</div>
                 </button>
-                <button onClick={() => alert('敬請期待')} className="glass rounded-2xl p-6 flex flex-col items-center gap-3 active:scale-95 transition-transform border border-white/5 opacity-40">
-                  <div className="text-4xl">⏳</div>
-                  <div className="font-bold text-white">定期定額</div>
+                <button onClick={() => alert('定期定額功能開發中，敬請期待')} className="group glass rounded-3xl p-8 flex flex-col items-center gap-4 active:scale-95 transition-all border border-white/5 opacity-40 grayscale">
+                  <div className="text-5xl">⏳</div>
+                  <div className="font-black text-white text-lg tracking-tight">定期定額</div>
                 </button>
               </div>
             </div>
           )}
 
           {mode === 'ORDER' && (
-            <div className="space-y-5">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
-                <button onClick={() => setMode('SELECT')} className="text-xs text-gold font-bold px-2 py-1 -ml-2 rounded-lg active:bg-white/5">‹ 返回</button>
-                <h2 className="font-black text-base text-white">新增交易</h2>
-                <div className="w-10" />
+                <button onClick={() => setMode('SELECT')} className="flex items-center gap-1 text-xs text-gold font-black px-3 py-1.5 bg-gold/10 rounded-full active:bg-gold/20">
+                  <span>‹</span> 返回
+                </button>
+                <h2 className="font-black text-base text-white tracking-widest uppercase">新增交易</h2>
+                <div className="w-14" />
               </div>
 
               {/* Action */}
-              <div>
+              <div className="space-y-2">
                 <Label>交易類型</Label>
-                <div className="flex gap-2">
+                <div className="flex gap-2.5">
                   {(['BUY','SELL'] as Action[]).map(a => (
                     <button key={a} onClick={() => setAction(a)}
-                      className={`flex-1 py-3 rounded-xl text-sm font-bold transition-all border ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400' : 'bg-green-400/20 text-green-400 border-green-400') : 'bg-white/5 text-white/40 border-transparent'}`}>
-                      {a === 'BUY' ? '買入' : '賣出'}
+                      className={`flex-1 py-3.5 rounded-2xl text-sm font-black transition-all border-2 ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400 shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'bg-green-400/20 text-green-400 border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.3)]') : 'bg-white/5 text-white/30 border-transparent'}`}>
+                      {a === 'BUY' ? '買入紀錄' : '賣出紀錄'}
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Symbol */}
-              <div>
-                <div className="flex justify-between items-end mb-1.5">
+              <div className="space-y-2">
+                <div className="flex justify-between items-end px-1">
                   <Label>股票代號</Label>
                   {fetchingName ? (
-                    <span className="text-[10px] animate-pulse text-gold">查詢中…</span>
+                    <span className="text-[10px] animate-pulse text-gold font-bold">搜尋中…</span>
                   ) : stockName ? (
-                    <span className="text-[10px] font-black text-gold uppercase">{stockName}</span>
+                    <span className="text-[11px] font-black text-gold uppercase bg-gold/10 px-2 py-0.5 rounded-md border border-gold/20">{stockName}</span>
                   ) : null}
                 </div>
                 <input
                   value={symbol}
                   onChange={e => setSymbol(e.target.value)}
                   onBlur={e => fetchStockName(e.target.value)}
-                  placeholder="例：2330.TW"
-                  className="input-base uppercase font-mono w-full"
+                  placeholder="輸入代號，如 2330"
+                  className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10 focus:border-gold/50 transition-colors"
                   autoCapitalize="characters"
                 />
               </div>
 
               {/* Trade type */}
-              <div>
+              <div className="space-y-2">
                 <Label>交易方式</Label>
-                <div className="flex gap-2">
+                <div className="flex gap-2.5">
                   {(['FULL','FRACTIONAL'] as TradeType[]).map(t => (
                     <button key={t} onClick={() => setTradeType(t)}
-                      className={`flex-1 py-2.5 rounded-xl text-[10px] font-bold transition-all border ${tradeType === t ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/40 border-transparent'}`}>
-                      {t === 'FULL' ? '整張（1000股）' : '零股'}
+                      className={`flex-1 py-3 rounded-2xl text-[11px] font-black tracking-wider transition-all border ${tradeType === t ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/30 border-transparent'}`}>
+                      {t === 'FULL' ? '整張 (1000股)' : '盤後零股'}
                     </button>
                   ))}
                 </div>
               </div>
 
               {/* Quantity */}
-              <div>
-                <Label>{tradeType === 'FULL' ? '張數' : '股數'}</Label>
-                <div className="flex items-center gap-3">
+              <div className="space-y-2">
+                <Label>{tradeType === 'FULL' ? '交易張數' : '交易股數'}</Label>
+                <div className="flex items-center gap-4">
                   <button onClick={handleMinus}
-                    className="btn-ghost w-12 h-12 flex items-center justify-center text-xl font-black rounded-xl border border-white/5 bg-white/5 text-white">
+                    className="btn-ghost w-14 h-14 flex items-center justify-center text-2xl font-black rounded-2xl border-2 border-white/5 bg-white/5 text-white/60 active:scale-95 transition-all">
                     −
                   </button>
                   <input
@@ -231,45 +236,48 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                       const v = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
                       tradeType === 'FULL' ? setLots(v) : setShares(v)
                     }}
-                    className="flex-1 text-center font-black font-mono text-2xl input-base w-full bg-transparent text-white"
+                    placeholder="0"
+                    className="flex-1 text-center font-black font-mono text-3xl input-base w-full bg-transparent text-white placeholder:text-white/10"
                   />
                   <button onClick={handlePlus}
-                    className="btn-ghost w-12 h-12 flex items-center justify-center text-xl font-black rounded-xl border border-white/5 bg-white/5 text-white">
+                    className="btn-ghost w-14 h-14 flex items-center justify-center text-2xl font-black rounded-2xl border-2 border-white/5 bg-white/5 text-white/60 active:scale-95 transition-all">
                     +
                   </button>
                 </div>
-                <p className="text-[10px] text-center mt-1.5 font-mono text-white/20">
-                  = {finalShares.toLocaleString()} 股
+                <p className="text-[11px] text-center font-black font-mono text-white/20 tracking-widest uppercase">
+                  = {finalShares.toLocaleString()} TOTAL SHARES
                 </p>
               </div>
 
-              {/* Price */}
-              <div>
-                <Label>成交價（元）</Label>
-                <input type="number" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" step="0.01" min="0" className="input-base font-mono text-base w-full text-white" />
-              </div>
+              <div className="space-y-4">
+                {/* Price */}
+                <div className="space-y-2">
+                  <Label>成交價格 (每股)</Label>
+                  <input type="number" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" step="0.01" min="0" className="input-base font-black font-mono text-xl w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" />
+                </div>
 
-              {/* Date */}
-              <div>
-                <Label>交易日期</Label>
-                <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base font-mono text-sm w-full text-white" style={{ colorScheme: 'dark' }} />
+                {/* Date */}
+                <div className="space-y-2">
+                  <Label>成交日期</Label>
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base font-black font-mono text-base w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" style={{ colorScheme: 'dark' }} />
+                </div>
               </div>
 
               {/* Note */}
-              <div>
-                <Label>備註（選填）</Label>
-                <input value={note} onChange={e => setNote(e.target.value)} placeholder="操作筆記…" className="input-base w-full text-white" />
+              <div className="space-y-2">
+                <Label>操作備註</Label>
+                <input value={note} onChange={e => setNote(e.target.value)} placeholder="選填，例如：長期持有、波段操作" className="input-base w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl font-bold" />
               </div>
 
               {/* Fee preview */}
-              {safePrice > 0 && (
-                <div className="rounded-xl p-3 space-y-1.5 bg-white/5 border border-white/10 shadow-inner">
-                  <FeeRow label="交易金額" value={fmtMoney(Math.round(amount))} />
-                  <FeeRow label="手續費"   value={fmtMoney(Math.round(fee))} />
-                  {tax > 0 && <FeeRow label="交易稅"  value={fmtMoney(Math.round(tax))} />}
-                  <div className="border-t pt-2 mt-2 flex justify-between items-center border-white/5">
-                    <span className="text-xs font-bold text-white/60">淨收支</span>
-                    <span className={`font-black font-mono text-base ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+              {safePrice > 0 && finalShares > 0 && (
+                <div className="rounded-3xl p-5 space-y-2.5 bg-white/[0.03] border border-white/10 shadow-inner">
+                  <FeeRow label="估算交易金額" value={fmtMoney(Math.round(amount))} />
+                  <FeeRow label="券商手續費"   value={fmtMoney(Math.round(fee))} />
+                  {tax > 0 && <FeeRow label="證券交易稅"  value={fmtMoney(Math.round(tax))} />}
+                  <div className="border-t border-white/10 pt-3 mt-3 flex justify-between items-center">
+                    <span className="text-xs font-black text-white/40 uppercase tracking-widest">預估淨收支</span>
+                    <span className={`font-black font-mono text-xl ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                       {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
                     </span>
                   </div>
@@ -280,8 +288,8 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
               <button 
                 onClick={submitOrder} 
                 disabled={saving || !canSubmit} 
-                className={`w-full py-4 text-base font-black rounded-2xl transition-all shadow-lg ${canSubmit ? 'bg-gradient-to-br from-gold to-gold-bright text-base active:scale-95' : 'bg-white/5 text-white/20 cursor-not-allowed'}`}>
-                {saving ? '處理中…' : '✅ 確認新增交易'}
+                className={`w-full py-5 text-lg font-black rounded-2xl transition-all shadow-2xl mt-4 ${canSubmit ? 'bg-gradient-to-br from-[#FFD700] to-[#FF8C00] text-black active:scale-95 shadow-gold/20' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`}>
+                {saving ? '處理中…' : '✅ 確認新增交易紀錄'}
               </button>
             </div>
           )}
@@ -292,14 +300,14 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="text-[10px] mb-1 block font-bold text-white/30 uppercase tracking-widest">{children}</label>
+  return <label className="text-[10px] mb-1 block font-black text-white/30 uppercase tracking-[0.2em] ml-1">{children}</label>
 }
 
 function FeeRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between text-xs">
-      <span className="text-white/40">{label}</span>
-      <span className="font-mono font-bold text-white/80">{value}</span>
+    <div className="flex justify-between items-center text-xs">
+      <span className="text-white/30 font-bold">{label}</span>
+      <span className="font-black font-mono text-white/70">{value}</span>
     </div>
   )
 }

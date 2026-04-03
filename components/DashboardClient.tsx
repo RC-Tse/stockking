@@ -8,7 +8,6 @@ import {
   DEFAULT_SETTINGS, calcFee, calcTax, fmtMoney,
 } from '@/types'
 import HoldingsTab      from './HoldingsTab'
-import CalendarTab      from './CalendarTab'
 import ConceptsTab      from './ConceptsTab'
 import TransactionsTab  from './TransactionsTab'
 import SettingsTab      from './SettingsTab'
@@ -109,6 +108,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     refresh()
     const now = new Date()
     refreshCal(now.getFullYear(), now.getMonth() + 1)
+    
+    // 啟動時更新一次股票名稱清單
+    fetch('/api/stockname/refresh').catch(() => {})
   }, [refresh, refreshCal])
 
   // ── Auto-save today's P&L to calendar at 2 PM ─────────────────
@@ -183,7 +185,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       </header>
 
       {/* ══ CONTENT ═════════════════════════════════════════════ */}
-      <main className="flex-1 overflow-y-auto pb-24 text-[15px] md:text-[16px]">
+      <main className="flex-1 overflow-y-auto pb-32 text-[15px] md:text-[16px]">
         {loading
           ? <LoadingSkeleton />
           : <>
@@ -216,22 +218,22 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       {(tab === 'holdings' || tab === 'transactions') && (
         <button
           onClick={() => setDrawerOpen(true)}
-          className="fixed bottom-24 right-4 md:right-[calc(50%-240px+16px)] z-30 w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold transition-transform active:scale-90 bg-gradient-to-br from-gold to-gold-bright text-base shadow-[0_6px_28px_rgba(201,165,100,0.3)]">
+          className="fixed bottom-24 right-6 md:right-[calc(50%-240px+24px)] z-30 w-14 h-14 rounded-full flex items-center justify-center text-3xl font-bold transition-all active:scale-90 bg-gradient-to-br from-[#FFD700] to-[#FF8C00] text-black shadow-[0_8px_32px_rgba(255,215,0,0.4)] border border-white/20">
           +
         </button>
       )}
 
       {/* ══ BOTTOM NAV ══════════════════════════════════════════ */}
-      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#0d1018f0] backdrop-blur-xl border-t border-white/5">
-        <div className="flex">
+      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#0d1018f5] backdrop-blur-2xl border-t border-white/10 shadow-[0_-4px_24px_rgba(0,0,0,0.5)]">
+        <div className="flex h-16">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex-1 relative flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors ${tab === t.id ? 'text-gold' : 'text-white/40'}`}>
-              <span className="text-[18px] leading-none">{t.icon}</span>
-              <span className={`font-semibold ${tab === t.id ? 'text-gold' : ''}`} style={{ fontSize: '10px' }}>
+              className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${tab === t.id ? 'text-gold' : 'text-white/30'}`}>
+              <span className="text-xl leading-none">{t.icon}</span>
+              <span className="font-bold text-[10px] tracking-wide uppercase">
                 {t.label}
               </span>
-              {tab === t.id && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-gold rounded-full" />}
+              {tab === t.id && <div className="absolute bottom-1 inset-x-6 h-1 bg-gold rounded-full shadow-[0_0_8px_var(--gold)]" />}
             </button>
           ))}
         </div>
