@@ -330,19 +330,23 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   const [shares, setShares] = useState(t.shares)
   const [price, setPrice] = useState(t.price)
   const [note, setNote] = useState(t.note || '')
+  const [tradeType, setTradeType] = useState(t.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
+  const [lots, setLots] = useState(Math.floor(t.shares / 1000) || 1)
   
   const isBuy = t.action === 'BUY' || t.action === 'DCA'
-  const amount = shares * price
+  const actualShares = tradeType === 'FULL' ? lots * 1000 : shares
+  const amount = actualShares * price
   const fee    = calcFee(amount, settings, t.action === 'SELL')
   const tax    = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
   const net    = isBuy ? -(amount + fee) : (amount - fee - tax)
 
   async function handleSave() {
+    if (actualShares <= 0 || price <= 0) return
     setLoading(true)
     await fetch('/api/transactions', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: t.id, trade_date: date, shares, price, note })
+      body: JSON.stringify({ id: t.id, trade_date: date, shares: actualShares, price, note })
     })
     setIsEditing(false)
     setLoading(false)
@@ -363,39 +367,111 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
 
   if (isEditing) {
     return (
-      <div className="p-3 rounded-lg bg-black/40 border-2 border-gold/30 space-y-3 my-1">
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <Label>交易日期</Label>
-            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full input-base text-xs py-1 h-8" style={{ colorScheme: 'dark' }} />
+      <div className="p-4 rounded-xl bg-black/60 border-2 border-gold/40 space-y-5 my-2 slide-up shadow-2xl">
+        {/* 第一區：交易日期 */}
+        <div className="flex flex-col items-center">
+          <Label>交易日期</Label>
+          <input 
+            type="date" 
+            value={date} 
+            onChange={e => setDate(e.target.value)} 
+            className="input-base text-center w-48 py-2 text-sm" 
+            style={{ colorScheme: 'dark' }} 
+          />
+        </div>
+
+        {/* 第二區：三個欄位橫排 */}
+        <div className="grid grid-cols-3 gap-2">
+          <div>
+            <Label>方式</Label>
+            <button 
+              onClick={() => setTradeType(prev => prev === 'FULL' ? 'FRACTIONAL' : 'FULL')}
+              className="w-full h-10 rounded-lg text-[10px] font-black transition-colors border"
+              style={{ 
+                background: tradeType === 'FULL' ? 'var(--gold-dim)' : 'var(--bg-hover)',
+                color: tradeType === 'FULL' ? 'var(--gold)' : 'var(--t3)',
+                borderColor: tradeType === 'FULL' ? 'var(--gold)' : 'var(--border)'
+              }}>
+              {tradeType === 'FULL' ? '整張' : '零股'}
+            </button>
           </div>
-          <div className="w-20">
-            <Label>股數</Label>
-            <input type="number" value={shares} onChange={e => setShares(Number(e.target.value))} className="w-full input-base text-xs py-1 h-8 font-mono" />
+          <div>
+            <Label>{tradeType === 'FULL' ? '張數' : '股數'}</Label>
+            <input 
+              type="number" 
+              value={tradeType === 'FULL' ? lots : shares} 
+              onChange={e => {
+                const v = Math.max(1, parseInt(e.target.value) || 0)
+                tradeType === 'FULL' ? setLots(v) : setShares(v)
+              }} 
+              className="w-full input-base text-center h-10 font-mono text-sm" 
+            />
           </div>
-          <div className="w-20">
+          <div>
             <Label>成交價</Label>
-            <input type="number" step="0.01" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full input-base text-xs py-1 h-8 font-mono" />
+            <input 
+              type="number" 
+              step="0.01" 
+              value={price} 
+              onChange={e => setPrice(Number(e.target.value))} 
+              className="w-full input-base text-center h-10 font-mono text-sm" 
+            />
           </div>
         </div>
+        {tradeType === 'FULL' && (
+          <p className="text-[10px] text-center -mt-3 opacity-50 font-mono">
+            = {actualShares.toLocaleString()} 股
+          </p>
+        )}
+
+        {/* 第三區：備註輸入框 */}
         <div>
           <Label>備註</Label>
-          <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base text-xs py-1 h-8" placeholder="備註..." />
+          <input 
+            value={note} 
+            onChange={e => setNote(e.target.value)} 
+            className="w-full input-base py-2.5 px-3 text-sm" 
+            placeholder="點此輸入備註..." 
+          />
         </div>
 
-        {/* Preview */}
-        <div className="flex justify-between items-center text-[10px] bg-white/5 p-1.5 rounded">
-          <span style={{ color: 'var(--t3)' }}>
-            手續費: {Math.round(fee)} {tax > 0 ? `| 交易稅: ${Math.round(tax)}` : ''}
-          </span>
-          <span className="font-bold" style={{ color: net >= 0 ? 'var(--red)' : 'var(--grn)' }}>
-            淨收支: {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
-          </span>
+        {/* 第四區：費用試算區塊 */}
+        <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 shadow-inner">
+          <div className="flex justify-between text-xs">
+            <span style={{ color: 'var(--t3)' }}>手續費</span>
+            <span className="font-mono font-bold" style={{ color: 'var(--t1)' }}>{fmtMoney(Math.round(fee))}</span>
+          </div>
+          {tax > 0 && (
+            <div className="flex justify-between text-xs">
+              <span style={{ color: 'var(--t3)' }}>交易稅</span>
+              <span className="font-mono font-bold" style={{ color: 'var(--t1)' }}>{fmtMoney(Math.round(tax))}</span>
+            </div>
+          )}
+          <div className="flex justify-between items-center pt-2 border-t border-white/10">
+            <span className="text-xs font-black" style={{ color: 'var(--t2)' }}>預估淨收支</span>
+            <span className="text-lg font-black font-mono" style={{ color: net >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+              {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
+            </span>
+          </div>
         </div>
 
-        <div className="flex gap-2 justify-end">
-          <button onClick={() => setIsEditing(false)} className="text-[10px] px-3 py-1.5 rounded bg-white/10">取消</button>
-          <button onClick={handleSave} disabled={loading} className="text-[10px] px-3 py-1.5 rounded bg-gold text-black font-bold">
+        {/* 第五區：取消和儲存修改按鈕 */}
+        <div className="flex gap-3 pt-1">
+          <button 
+            onClick={() => setIsEditing(false)} 
+            className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 hover:bg-white/10 transition-colors"
+            style={{ color: 'var(--t2)', border: '1px solid var(--border)' }}>
+            取消
+          </button>
+          <button 
+            onClick={handleSave} 
+            disabled={loading} 
+            className="flex-2 py-3 rounded-xl font-black text-sm transition-all active:scale-95 shadow-lg"
+            style={{ 
+              background: 'linear-gradient(135deg, var(--gold) 0%, var(--gold-bright) 100%)',
+              color: 'var(--bg-base)',
+              boxShadow: '0 4px 15px var(--gold-glow)'
+            }}>
             {loading ? '儲存中...' : '儲存修改'}
           </button>
         </div>
