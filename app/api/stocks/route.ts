@@ -25,7 +25,7 @@ function quote(sym:string){
   return {symbol:sym,price,prev:base,open,high,low,change,change_pct:Math.round(cp*10000)/100,volume:Math.floor(rng(s+4)*80000+500)}
 }
 export async function GET(req:NextRequest){
-  const syms=(req.nextUrl.searchParams.get('symbols')??\'\').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)
+  const syms=(req.nextUrl.searchParams.get('symbols')??'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)
   if(!syms.length)return NextResponse.json({},{status:400})
   const r:Record<string,ReturnType<typeof quote>>={};for(const s of syms)r[s]=quote(s)
   return NextResponse.json(r,{headers:{'Cache-Control':'public,s-maxage=60'}})
