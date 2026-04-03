@@ -1,17 +1,19 @@
 'use client'
 
-import { useState } from 'react'
-import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction } from '@/types'
+import { useState, useMemo, useEffect } from 'react'
+import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry } from '@/types'
 
 interface Props {
   holdings: Holding[]
   quotes: Record<string, Quote>
   settings: UserSettings
   transactions: Transaction[]
+  calEntries: CalendarEntry[]
   onRefresh: () => void
+  onRefreshCal: (year: number, month: number) => void
 }
 
-export default function HoldingsTab({ holdings, quotes, settings, transactions, onRefresh }: Props) {
+export default function HoldingsTab({ holdings, quotes, settings, transactions, calEntries, onRefresh, onRefreshCal }: Props) {
   const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0)
   const totalMV   = holdings.reduce((s, h) => s + h.market_value, 0)
   const totalPnl  = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
@@ -19,19 +21,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
   const [expanded, setExpanded] = useState<string | null>(null)
 
-  if (holdings.length === 0) {
-    return (
-      <Empty
-        icon="📭"
-        text="尚無持股紀錄"
-        sub={<>點右下角 <GoldSpan>+</GoldSpan> 新增第一筆交易</>}
-      />
-    )
-  }
-
   return (
-    <div className="p-4 space-y-3">
-      {/* ── Summary card ───────────────────────────────────── */}
+    <div className="p-4 space-y-4">
+      {/* 1. 持股概覽卡片 */}
       <div className="glass rounded-2xl p-4 relative overflow-hidden"
         style={{ border: '1px solid var(--border-bright)' }}>
         <div className="absolute inset-0 pointer-events-none"
@@ -52,28 +44,161 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           <StatBox label="投入成本" value={shortMoney(totalCost)} />
           <StatBox label="目前市值" value={shortMoney(totalMV)} />
           <StatBox
-            label="總盈虧比"
+            label="總損益比"
             value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
             upDown={totalPnl}
           />
         </div>
       </div>
 
-      {/* ── Holding rows ───────────────────────────────────── */}
-      {holdings
-        .sort((a, b) => b.market_value - a.market_value)
-        .map(h => (
-          <HoldingItem
-            key={h.symbol}
-            h={h}
-            q={quotes[h.symbol]}
-            txs={transactions.filter(t => t.symbol === h.symbol)}
-            isExpanded={expanded === h.symbol}
-            onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)}
-            onUpdated={onRefresh}
-          />
-        ))
-      }
+      {/* 2. 損益月曆區塊 */}
+      <IntegratedCalendar entries={calEntries} onRefresh={onRefreshCal} />
+
+      {/* 3. 各持股明細列表 */}
+      <div className="space-y-3">
+        {holdings.length === 0 ? (
+          <Empty icon="📭" text="尚無持股紀錄" sub={<>點右下角 <GoldSpan>+</GoldSpan> 新增第一筆交易</>} />
+        ) : (
+          holdings
+            .sort((a, b) => b.market_value - a.market_value)
+            .map(h => (
+              <HoldingItem
+                key={h.symbol}
+                h={h}
+                q={quotes[h.symbol]}
+                txs={transactions.filter(t => t.symbol === h.symbol)}
+                isExpanded={expanded === h.symbol}
+                onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)}
+                onUpdated={onRefresh}
+              />
+            ))
+        )}
+      </div>
+    </div>
+  )
+}
+
+function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], onRefresh: (y: number, m: number) => void }) {
+  const now = new Date()
+  const [viewDate, setViewDate] = useState(new Date(now.getFullYear(), now.getMonth(), 1))
+  const year = viewDate.getFullYear()
+  const month = viewDate.getMonth() + 1
+
+  useEffect(() => {
+    onRefresh(year, month)
+  }, [year, month, onRefresh])
+
+  const days = useMemo(() => {
+    const firstDay = new Date(year, month - 1, 1).getDay()
+    const lastDate = new Date(year, month, 0).getDate()
+    const arr = []
+    for (let i = 0; i < firstDay; i++) arr.push(null)
+    for (let i = 1; i <= lastDate; i++) arr.push(i)
+    return arr
+  }, [year, month])
+
+  const entryMap = useMemo(() => {
+    const map: Record<number, CalendarEntry> = {}
+    entries.forEach(e => {
+      const d = new Date(e.entry_date).getDate()
+      map[d] = e
+    })
+    return map
+  }, [entries])
+
+  const stats = useMemo(() => {
+    const totalPnl = entries.reduce((s, e) => s + e.pnl, 0)
+    const totalPnlPct = entries.reduce((s, e) => s + (e.pnl_pct || 0), 0)
+    return { totalPnl, totalPnlPct }
+  }, [entries])
+
+  function moveMonth(delta: number) {
+    setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1))
+  }
+
+  function handleMonthChange(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!e.target.value) return
+    const [y, m] = e.target.value.split('-').map(Number)
+    setViewDate(new Date(y, m - 1, 1))
+  }
+
+  return (
+    <div className="glass rounded-2xl p-4 border border-white/5 space-y-4">
+      <div className="flex flex-col gap-3">
+        {/* Header with Picker */}
+        <div className="flex items-center justify-between">
+          <button onClick={() => moveMonth(-1)} className="btn-ghost p-2 text-lg">‹</button>
+          <div className="relative">
+            <h2 className="font-black text-base flex items-center gap-1" style={{ color: 'var(--t1)' }}>
+              {year}年 {month}月 ▾
+            </h2>
+            <input 
+              type="month" 
+              className="absolute inset-0 opacity-0 cursor-pointer"
+              onChange={handleMonthChange}
+              value={`${year}-${String(month).padStart(2, '0')}`}
+            />
+          </div>
+          <button onClick={() => moveMonth(1)} className="btn-ghost p-2 text-lg">›</button>
+        </div>
+
+        {/* Month Stats */}
+        <div className="grid grid-cols-2 gap-4 text-center">
+          <div>
+            <div className="text-[10px] font-bold text-gray-500 uppercase">本月總損益</div>
+            <div className="text-sm font-black font-mono" style={{ color: stats.totalPnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+              {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] font-bold text-gray-500 uppercase">本月損益百分比</div>
+            <div className="text-sm font-black font-mono" style={{ color: stats.totalPnlPct >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+              {stats.totalPnlPct >= 0 ? '+' : ''}{stats.totalPnlPct.toFixed(2)}%
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Calendar Grid */}
+      <div className="grid grid-cols-7 gap-1">
+        {['日','一','二','三','四','五','六'].map(d => (
+          <div key={d} className="text-center text-[10px] font-bold py-1 opacity-40">{d}</div>
+        ))}
+        {days.map((d, i) => {
+          if (d === null) return <div key={`empty-${i}`} className="aspect-square" />
+          const entry = entryMap[d]
+          const pnlPct = entry?.pnl_pct || 0
+          
+          let bgColor = 'transparent'
+          if (pnlPct > 0) {
+            const intensity = Math.min(100, (pnlPct / 10) * 100)
+            bgColor = `rgba(255, 69, 58, ${0.1 + (intensity / 100) * 0.9})`
+          } else if (pnlPct < 0) {
+            const intensity = Math.min(100, (Math.abs(pnlPct) / 10) * 100)
+            bgColor = `rgba(50, 215, 75, ${0.1 + (intensity / 100) * 0.9})`
+          } else if (entry) {
+            bgColor = 'rgba(255, 255, 255, 0.05)'
+          }
+
+          return (
+            <div key={d} 
+              className="aspect-square rounded-lg flex flex-col items-center justify-center border border-white/5 transition-all"
+              style={{ background: bgColor }}>
+              <span className="text-xs font-black text-white">{d}</span>
+              {entry && entry.pnl !== 0 && (
+                <>
+                  <div className="text-[8px] font-bold text-white leading-none scale-90">
+                    {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
+                  </div>
+                  <div className="text-[7px] font-bold text-white leading-none scale-75">
+                    {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                  </div>
+                </>
+              )}
+            </div>
+          )
+        })}
+      </div>
     </div>
   )
 }
@@ -144,13 +269,10 @@ function HoldingItem({ h, q, txs, isExpanded, onToggle, onUpdated }: {
 function TxRow({ t, onUpdated }: { t: Transaction; onUpdated: () => void }) {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
-
-  // Edit fields
   const [date, setDate] = useState(t.trade_date)
   const [shares, setShares] = useState(t.shares)
   const [price, setPrice] = useState(t.price)
   const [note, setNote] = useState(t.note)
-
   const isBuy = t.action === 'BUY' || t.action === 'DCA'
 
   async function handleSave() {
@@ -213,13 +335,12 @@ function shortMoney(v: number): string {
   return `${sign}${abs.toFixed(0)}`
 }
 
-function StatBox({ label, value, sub, upDown }: { label: string; value: string; sub?: string; upDown?: number }) {
+function StatBox({ label, value, upDown }: { label: string; value: string; upDown?: number }) {
   const col = upDown === undefined ? 'var(--t1)' : upDown >= 0 ? 'var(--red)' : 'var(--grn)'
   return (
     <div>
       <div className="text-xs mb-0.5" style={{ color: 'var(--t3)' }}>{label}</div>
       <div className="font-black font-mono text-sm leading-tight" style={{ color: col }}>{value}</div>
-      {sub && <div className="text-xs font-mono" style={{ color: col, opacity: 0.7 }}>{sub}</div>}
     </div>
   )
 }
@@ -227,10 +348,10 @@ function StatBox({ label, value, sub, upDown }: { label: string; value: string; 
 function GoldSpan({ children }: { children: React.ReactNode }) { return <span style={{ color: 'var(--gold)', fontWeight: 800 }}>{children}</span> }
 function Empty({ icon, text, sub }: { icon: string; text: string; sub?: React.ReactNode }) {
   return (
-    <div className="flex flex-col items-center justify-center py-28 gap-3 px-6">
-      <div className="text-5xl">{icon}</div>
-      <p className="font-bold" style={{ color: 'var(--t2)' }}>{text}</p>
-      {sub && <p className="text-sm text-center" style={{ color: 'var(--t3)' }}>{sub}</p>}
+    <div className="flex flex-col items-center justify-center py-10 gap-2 px-6">
+      <div className="text-4xl">{icon}</div>
+      <p className="font-bold text-sm" style={{ color: 'var(--t2)' }}>{text}</p>
+      {sub && <p className="text-xs text-center" style={{ color: 'var(--t3)' }}>{sub}</p>}
     </div>
   )
 }

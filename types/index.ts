@@ -42,10 +42,9 @@ export interface Quote {
 }
 
 export interface CalendarEntry {
-  id: number
-  user_id: string
   entry_date: string
   pnl: number
+  pnl_pct?: number
   note: string
 }
 
