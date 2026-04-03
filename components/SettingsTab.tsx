@@ -100,7 +100,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
           </Section>
         </div>
 
-        <button onClick={submit} disabled={saving} className="btn-primary w-full py-4 rounded-2xl font-black text-lg shadow-xl shadow-gold/10 active:scale-95 transition-all">
+        <button onClick={submit} disabled={saving} className="btn-primary w-full py-4 rounded-2xl font-black text-lg active:scale-95 transition-all">
           {saving ? '處理中…' : saved ? '✅ 設定已更新' : '💾 儲存費率設定'}
         </button>
       </div>
@@ -128,7 +128,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
           </Section>
         </div>
 
-        <button onClick={submit} disabled={saving} className="btn-primary w-full py-4 rounded-2xl font-black text-lg shadow-xl shadow-gold/10 active:scale-95 transition-all">
+        <button onClick={submit} disabled={saving} className="btn-primary w-full py-4 rounded-2xl font-black text-lg active:scale-95 transition-all">
           {saving ? '處理中…' : saved ? '✅ 目標已更新' : '💾 儲存目標設定'}
         </button>
       </div>
@@ -220,7 +220,7 @@ function Rate({ label, value }: { label: string; value: number }) {
     <div className="text-[10px] px-4 py-3 rounded-xl font-black bg-white/5 border border-white/5 flex justify-between items-center">
       <span className="text-white/30 uppercase tracking-widest">{label}</span>
       <div className="flex items-center gap-2">
-        <span className="text-gold shadow-sm">{(value * 100).toFixed(5)}%</span>
+        <span className="text-gold">{(value * 100).toFixed(5)}%</span>
         <span className="text-white/10 text-[8px] font-bold">({(1 / 0.001425 * value).toFixed(2)} 折)</span>
       </div>
     </div>

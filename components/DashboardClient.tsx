@@ -150,7 +150,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
 
   // ── render ─────────────────────────────────────────────────────
   return (
-    <div className="min-h-dvh flex flex-col bg-base md:max-w-[480px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
+    <div className="min-h-dvh flex flex-col bg-base md:max-w-[480px] md:mx-auto md:border-x md:border-white/5">
 
       {/* ══ HEADER ══════════════════════════════════════════════ */}
       <header className="sticky top-0 z-40 pt-safe bg-[#0d1018e0] backdrop-blur-xl border-b border-white/5">

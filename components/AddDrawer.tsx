@@ -56,10 +56,11 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
 
     setFetchingName(true)
     try {
-      const res = await fetch(`/api/stockname?symbol=${sym}`)
+      // Use direct stock API which now handles names
+      const res = await fetch(`/api/stocks?symbols=${sym}`)
       if (res.ok) {
         const data = await res.json()
-        setStockName(data.name_zh)
+        setStockName(data[sym]?.name_zh || '')
       } else {
         setStockName('')
       }
@@ -179,7 +180,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                 <div className="flex gap-2.5">
                   {(['BUY','SELL'] as Action[]).map(a => (
                     <button key={a} onClick={() => setAction(a)}
-                      className={`flex-1 py-3.5 rounded-2xl text-sm font-black transition-all border-2 ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400 shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'bg-green-400/20 text-green-400 border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.3)]') : 'bg-white/5 text-white/30 border-transparent'}`}>
+                      className={`flex-1 py-3.5 rounded-2xl text-sm font-black transition-all border-2 ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400' : 'bg-green-400/20 text-green-400 border-green-400') : 'bg-white/5 text-white/30 border-transparent'}`}>
                       {a === 'BUY' ? '買入紀錄' : '賣出紀錄'}
                     </button>
                   ))}
@@ -271,7 +272,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
 
               {/* Fee preview */}
               {safePrice > 0 && finalShares > 0 && (
-                <div className="rounded-3xl p-5 space-y-2.5 bg-white/[0.03] border border-white/10 shadow-inner">
+                <div className="rounded-3xl p-5 space-y-2.5 bg-white/[0.03] border border-white/10">
                   <FeeRow label="估算交易金額" value={fmtMoney(Math.round(amount))} />
                   <FeeRow label="券商手續費"   value={fmtMoney(Math.round(fee))} />
                   {tax > 0 && <FeeRow label="證券交易稅"  value={fmtMoney(Math.round(tax))} />}
@@ -288,7 +289,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
               <button 
                 onClick={submitOrder} 
                 disabled={saving || !canSubmit} 
-                className={`w-full py-5 text-lg font-black rounded-2xl transition-all shadow-2xl mt-4 ${canSubmit ? 'bg-gradient-to-br from-[#FFD700] to-[#FF8C00] text-black active:scale-95 shadow-gold/20' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`}>
+                className={`w-full py-5 text-lg font-black rounded-2xl transition-all mt-4 ${canSubmit ? 'bg-gold text-black active:scale-95' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`}>
                 {saving ? '處理中…' : '✅ 確認新增交易紀錄'}
               </button>
             </div>

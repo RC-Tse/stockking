@@ -195,7 +195,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
   }
 
   return (
-    <div className="glass rounded-xl p-4 space-y-5 border-2 border-gold/40 my-2 slide-up shadow-2xl bg-[#0d1018]">
+    <div className="glass rounded-xl p-4 space-y-5 border-2 border-gold/40 my-2 slide-up bg-[#0d1018]">
       <div className="flex justify-between items-center">
         <h3 className="font-black text-sm text-gold">編輯交易 - {tx.symbol}</h3>
         <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-white/5 text-white/40 border border-white/5 uppercase">
@@ -228,7 +228,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
         <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-2.5 px-3 text-sm" placeholder="點此輸入備註..." />
       </div>
 
-      <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 shadow-inner">
+      <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10">
         <div className="flex justify-between text-xs">
           <span className="opacity-40">手續費</span>
           <span className="font-mono font-bold text-white">{fmtMoney(Math.round(fee))}</span>
@@ -249,7 +249,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
 
       <div className="flex gap-3 pt-1">
         <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 text-white/60 border border-white/10 active:scale-95 transition-transform">取消</button>
-        <button onClick={handleSave} disabled={saving} className="flex-2 py-3 rounded-xl font-black text-sm bg-gradient-to-br from-gold to-gold-bright text-base shadow-lg active:scale-95 transition-transform">{saving ? '儲存中...' : '儲存修改'}</button>
+        <button onClick={handleSave} disabled={saving} className="flex-2 py-3 rounded-xl font-black text-sm bg-gold text-base active:scale-95 transition-transform">{saving ? '儲存中...' : '儲存修改'}</button>
       </div>
     </div>
   )

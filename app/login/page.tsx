@@ -22,20 +22,10 @@ export default function LoginPage() {
       className="min-h-dvh flex flex-col items-center justify-center px-6 relative overflow-hidden"
       style={{ background: 'var(--bg-base)' }}
     >
-      {/* Ambient orb */}
-      <div
-        className="absolute top-1/3 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none"
-        style={{
-          background: 'radial-gradient(circle, rgba(201,165,100,0.07) 0%, transparent 65%)',
-          filter: 'blur(50px)',
-        }}
-      />
-
       {/* Hero */}
       <div className="relative z-10 text-center mb-10">
         <div
           className="text-[72px] leading-none mb-5 select-none"
-          style={{ filter: 'drop-shadow(0 4px 24px rgba(201,165,100,0.4))' }}
         >
           👑
         </div>

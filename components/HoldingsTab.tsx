@@ -76,9 +76,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     <div className="p-3 md:p-4 space-y-4">
       {/* 1. 持股概覽卡片 */}
       <div className="glass rounded-2xl p-3 md:p-4 relative overflow-hidden border border-white/10">
-        <div className="absolute inset-0 pointer-events-none"
-          style={{ background: 'radial-gradient(ellipse at top right, rgba(201,165,100,0.07) 0%, transparent 60%)' }} />
-
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs font-semibold opacity-50">
             持股概覽 · {holdings.length} 檔
@@ -307,7 +304,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
   const arrow = isUp ? '▲' : '▼'
 
   return (
-    <div className={`glass rounded-xl overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-gold shadow-[0_0_20px_rgba(201,165,100,0.15)]' : 'border-white/5'}`}>
+    <div className={`glass rounded-xl overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-gold' : 'border-white/5'}`}>
       <div className="p-3 md:p-4 cursor-pointer active:bg-white/5" onClick={onToggle}>
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -401,7 +398,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
 
   if (isEditing) {
     return (
-      <div className="p-4 rounded-xl bg-black/60 border-2 border-gold/40 space-y-5 my-2 slide-up shadow-2xl">
+      <div className="p-4 rounded-xl bg-black/60 border-2 border-gold/40 space-y-5 my-2 slide-up">
         <div className="flex flex-col items-center">
           <Label>交易日期</Label>
           <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base text-center w-full py-2 text-sm" style={{ colorScheme: 'dark' }} />
@@ -427,7 +424,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
           <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-2.5 px-3 text-sm" placeholder="點此輸入備註..." />
         </div>
 
-        <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 shadow-inner">
+        <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10">
           <div className="flex justify-between text-xs">
             <span className="opacity-40">手續費</span>
             <span className="font-mono font-bold text-white">{fmtMoney(Math.round(fee))}</span>
@@ -448,7 +445,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
 
         <div className="flex gap-3 pt-1">
           <button onClick={() => setIsEditing(false)} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 text-white/60 border border-white/10">取消</button>
-          <button onClick={handleSave} disabled={loading} className="flex-2 py-3 rounded-xl font-black text-sm bg-gradient-to-br from-gold to-gold-bright text-base shadow-lg active:scale-95 transition-transform">{loading ? '儲存中...' : '儲存修改'}</button>
+          <button onClick={handleSave} disabled={loading} className="flex-2 py-3 rounded-xl font-black text-sm bg-gold text-base active:scale-95 transition-transform">{loading ? '儲存中...' : '儲存修改'}</button>
         </div>
       </div>
     )
