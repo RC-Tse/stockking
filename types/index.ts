@@ -31,6 +31,7 @@ export interface Holding {
 export interface Quote {
   symbol: string
   name?: string
+  name_zh?: string
   price: number
   prev: number
   open: number

@@ -112,11 +112,11 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
 
         {/* Symbol + Name */}
         <div className="flex flex-col min-w-0">
-          <span className="font-black font-mono text-sm leading-tight" style={{ color: 'var(--t1)' }}>
+          <span className="font-black font-mono text-sm leading-tight text-white">
             {codeOnly(tx.symbol)}
           </span>
-          <span className="text-[10px] font-bold truncate opacity-60" style={{ color: 'var(--t1)' }}>
-            {getStockName(tx.symbol)}
+          <span className="text-[10px] font-bold truncate text-white/40">
+            {tx.name_zh || getStockName(tx.symbol)}
           </span>
         </div>
 

@@ -16,11 +16,10 @@ import AddDrawer        from './AddDrawer'
 
 export interface AppUser { id: string; email: string; name: string; avatar: string }
 
-type Tab = 'holdings' | 'concepts' | 'transactions' | 'settings'
+type Tab = 'holdings' | 'transactions' | 'settings'
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'holdings',     icon: '📊', label: '持股'  },
-  { id: 'concepts',     icon: '💡', label: '概念股' },
   { id: 'transactions', icon: '📋', label: '紀錄'  },
   { id: 'settings',     icon: '⚙️', label: '設定'  },
 ]
@@ -136,17 +135,6 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     })
   }, [holdings, calEntries, refreshCal])
 
-  // ── extra quotes (for concepts tab) ───────────────────────────
-  const fetchQuotes = useCallback(async (syms: string[]) => {
-    const need = syms.filter(s => !quotes[s])
-    if (!need.length) return
-    const r = await fetch(`/api/stocks?symbols=${need.join(',')}`)
-    if (r.ok) {
-      const q: Record<string, Quote> = await r.json()
-      setQuotes(prev => ({ ...prev, ...q }))
-    }
-  }, [quotes])
-
   // ── summary ────────────────────────────────────────────────────
   const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0)
   const totalMV   = holdings.reduce((s, h) => s + h.market_value, 0)
@@ -159,47 +147,34 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   }
 
   // ── render ─────────────────────────────────────────────────────
-  const fontSizeMap = {
-    small: '14px',
-    medium: '16px',
-    large: '18px'
-  }
-  const baseFontSize = fontSizeMap[settings.font_size || 'medium']
-
   return (
-    <div className="min-h-dvh flex flex-col" style={{ 
-      background: 'var(--bg-base)',
-      fontSize: baseFontSize,
-    }}>
+    <div className="min-h-dvh flex flex-col bg-base md:max-w-[480px] md:mx-auto md:shadow-2xl md:border-x md:border-white/5">
 
       {/* ══ HEADER ══════════════════════════════════════════════ */}
-      <header className="sticky top-0 z-40 pt-safe"
-        style={{ background: 'rgba(13,16,24,0.88)', backdropFilter: 'blur(20px)', borderBottom: '1px solid var(--border)' }}>
+      <header className="sticky top-0 z-40 pt-safe bg-[#0d1018e0] backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center justify-between px-4 py-3 gap-2">
 
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-xl leading-none">👑</span>
-            <span className="text-gold font-black text-sm tracking-tight">少年存股王</span>
+            <span className="text-gold font-black text-sm tracking-tight hidden xs:block">少年存股王</span>
           </div>
 
           {/* Summary pill */}
           <div className="flex-1 flex justify-center">
-            <div className="glass-sm flex items-center gap-2 px-3 py-1.5 text-xs font-mono"
-              style={{ border: '1px solid var(--border)' }}>
-              <span style={{ color: 'var(--t3)' }}>市值</span>
-              <span style={{ color: 'var(--t1)' }}>{fmtMoney(totalMV)}</span>
-              <span className={totalPnl >= 0 ? 'up' : 'down'}>
+            <div className="glass-sm flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono border border-white/5">
+              <span className="opacity-50">市值</span>
+              <span className="text-white font-bold">{fmtMoney(totalMV)}</span>
+              <span className={totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}>
                 {totalPnl >= 0 ? '+' : ''}{fmtMoney(totalPnl)}
-                <span className="ml-0.5 opacity-60">({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
+                <span className="ml-0.5 opacity-60 text-[10px]">({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
               </span>
             </div>
           </div>
 
           {/* Avatar → sign out */}
           <button onClick={signOut} title="登出"
-            className="shrink-0 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-xs font-black"
-            style={{ background: 'var(--gold-dim)', border: '1px solid var(--border-bright)', color: 'var(--gold)' }}>
+            className="shrink-0 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-xs font-black bg-gold-dim border border-white/10 text-gold">
             {user.avatar
               ? <img src={user.avatar} alt="" className="w-full h-full object-cover" />
               : (user.name?.[0] ?? user.email[0]).toUpperCase()}
@@ -208,7 +183,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       </header>
 
       {/* ══ CONTENT ═════════════════════════════════════════════ */}
-      <main className="flex-1 overflow-y-auto pb-24">
+      <main className="flex-1 overflow-y-auto pb-24 text-[15px] md:text-[16px]">
         {loading
           ? <LoadingSkeleton />
           : <>
@@ -222,7 +197,6 @@ export default function DashboardClient({ user }: { user: AppUser }) {
                 onRefreshCal={refreshCal}
               />}
 
-              {tab === 'concepts'     && <ConceptsTab quotes={quotes} onFetchQuotes={fetchQuotes} />}
               {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} />}
               {tab === 'settings'     && (
                 <SettingsTab settings={settings} onSignOut={signOut} onSave={async (s) => {
@@ -242,29 +216,22 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       {(tab === 'holdings' || tab === 'transactions') && (
         <button
           onClick={() => setDrawerOpen(true)}
-          className="fixed bottom-24 right-4 z-30 w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold transition-transform active:scale-90"
-          style={{
-            background: 'linear-gradient(135deg, var(--gold) 0%, var(--gold-bright) 100%)',
-            color: 'var(--bg-base)',
-            boxShadow: '0 6px 28px var(--gold-glow)',
-          }}>
+          className="fixed bottom-24 right-4 md:right-[calc(50%-240px+16px)] z-30 w-14 h-14 rounded-full flex items-center justify-center text-2xl font-bold transition-transform active:scale-90 bg-gradient-to-br from-gold to-gold-bright text-base shadow-[0_6px_28px_rgba(201,165,100,0.3)]">
           +
         </button>
       )}
 
       {/* ══ BOTTOM NAV ══════════════════════════════════════════ */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 pb-safe"
-        style={{ background: 'rgba(13,16,24,0.94)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--border)' }}>
+      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#0d1018f0] backdrop-blur-xl border-t border-white/5">
         <div className="flex">
           {TABS.map(t => (
             <button key={t.id} onClick={() => setTab(t.id)}
-              className="flex-1 relative flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors"
-              style={{ color: tab === t.id ? 'var(--gold)' : 'var(--t3)' }}>
+              className={`flex-1 relative flex flex-col items-center gap-0.5 py-2.5 text-xs transition-colors ${tab === t.id ? 'text-gold' : 'text-white/40'}`}>
               <span className="text-[18px] leading-none">{t.icon}</span>
               <span className={`font-semibold ${tab === t.id ? 'text-gold' : ''}`} style={{ fontSize: '10px' }}>
                 {t.label}
               </span>
-              {tab === t.id && <div className="tab-indicator" />}
+              {tab === t.id && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-gold rounded-full" />}
             </button>
           ))}
         </div>

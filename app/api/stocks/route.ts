@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { STOCK_NAMES } from '@/types'
+import { createClient } from '@/lib/supabase/server'
 
-async function fetchYahooQuote(symbol: string) {
+async function fetchYahooQuote(symbol: string, nameZh?: string) {
   try {
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`,
@@ -27,7 +28,8 @@ async function fetchYahooQuote(symbol: string) {
 
     return {
       symbol,
-      name: STOCK_NAMES[symbol] || meta.shortName || meta.longName || symbol.split('.')[0],
+      name: nameZh || STOCK_NAMES[symbol] || meta.shortName || meta.longName || symbol.split('.')[0],
+      name_zh: nameZh,
       price,
       prev,
       open,
@@ -51,9 +53,17 @@ export async function GET(req: NextRequest) {
 
   if (!syms.length) return NextResponse.json({}, { status: 400 })
 
-  const results = await Promise.all(syms.map(s => fetchYahooQuote(s)))
+  const supabase = await createClient()
+  const { data: names } = await supabase
+    .from('stock_names')
+    .select('symbol, name_zh')
+    .in('symbol', syms)
+
+  const nameMap = Object.fromEntries(names?.map(n => [n.symbol, n.name_zh]) ?? [])
+
+  const results = await Promise.all(syms.map(s => fetchYahooQuote(s, nameMap[s])))
   const data: Record<string, any> = {}
-  
+
   results.forEach(q => {
     if (q) data[q.symbol] = q
   })
