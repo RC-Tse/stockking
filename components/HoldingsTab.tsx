@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry } from '@/types'
+import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax } from '@/types'
 
 interface Props {
   holdings: Holding[]
