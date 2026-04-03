@@ -1,8 +1,17 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { STOCK_NAMES } from '@/types'
 
 export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get('symbol')?.toUpperCase()
   if (!symbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
+
+  // 優先從對照表找
+  if (STOCK_NAMES[symbol]) {
+    return NextResponse.json({
+      symbol,
+      name: STOCK_NAMES[symbol],
+    })
+  }
 
   try {
     if (!symbol.endsWith('.TW') && !symbol.endsWith('.TWO')) {

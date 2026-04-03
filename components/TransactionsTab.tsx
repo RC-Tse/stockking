@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Transaction, codeOnly, fmtMoney } from '@/types'
+import { Transaction, codeOnly, fmtMoney, getStockName } from '@/types'
 
 interface Props {
   txs: Transaction[]
@@ -23,7 +23,11 @@ export default function TransactionsTab({ txs, onRefresh }: Props) {
   const [deleting, setDeleting] = useState<number | null>(null)
 
   const filtered = filter.trim()
-    ? txs.filter(t => codeOnly(t.symbol).includes(filter.toUpperCase()) || t.symbol.includes(filter.toUpperCase()))
+    ? txs.filter(t => 
+        codeOnly(t.symbol).includes(filter.toUpperCase()) || 
+        t.symbol.includes(filter.toUpperCase()) ||
+        getStockName(t.symbol).includes(filter)
+      )
     : txs
 
   async function deleteTx(id: number) {
@@ -44,7 +48,7 @@ export default function TransactionsTab({ txs, onRefresh }: Props) {
       <input
         value={filter}
         onChange={e => setFilter(e.target.value)}
-        placeholder="輸入代號篩選…"
+        placeholder="輸入代號或名稱篩選…"
         className="input-base"
       />
 
@@ -80,13 +84,18 @@ function TxRow({ tx, deleting, onDelete }: { tx: Transaction; deleting: boolean;
           {ACTION_LABEL[tx.action] ?? tx.action}
         </span>
 
-        {/* Symbol */}
-        <span className="font-black font-mono text-sm shrink-0" style={{ color: 'var(--t1)' }}>
-          {codeOnly(tx.symbol)}
-        </span>
+        {/* Symbol + Name */}
+        <div className="flex flex-col min-w-0">
+          <span className="font-black font-mono text-sm leading-tight" style={{ color: 'var(--t1)' }}>
+            {codeOnly(tx.symbol)}
+          </span>
+          <span className="text-[10px] font-bold truncate opacity-60" style={{ color: 'var(--t1)' }}>
+            {getStockName(tx.symbol)}
+          </span>
+        </div>
 
         {/* Date */}
-        <span className="text-xs flex-1" style={{ color: 'var(--t3)' }}>{tx.trade_date}</span>
+        <span className="text-xs flex-1 ml-1" style={{ color: 'var(--t3)' }}>{tx.trade_date}</span>
 
         {/* Net amount */}
         <span className="font-bold font-mono text-sm shrink-0"
