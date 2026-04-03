@@ -19,6 +19,56 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const totalPnl  = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
   const pnlPct    = totalCost ? totalPnl / totalCost * 100 : 0
 
+  // ── Year PnL Calculation ──
+  const currentYear = new Date().getFullYear().toString()
+  let ytdRealized = 0
+  let eoyCost = 0
+
+  const sortedTxs = [...transactions].sort((a, b) => a.trade_date.localeCompare(b.trade_date))
+  const map: Record<string, { shares: number, cost: number }> = {}
+
+  sortedTxs.forEach(tx => {
+    if (tx.trade_date < `${currentYear}-01-01`) {
+      if (!map[tx.symbol]) map[tx.symbol] = { shares: 0, cost: 0 }
+      const h = map[tx.symbol]
+      if (tx.action === 'BUY' || tx.action === 'DCA') {
+        h.shares += tx.shares
+        h.cost += tx.amount + tx.fee
+      } else if (tx.action === 'SELL') {
+        const avgCost = h.shares > 0 ? h.cost / h.shares : 0
+        h.shares -= tx.shares
+        h.cost -= tx.shares * avgCost
+      }
+    }
+  })
+
+  Object.values(map).forEach(h => {
+    if (h.shares > 0) eoyCost += h.cost
+  })
+
+  const mapYtd: Record<string, { shares: number, cost: number }> = {}
+  sortedTxs.forEach(tx => {
+    if (!mapYtd[tx.symbol]) mapYtd[tx.symbol] = { shares: 0, cost: 0 }
+    const h = mapYtd[tx.symbol]
+    if (tx.action === 'BUY' || tx.action === 'DCA') {
+      h.shares += tx.shares
+      h.cost += tx.amount + tx.fee
+    } else if (tx.action === 'SELL') {
+      const avgCost = h.shares > 0 ? h.cost / h.shares : 0
+      const costBasis = tx.shares * avgCost
+      h.shares -= tx.shares
+      h.cost -= costBasis
+      if (tx.trade_date >= `${currentYear}-01-01`) {
+        ytdRealized += (tx.net_amount + costBasis)
+      }
+    }
+  })
+
+  // 近似年損益 = 今年已實現損益 + (目前總未實現損益) 
+  // 註：精確的年損益需要去年底的收盤價，此處以總未實現損益 + 今年已實現損益作為簡化計算
+  const yearPnl = ytdRealized + totalPnl
+  const yearPnlPct = eoyCost > 0 ? (yearPnl / eoyCost) * 100 : 0
+
   const [expanded, setExpanded] = useState<string | null>(null)
 
   return (
@@ -40,7 +90,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </button>
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-3 mb-3">
           <StatBox label="投入成本" value={shortMoney(totalCost)} />
           <StatBox label="目前市值" value={shortMoney(totalMV)} />
           <StatBox
@@ -48,6 +98,32 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
             upDown={totalPnl}
           />
+        </div>
+
+        {/* 年損益與目標 */}
+        <div className="pt-3 border-t border-white/10 space-y-2">
+          <div className="flex justify-between items-center text-xs">
+            <span style={{ color: 'var(--t3)' }}>今年損益 (已實現+未實現)</span>
+            <span className="font-mono font-bold" style={{ color: yearPnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+              {yearPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(yearPnl))} ({yearPnlPct > 0 ? '+' : ''}{yearPnlPct.toFixed(2)}%)
+            </span>
+          </div>
+          {settings.year_goal > 0 && (
+            <div className="flex justify-between items-center text-xs">
+              <span style={{ color: 'var(--t3)' }}>年目標：{fmtMoney(settings.year_goal)}</span>
+              <span className="font-mono font-bold" style={{ color: 'var(--gold)' }}>
+                達成: {((totalMV / settings.year_goal) * 100).toFixed(1)}%
+              </span>
+            </div>
+          )}
+          {settings.total_goal > 0 && (
+            <div className="flex justify-between items-center text-xs">
+              <span style={{ color: 'var(--t3)' }}>總目標：{fmtMoney(settings.total_goal)}</span>
+              <span className="font-mono font-bold" style={{ color: 'var(--gold)' }}>
+                達成: {((totalMV / settings.total_goal) * 100).toFixed(1)}%
+              </span>
+            </div>
+          )}
         </div>
       </div>
 

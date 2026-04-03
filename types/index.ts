@@ -67,6 +67,9 @@ export interface UserSettings {
   tax_etf: number
   max_holdings: number
   font_size: 'small' | 'medium' | 'large'
+  dca_fee_rate: number
+  year_goal: number
+  total_goal: number
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -80,6 +83,9 @@ export const DEFAULT_SETTINGS: UserSettings = {
   tax_etf: 0.001,
   max_holdings: 7,
   font_size: 'medium',
+  dca_fee_rate: 0.001425,
+  year_goal: 0,
+  total_goal: 0,
 }
 
 // ETF codes for tax calculation

@@ -62,3 +62,9 @@ CREATE TABLE IF NOT EXISTS public.settings (
 ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "own_settings" ON public.settings
   FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+-- 4. schema updates (2026-04) ─────────────────────────────────
+-- 請在 Supabase SQL Editor 執行以下指令以新增欄位
+ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS year_goal NUMERIC DEFAULT 0;
+ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS total_goal NUMERIC DEFAULT 0;
+ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS dca_fee_rate NUMERIC DEFAULT 0.001425;

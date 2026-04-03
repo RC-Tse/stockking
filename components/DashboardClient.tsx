@@ -225,7 +225,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
               {tab === 'concepts'     && <ConceptsTab quotes={quotes} onFetchQuotes={fetchQuotes} />}
               {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} />}
               {tab === 'settings'     && (
-                <SettingsTab settings={settings} onSave={async (s) => {
+                <SettingsTab settings={settings} onSignOut={signOut} onSave={async (s) => {
                   const r = await fetch('/api/settings', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
