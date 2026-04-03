@@ -49,9 +49,8 @@ export default function HoldingsTab({ holdings, quotes, settings, onRefresh }: P
           <StatBox label="投入成本" value={shortMoney(totalCost)} />
           <StatBox label="目前市值" value={shortMoney(totalMV)} />
           <StatBox
-            label="未實現損益"
-            value={`${totalPnl >= 0 ? '+' : ''}${shortMoney(totalPnl)}`}
-            sub={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%`}
+            label="總盈虧比"
+            value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
             upDown={totalPnl}
           />
         </div>
@@ -92,7 +91,11 @@ function HoldingRow({ h, q }: { h: Holding; q?: Quote }) {
         {/* Left */}
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="font-black text-base" style={{ color: 'var(--t1)' }}>
+            {q?.name && (
+              <span className="font-black text-base" style={{ color: 'var(--t1)' }}>{q.name}</span>
+            )}
+            <span className={`font-mono px-1.5 py-0.5 rounded-md text-xs shrink-0`}
+              style={{ background: 'var(--bg-hover)', color: 'var(--t2)' }}>
               {codeOnly(h.symbol)}
             </span>
             <span className="text-xs font-mono px-2 py-0.5 rounded-full shrink-0"

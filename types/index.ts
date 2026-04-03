@@ -30,6 +30,7 @@ export interface Holding {
 
 export interface Quote {
   symbol: string
+  name?: string
   price: number
   prev: number
   open: number
@@ -91,7 +92,7 @@ export function calcFee(amount: number, s: UserSettings, isSell = false): number
   const rate = isSell
     ? s.sell_fee_rate * s.sell_discount
     : s.buy_fee_rate * s.buy_discount
-  return Math.max(amount * rate, s.fee_min)
+  return Math.floor(Math.max(amount * rate, s.fee_min))
 }
 
 export function calcTax(amount: number, symbol: string, s: UserSettings): number {

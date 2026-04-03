@@ -1,4 +1,38 @@
-﻿import { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
+
+interface TWItem {
+  c: string; ex: string; n: string; z: string
+  y: string; o: string; h: string; l: string; v: string
+}
+
+async function fetchTWSEQuotes(symbols: string[]) {
+  const exCh = symbols.map(s => {
+    const code = s.replace(/\.(TW|TWO)$/i, '').toLowerCase()
+    return s.toUpperCase().endsWith('.TWO') ? `otc_${code}.tw` : `tse_${code}.tw`
+  }).join('|')
+  const res = await fetch(
+    `https://mis.twse.com.tw/stock/api/getStockInfo.jsp?ex_ch=${exCh}&json=1&delay=0`,
+    { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
+  )
+  if (!res.ok) throw new Error('TWSE error')
+  return res.json() as Promise<{ msgArray: TWItem[] }>
+}
+
+function toQuote(item: TWItem) {
+  const p  = (s: string) => parseFloat(s) || 0
+  const price = p(item.z) > 0 ? p(item.z) : p(item.y)
+  const prev  = p(item.y) || price
+  const open  = p(item.o) > 0 ? p(item.o) : prev
+  const high  = p(item.h) > 0 ? p(item.h) : price
+  const low   = p(item.l) > 0 ? p(item.l) : price
+  const volume = parseInt(item.v) || 0
+  const change = Math.round((price - prev) * 100) / 100
+  const change_pct = prev ? Math.round(change / prev * 10000) / 100 : 0
+  const sym = item.c.toUpperCase() + (item.ex === 'tse' ? '.TW' : '.TWO')
+  return { symbol: sym, name: item.n, price, prev, open, high, low, change, change_pct, volume }
+}
+
+// ── Mock fallback ─────────────────────────────────────────────────────────────
 const BASE: Record<string,number> = {
   '2330.TW':960,'2454.TW':1180,'2382.TW':315,'2356.TW':90,'3711.TW':182,
   '2308.TW':388,'6669.TW':1040,'3034.TW':242,'2301.TW':76,'2317.TW':220,
@@ -11,7 +45,7 @@ const BASE: Record<string,number> = {
 }
 function rng(s:number){const x=Math.sin(s+1)*10000;return x-Math.floor(x)}
 function ss(sym:string){return sym.split('').reduce((a,c)=>a*31+c.charCodeAt(0),0)}
-function quote(sym:string){
+function mockQuote(sym:string){
   const base=BASE[sym]??100
   const now=new Date()
   const ds=now.getFullYear()*10000+(now.getMonth()+1)*100+now.getDate()
@@ -22,11 +56,28 @@ function quote(sym:string){
   const open=Math.round(base*(1+(rng(s+1)*4-2)/100)*100)/100
   const high=Math.round(Math.max(price,open)*(1+rng(s+2)*0.008)*100)/100
   const low=Math.round(Math.min(price,open)*(1-rng(s+3)*0.008)*100)/100
-  return {symbol:sym,price,prev:base,open,high,low,change,change_pct:Math.round(cp*10000)/100,volume:Math.floor(rng(s+4)*80000+500)}
+  return {symbol:sym,name:undefined,price,prev:base,open,high,low,change,change_pct:Math.round(cp*10000)/100,volume:Math.floor(rng(s+4)*80000+500)}
 }
+
 export async function GET(req:NextRequest){
   const syms=(req.nextUrl.searchParams.get('symbols')??'').split(',').map(s=>s.trim().toUpperCase()).filter(Boolean)
   if(!syms.length)return NextResponse.json({},{status:400})
-  const r:Record<string,ReturnType<typeof quote>>={};for(const s of syms)r[s]=quote(s)
-  return NextResponse.json(r,{headers:{'Cache-Control':'public,s-maxage=60'}})
+
+  try {
+    const data = await fetchTWSEQuotes(syms)
+    const result: Record<string, ReturnType<typeof toQuote>> = {}
+    for (const item of data.msgArray ?? []) {
+      const q = toQuote(item)
+      result[q.symbol] = q
+    }
+    // Fill missing symbols with mock
+    for (const s of syms) {
+      if (!result[s]) result[s] = mockQuote(s)
+    }
+    return NextResponse.json(result, { headers: { 'Cache-Control': 'public,s-maxage=30' } })
+  } catch {
+    const r: Record<string, ReturnType<typeof mockQuote>> = {}
+    for (const s of syms) r[s] = mockQuote(s)
+    return NextResponse.json(r, { headers: { 'Cache-Control': 'public,s-maxage=60' } })
+  }
 }

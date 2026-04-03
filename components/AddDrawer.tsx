@@ -154,9 +154,18 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                 className="btn-ghost w-11 h-11 flex items-center justify-center text-xl font-black rounded-xl">
                 −
               </button>
-              <div className="flex-1 text-center font-black font-mono text-2xl" style={{ color: 'var(--t1)' }}>
-                {tradeType === 'FULL' ? lots : shares}
-              </div>
+              <input
+                type="number"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={tradeType === 'FULL' ? lots : shares}
+                onChange={e => {
+                  const v = Math.max(1, parseInt(e.target.value) || 0)
+                  tradeType === 'FULL' ? setLots(v) : setShares(v)
+                }}
+                className="flex-1 text-center font-black font-mono text-2xl input-base"
+                style={{ color: 'var(--t1)', background: 'transparent' }}
+              />
               <button onClick={() => tradeType === 'FULL' ? setLots(l => l+1) : setShares(s => s+1)}
                 className="btn-ghost w-11 h-11 flex items-center justify-center text-xl font-black rounded-xl">
                 +

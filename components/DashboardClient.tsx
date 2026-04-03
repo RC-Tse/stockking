@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
@@ -71,6 +71,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [holdings, setHoldings]   = useState<Holding[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [loading, setLoading]     = useState(true)
+  const autoCalSaved = useRef(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -111,6 +112,30 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     const now = new Date()
     refreshCal(now.getFullYear(), now.getMonth() + 1)
   }, [refresh, refreshCal])
+
+  // ── Auto-save today's P&L to calendar at 2 PM ─────────────────
+  useEffect(() => {
+    if (autoCalSaved.current || holdings.length === 0) return
+    const now = new Date()
+    if (now.getHours() < 14) return
+    const todayStr = now.toISOString().split('T')[0]
+    if (calEntries.some(e => e.entry_date === todayStr)) return
+    autoCalSaved.current = true
+    const pnl = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
+    const cost = holdings.reduce((s, h) => s + h.total_cost, 0)
+    const pnlPctStr = cost ? `${pnl >= 0 ? '+' : ''}${(pnl / cost * 100).toFixed(2)}%` : ''
+    fetch('/api/calendar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        entry_date: todayStr,
+        pnl: Math.round(pnl),
+        note: `自動更新・盈虧比 ${pnlPctStr}`,
+      }),
+    }).then(r => {
+      if (r.ok) refreshCal(now.getFullYear(), now.getMonth() + 1)
+    })
+  }, [holdings, calEntries, refreshCal])
 
   // ── extra quotes (for concepts tab) ───────────────────────────
   const fetchQuotes = useCallback(async (syms: string[]) => {
