@@ -6,10 +6,24 @@ export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { data, error } = await supabase.from('transactions').select('*').eq('user_id', user.id)
+  
+  const { data: txs, error } = await supabase.from('transactions').select('*').eq('user_id', user.id)
     .order('trade_date', { ascending: false }).order('created_at', { ascending: false })
+  
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json(data ?? [])
+  if (!txs || txs.length === 0) return NextResponse.json([])
+
+  // Fetch Chinese names for these symbols
+  const syms = Array.from(new Set(txs.map(t => t.symbol)))
+  const { data: names } = await supabase
+    .from('stock_names')
+    .select('symbol, name_zh')
+    .in('symbol', syms)
+
+  const nameMap = Object.fromEntries(names?.map(n => [n.symbol, n.name_zh]) ?? [])
+  const enriched = txs.map(t => ({ ...t, name_zh: nameMap[t.symbol] }))
+
+  return NextResponse.json(enriched)
 }
 
 export async function POST(req: NextRequest) {

@@ -4,6 +4,7 @@ export interface Transaction {
   id: number
   user_id: string
   symbol: string
+  name_zh?: string
   action: 'BUY' | 'SELL' | 'DCA'
   trade_date: string
   shares: number
