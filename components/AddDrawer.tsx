@@ -22,6 +22,8 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   const [action,    setAction]    = useState<Action>('BUY')
   const [tradeType, setTradeType] = useState<TradeType>('FULL')
   const [symbol,    setSymbol]    = useState('')
+  const [stockName, setStockName] = useState('')
+  const [fetchingName, setFetchingName] = useState(false)
   const [lots,      setLots]      = useState(1)
   const [shares,    setShares]    = useState(1)
   const [price,     setPrice]     = useState(0)
@@ -32,13 +34,33 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   // Reset when opened
   useEffect(() => {
     if (open) {
-      setAction('BUY'); setTradeType('FULL'); setSymbol('')
+      setAction('BUY'); setTradeType('FULL'); setSymbol(''); setStockName('')
       setLots(1); setShares(1); setPrice(0)
       setDate(today); setNote(''); setSaving(false)
     }
   }, [open, today])
 
+  async function fetchStockName(s: string) {
+    const sym = s.trim().toUpperCase()
+    if (!sym || sym.length < 2) return
+    setFetchingName(true)
+    try {
+      const res = await fetch(`/api/stocks/info?symbol=${sym}`)
+      if (res.ok) {
+        const data = await res.json()
+        setStockName(data.name)
+      } else {
+        setStockName('找不到此代號')
+      }
+    } catch (err) {
+      setStockName('')
+    } finally {
+      setFetchingName(false)
+    }
+  }
+
   const actualShares = tradeType === 'FULL' ? lots * 1000 : shares
+
   const amount = actualShares * price
   const fee    = price > 0 ? calcFee(amount, settings, action === 'SELL') : 0
   const tax    = price > 0 && action === 'SELL' ? calcTax(amount, symbol, settings) : 0
