@@ -160,8 +160,18 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   }
 
   // ── render ─────────────────────────────────────────────────────
+  const fontSizeMap = {
+    small: '14px',
+    medium: '16px',
+    large: '18px'
+  }
+  const baseFontSize = fontSizeMap[settings.font_size || 'medium']
+
   return (
-    <div className="min-h-dvh flex flex-col" style={{ background: 'var(--bg-base)' }}>
+    <div className="min-h-dvh flex flex-col" style={{ 
+      background: 'var(--bg-base)',
+      fontSize: baseFontSize,
+    }}>
 
       {/* ══ HEADER ══════════════════════════════════════════════ */}
       <header className="sticky top-0 z-40 pt-safe"

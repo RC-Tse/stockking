@@ -33,17 +33,28 @@ export default function SettingsTab({ settings, onSave }: Props) {
     <div className="p-4 space-y-4">
 
       {/* ── Broker ──────────────────────────────────────────── */}
-      <Section title="🏦 券商設定">
+      <Section title="🏦 券商與系統設定">
         <Field label="券商名稱">
           <input value={form.broker_name}
             onChange={e => set('broker_name', e.target.value)}
             className="input-base" />
         </Field>
-        <Field label="持股上限（檔）">
-          <input type="number" value={form.max_holdings} min={1} max={30}
-            onChange={e => set('max_holdings', Number(e.target.value))}
-            className="input-base" />
-        </Field>
+        <div className="grid grid-cols-2 gap-2">
+          <Field label="持股上限（檔）">
+            <input type="number" value={form.max_holdings} min={1} max={30}
+              onChange={e => set('max_holdings', Number(e.target.value))}
+              className="input-base" />
+          </Field>
+          <Field label="字體大小">
+            <select value={form.font_size}
+              onChange={e => set('font_size', e.target.value as any)}
+              className="input-base">
+              <option value="small">小 (Small)</option>
+              <option value="medium">中 (Medium)</option>
+              <option value="large">大 (Large)</option>
+            </select>
+          </Field>
+        </div>
       </Section>
 
       {/* ── Buy fee ─────────────────────────────────────────── */}

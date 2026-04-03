@@ -46,6 +46,14 @@ export interface CalendarEntry {
   pnl: number
   pnl_pct?: number
   note: string
+  details?: {
+    symbol: string
+    name: string
+    price: number
+    pnl: number
+    pnl_pct: number
+    shares: number
+  }[]
 }
 
 export interface UserSettings {
@@ -58,6 +66,7 @@ export interface UserSettings {
   tax_stock: number
   tax_etf: number
   max_holdings: number
+  font_size: 'small' | 'medium' | 'large'
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -70,6 +79,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   tax_stock: 0.003,
   tax_etf: 0.001,
   max_holdings: 7,
+  font_size: 'medium',
 }
 
 // ETF codes for tax calculation

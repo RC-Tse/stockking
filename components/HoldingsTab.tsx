@@ -81,6 +81,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], onRefresh: (y: number, m: number) => void }) {
   const now = new Date()
   const [viewDate, setViewDate] = useState(new Date(now.getFullYear(), now.getMonth(), 1))
+  const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth() + 1
 
@@ -112,93 +114,147 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
     return { totalPnl, totalPnlPct }
   }, [entries])
 
+  const selectedEntry = useMemo(() => {
+    if (!selectedDate) return null
+    return entries.find(e => e.entry_date === selectedDate)
+  }, [selectedDate, entries])
+
   function moveMonth(delta: number) {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1))
+    setSelectedDate(null)
   }
 
   function handleMonthChange(e: React.ChangeEvent<HTMLInputElement>) {
     if (!e.target.value) return
     const [y, m] = e.target.value.split('-').map(Number)
     setViewDate(new Date(y, m - 1, 1))
+    setSelectedDate(null)
+  }
+
+  function toggleDate(dateStr: string) {
+    setSelectedDate(prev => prev === dateStr ? null : dateStr)
   }
 
   return (
-    <div className="glass rounded-2xl p-4 border border-white/5 space-y-4">
-      <div className="flex flex-col gap-3">
-        {/* Header with Picker */}
-        <div className="flex items-center justify-between">
-          <button onClick={() => moveMonth(-1)} className="btn-ghost p-2 text-lg">‹</button>
-          <div className="relative">
-            <h2 className="font-black text-base flex items-center gap-1" style={{ color: 'var(--t1)' }}>
-              {year}年 {month}月 ▾
-            </h2>
-            <input 
-              type="month" 
-              className="absolute inset-0 opacity-0 cursor-pointer"
-              onChange={handleMonthChange}
-              value={`${year}-${String(month).padStart(2, '0')}`}
-            />
+    <div className="space-y-4">
+      <div className="glass rounded-2xl p-4 border border-white/5 space-y-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <button onClick={() => moveMonth(-1)} className="btn-ghost p-2 text-lg">‹</button>
+            <div className="relative">
+              <h2 className="font-black text-base flex items-center gap-1" style={{ color: 'var(--t1)' }}>
+                {year}年 {month}月 ▾
+              </h2>
+              <input 
+                type="month" 
+                className="absolute inset-0 opacity-0 cursor-pointer"
+                onChange={handleMonthChange}
+                value={`${year}-${String(month).padStart(2, '0')}`}
+              />
+            </div>
+            <button onClick={() => moveMonth(1)} className="btn-ghost p-2 text-lg">›</button>
           </div>
-          <button onClick={() => moveMonth(1)} className="btn-ghost p-2 text-lg">›</button>
+
+          <div className="grid grid-cols-2 gap-4 text-center">
+            <div>
+              <div className="text-[10px] font-bold text-gray-500 uppercase">本月總損益</div>
+              <div className="text-sm font-black font-mono" style={{ color: stats.totalPnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+                {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
+              </div>
+            </div>
+            <div>
+              <div className="text-[10px] font-bold text-gray-500 uppercase">本月損益百分比</div>
+              <div className="text-sm font-black font-mono" style={{ color: stats.totalPnlPct >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+                {stats.totalPnlPct >= 0 ? '+' : ''}{stats.totalPnlPct.toFixed(2)}%
+              </div>
+            </div>
+          </div>
         </div>
 
-        {/* Month Stats */}
-        <div className="grid grid-cols-2 gap-4 text-center">
-          <div>
-            <div className="text-[10px] font-bold text-gray-500 uppercase">本月總損益</div>
-            <div className="text-sm font-black font-mono" style={{ color: stats.totalPnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
-              {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
-            </div>
-          </div>
-          <div>
-            <div className="text-[10px] font-bold text-gray-500 uppercase">本月損益百分比</div>
-            <div className="text-sm font-black font-mono" style={{ color: stats.totalPnlPct >= 0 ? 'var(--red)' : 'var(--grn)' }}>
-              {stats.totalPnlPct >= 0 ? '+' : ''}{stats.totalPnlPct.toFixed(2)}%
-            </div>
-          </div>
+        <div className="grid grid-cols-7 gap-1">
+          {['日','一','二','三','四','五','六'].map(d => (
+            <div key={d} className="text-center text-[10px] font-bold py-1 opacity-40">{d}</div>
+          ))}
+          {days.map((d, i) => {
+            if (d === null) return <div key={`empty-${i}`} className="aspect-[1.5/1]" />
+            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+            const entry = entryMap[d]
+            const pnlPct = entry?.pnl_pct || 0
+            const isSelected = selectedDate === dateStr
+            
+            let bgColor = 'transparent'
+            if (pnlPct > 0) {
+              const intensity = Math.min(100, (pnlPct / 10) * 100)
+              bgColor = `rgba(255, 69, 58, ${0.2 + (intensity / 100) * 0.8})`
+            } else if (pnlPct < 0) {
+              const intensity = Math.min(100, (Math.abs(pnlPct) / 10) * 100)
+              bgColor = `rgba(50, 215, 75, ${0.2 + (intensity / 100) * 0.8})`
+            } else if (entry) {
+              bgColor = 'rgba(255, 255, 255, 0.05)'
+            }
+
+            return (
+              <div key={d} 
+                onClick={() => toggleDate(dateStr)}
+                className={`aspect-[1.2/1] rounded flex flex-col items-center justify-between p-1 cursor-pointer transition-all border ${isSelected ? 'border-white ring-1 ring-white' : 'border-white/5'}`}
+                style={{ background: bgColor }}>
+                <span className="text-[10px] font-black text-white self-start">{d}</span>
+                {entry && entry.pnl !== 0 && (
+                  <div className="w-full text-center flex flex-col justify-end flex-1">
+                    <div className="text-[9px] font-black text-white leading-none mb-0.5">
+                      {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
+                    </div>
+                    <div className="text-[8px] font-bold text-white leading-none scale-90">
+                      {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
         </div>
       </div>
 
-      {/* Calendar Grid */}
-      <div className="grid grid-cols-7 gap-1">
-        {['日','一','二','三','四','五','六'].map(d => (
-          <div key={d} className="text-center text-[10px] font-bold py-1 opacity-40">{d}</div>
-        ))}
-        {days.map((d, i) => {
-          if (d === null) return <div key={`empty-${i}`} className="aspect-square" />
-          const entry = entryMap[d]
-          const pnlPct = entry?.pnl_pct || 0
+      {/* Daily Details Card */}
+      {selectedEntry && (
+        <div className="glass rounded-2xl p-4 border border-gold/30 slide-up bg-black/40">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="font-black text-sm" style={{ color: 'var(--gold)' }}>
+              📅 {selectedEntry.entry_date} 持股明細
+            </h3>
+            <span className="text-xs font-mono font-bold" style={{ color: selectedEntry.pnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+              當日：{selectedEntry.pnl >= 0 ? '+' : ''}{fmtMoney(selectedEntry.pnl)} ({selectedEntry.pnl_pct}%)
+            </span>
+          </div>
           
-          let bgColor = 'transparent'
-          if (pnlPct > 0) {
-            const intensity = Math.min(100, (pnlPct / 10) * 100)
-            bgColor = `rgba(255, 69, 58, ${0.1 + (intensity / 100) * 0.9})`
-          } else if (pnlPct < 0) {
-            const intensity = Math.min(100, (Math.abs(pnlPct) / 10) * 100)
-            bgColor = `rgba(50, 215, 75, ${0.1 + (intensity / 100) * 0.9})`
-          } else if (entry) {
-            bgColor = 'rgba(255, 255, 255, 0.05)'
-          }
-
-          return (
-            <div key={d} 
-              className="aspect-square rounded-lg flex flex-col items-center justify-center border border-white/5 transition-all"
-              style={{ background: bgColor }}>
-              <span className="text-xs font-black text-white">{d}</span>
-              {entry && entry.pnl !== 0 && (
-                <>
-                  <div className="text-[8px] font-bold text-white leading-none scale-90">
-                    {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
+          <div className="space-y-2">
+            {selectedEntry.details?.map(s => (
+              <div key={s.symbol} className="flex items-center justify-between p-2 rounded-lg bg-white/5 border border-white/10">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black text-white truncate">{s.name}</span>
+                    <span className="text-[10px] font-mono opacity-50">{codeOnly(s.symbol)}</span>
                   </div>
-                  <div className="text-[7px] font-bold text-white leading-none scale-75">
-                    {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                  <div className="text-[10px] opacity-70 mt-0.5">
+                    持股 {s.shares.toLocaleString()} 股 · 收盤 {s.price.toFixed(2)}
                   </div>
-                </>
-              )}
-            </div>
-          )
-        })}
-      </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-black font-mono" style={{ color: s.pnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+                    {s.pnl >= 0 ? '+' : ''}{fmtMoney(s.pnl)}
+                  </div>
+                  <div className="text-[10px] font-bold font-mono" style={{ color: s.pnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+                    {s.pnl >= 0 ? '+' : ''}{s.pnl_pct.toFixed(2)}%
+                  </div>
+                </div>
+              </div>
+            ))}
+            {(!selectedEntry.details || selectedEntry.details.length === 0) && (
+              <div className="text-center py-4 text-xs opacity-50 italic">當天無持股資料</div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
