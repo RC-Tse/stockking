@@ -60,7 +60,6 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   }
 
   const actualShares = tradeType === 'FULL' ? lots * 1000 : shares
-
   const amount = actualShares * price
   const fee    = price > 0 ? calcFee(amount, settings, action === 'SELL') : 0
   const tax    = price > 0 && action === 'SELL' ? calcTax(amount, symbol, settings) : 0
@@ -137,10 +136,18 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
 
           {/* ── Symbol ─────────────────────────────────────── */}
           <div>
-            <Label>股票代號</Label>
+            <div className="flex justify-between items-end mb-1.5">
+              <Label>股票代號</Label>
+              {fetchingName ? (
+                <span className="text-xs animate-pulse" style={{ color: 'var(--gold)' }}>查詢中…</span>
+              ) : stockName ? (
+                <span className="text-xs font-bold" style={{ color: 'var(--gold)' }}>{stockName}</span>
+              ) : null}
+            </div>
             <input
               value={symbol}
               onChange={e => setSymbol(e.target.value)}
+              onBlur={e => fetchStockName(e.target.value)}
               placeholder="例：2330.TW"
               className="input-base uppercase font-mono"
               autoCapitalize="characters"
