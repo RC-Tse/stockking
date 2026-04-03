@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { UserSettings, calcFee, calcTax, fmtMoney, codeOnly } from '@/types'
 
 interface Props {
@@ -18,7 +18,10 @@ type Action = 'BUY' | 'SELL'
 type TradeType = 'FULL' | 'FRACTIONAL'
 
 export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
-  const today = new Date().toISOString().split('T')[0]
+  const now = new Date()
+  const currentYear = now.getFullYear()
+  const currentMonth = now.getMonth() + 1
+  const currentDay = now.getDate()
 
   const [mode, setMode] = useState<Mode>('SELECT')
   
@@ -31,7 +34,12 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   const [lots,      setLots]      = useState<number | ''>('')
   const [shares,    setShares]    = useState<number | ''>('')
   const [price,     setPrice]     = useState<number | ''>('')
-  const [date,      setDate]      = useState(today)
+  
+  // Custom Date States
+  const [selYear,  setSelYear]  = useState(currentYear)
+  const [selMonth, setSelMonth] = useState(currentMonth)
+  const [selDay,   setSelDay]   = useState(currentDay)
+
   const [note,      setNote]      = useState('')
   const [saving,    setSaving]    = useState(false)
 
@@ -41,9 +49,27 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
       setMode('SELECT')
       setAction('BUY'); setTradeType('FULL'); setSymbol(''); setStockName('')
       setLots(''); setShares(''); setPrice('')
-      setDate(today); setNote(''); setSaving(false)
+      setSelYear(currentYear); setSelMonth(currentMonth); setSelDay(currentDay)
+      setNote(''); setSaving(false)
     }
-  }, [open, today])
+  }, [open, currentYear, currentMonth, currentDay])
+
+  const years = useMemo(() => {
+    const arr = []
+    for (let i = 0; i < 5; i++) arr.push(currentYear - i)
+    return arr
+  }, [currentYear])
+
+  const daysInMonth = useMemo(() => {
+    return new Date(selYear, selMonth, 0).getDate()
+  }, [selYear, selMonth])
+
+  // Adjust day if month change makes it invalid (e.g. Feb 30 -> Feb 28)
+  useEffect(() => {
+    if (selDay > daysInMonth) setSelDay(daysInMonth)
+  }, [daysInMonth, selDay])
+
+  const tradeDate = `${selYear}-${String(selMonth).padStart(2, '0')}-${String(selDay).padStart(2, '0')}`
 
   async function fetchStockName(s: string) {
     let sym = s.trim().toUpperCase()
@@ -56,7 +82,6 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
 
     setFetchingName(true)
     try {
-      // Use direct stock API which now handles names
       const res = await fetch(`/api/stocks?symbols=${sym}`)
       if (res.ok) {
         const data = await res.json()
@@ -86,7 +111,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     await onSave({
       symbol: symbol.trim().toUpperCase(),
       action,
-      trade_date: date,
+      trade_date: tradeDate,
       shares: finalShares,
       price: safePrice,
       trade_type: tradeType,
@@ -257,10 +282,20 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                   <input type="number" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" step="0.01" min="0" className="input-base font-black font-mono text-xl w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" />
                 </div>
 
-                {/* Date */}
+                {/* Custom Date Selector */}
                 <div className="space-y-2">
                   <Label>成交日期</Label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base font-black font-mono text-base w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" style={{ colorScheme: 'dark', width: '100%', maxWidth: '100%' }} />
+                  <div className="flex gap-2">
+                    <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} className="flex-1 input-base bg-white/5 border-white/10 py-4 px-2 rounded-2xl font-black font-mono text-center appearance-none">
+                      {years.map(y => <option key={y} value={y}>{y}年</option>)}
+                    </select>
+                    <select value={selMonth} onChange={e => setSelMonth(Number(e.target.value))} className="w-20 input-base bg-white/5 border-white/10 py-4 px-2 rounded-2xl font-black font-mono text-center appearance-none">
+                      {Array.from({length: 12}, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
+                    </select>
+                    <select value={selDay} onChange={e => setSelDay(Number(e.target.value))} className="w-20 input-base bg-white/5 border-white/10 py-4 px-2 rounded-2xl font-black font-mono text-center appearance-none">
+                      {Array.from({length: daysInMonth}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}日</option>)}
+                    </select>
+                  </div>
                 </div>
               </div>
 

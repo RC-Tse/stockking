@@ -452,23 +452,23 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   }
 
   return (
-    <div className="flex items-center justify-between py-1.5 border-b border-white/5 last:border-0">
+    <div className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
       <div className="flex items-center gap-3">
-        <div className={`w-1 h-8 rounded-full ${isBuy ? 'bg-red-500' : 'bg-green-500'}`} />
+        <div className={`w-1 h-10 rounded-full ${isBuy ? 'bg-red-500' : 'bg-green-500'}`} />
         <div>
-          <div className="text-[10px] font-mono opacity-30">{t.trade_date}</div>
-          <div className="text-xs font-bold text-white/80">
+          <div className="text-sm font-mono opacity-40">{t.trade_date}</div>
+          <div className="text-sm font-bold text-white/90">
             <span className={isBuy ? 'text-red-400' : 'text-green-400'}>{isBuy ? '買' : '賣'}</span> {t.shares}股 @ {t.price}
           </div>
         </div>
       </div>
       <div className="text-right">
-        <div className={`text-xs font-mono font-bold ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+        <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
           {t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}
         </div>
-        <div className="flex gap-2 justify-end mt-0.5">
-          <button onClick={() => setIsEditing(true)} className="text-[10px] text-gold/60 hover:text-gold active:underline">編輯</button>
-          <button onClick={handleDelete} className="text-[10px] text-white/20 hover:text-red-400 active:underline">刪除</button>
+        <div className="flex gap-3 justify-end mt-1">
+          <button onClick={() => setIsEditing(true)} className="text-sm font-bold text-gold hover:underline active:opacity-60">編輯</button>
+          <button onClick={handleDelete} className="text-sm font-bold text-[#ff6b6b] hover:underline active:opacity-60">刪除</button>
         </div>
       </div>
     </div>
