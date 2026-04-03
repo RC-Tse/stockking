@@ -218,7 +218,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       {(tab === 'holdings' || tab === 'transactions') && (
         <button
           onClick={() => setDrawerOpen(true)}
-          className="fixed bottom-24 right-6 md:right-[calc(50%-240px+24px)] z-30 w-14 h-14 rounded-full flex items-center justify-center text-3xl font-bold transition-all active:scale-90 bg-gold text-base border border-white/20">
+          className="fixed bottom-32 right-6 md:right-[calc(50%-240px+24px)] z-30 w-14 h-14 rounded-full flex items-center justify-center text-3xl font-bold transition-all active:scale-90 bg-gold text-base border border-white/20">
           +
         </button>
       )}

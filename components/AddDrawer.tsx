@@ -143,7 +143,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
           <div className="w-12 h-1.5 rounded-full bg-white/10" />
         </div>
 
-        <div className="px-6 pt-2 pb-8 overflow-y-auto overflow-x-hidden flex-1 w-full">
+        <div className="px-6 pt-2 pb-8 overflow-y-auto overflow-x-hidden flex-1 w-full" style={{ overflowX: 'hidden' }}>
           
           {mode === 'SELECT' && (
             <div className="space-y-8 py-8">
@@ -180,7 +180,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                 <div className="flex gap-2.5">
                   {(['BUY','SELL'] as Action[]).map(a => (
                     <button key={a} onClick={() => setAction(a)}
-                      className={`flex-1 py-3.5 rounded-2xl text-sm font-black transition-all border-2 ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400' : 'bg-green-400/20 text-green-400 border-green-400') : 'bg-white/5 text-white/30 border-transparent'}`}>
+                      className={`flex-1 py-3.5 rounded-2xl text-sm font-black transition-all border-2 ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400 shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'bg-green-400/20 text-green-400 border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.3)]') : 'bg-white/5 text-white/30 border-transparent'}`}>
                       {a === 'BUY' ? '買入紀錄' : '賣出紀錄'}
                     </button>
                   ))}
@@ -260,7 +260,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                 {/* Date */}
                 <div className="space-y-2">
                   <Label>成交日期</Label>
-                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base font-black font-mono text-base w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" style={{ colorScheme: 'dark' }} />
+                  <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base font-black font-mono text-base w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" style={{ colorScheme: 'dark', width: '100%', maxWidth: '100%' }} />
                 </div>
               </div>
 
@@ -289,7 +289,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
               <button 
                 onClick={submitOrder} 
                 disabled={saving || !canSubmit} 
-                className={`w-full py-5 text-lg font-black rounded-2xl transition-all mt-4 ${canSubmit ? 'bg-gold text-black active:scale-95' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`}>
+                className={`w-full py-5 text-lg font-black rounded-xl transition-all mt-4 ${canSubmit ? 'bg-gradient-to-br from-[#FFD700] to-[#FF8C00] text-black active:scale-95 shadow-[0_8px_32px_rgba(255,215,0,0.2)]' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`}>
                 {saving ? '處理中…' : '✅ 確認新增交易紀錄'}
               </button>
             </div>

@@ -281,7 +281,7 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
                     <div className="text-[8px] font-black text-white leading-none scale-90">
                       {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
                     </div>
-                    <div className="text-[7px] font-bold text-white/60 leading-none scale-75">
+                    <div className="text-[8px] font-bold text-white/60 leading-none scale-90">
                       {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                     </div>
                   </div>

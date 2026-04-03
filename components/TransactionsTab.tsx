@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax } from '@/types'
 
 interface Props {
@@ -22,6 +22,14 @@ const ACTION_BG: Record<string, string> = {
 export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
   const [filter, setFilter] = useState('')
   const [deleting, setDeleting] = useState<number | null>(null)
+  
+  // States for accordion
+  const now = new Date()
+  const currentYear = now.getFullYear().toString()
+  const currentMonth = (now.getMonth() + 1).toString()
+  
+  const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({ [currentYear]: true })
+  const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({ [`${currentYear}-${currentMonth}`]: true })
 
   const filtered = filter.trim()
     ? txs.filter(t => 
@@ -30,6 +38,30 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
         (t.name_zh || getStockName(t.symbol)).includes(filter)
       )
     : txs
+
+  // Grouping logic
+  const groupedData = useMemo(() => {
+    const groups: Record<string, Record<string, { txs: Transaction[], pnl: number }>> = {}
+    const today = new Date()
+    
+    filtered.forEach(t => {
+      const d = new Date(t.trade_date)
+      if (d > today) return // Skip future dates
+      
+      const year = d.getFullYear().toString()
+      const month = (d.getMonth() + 1).toString()
+      
+      if (!groups[year]) groups[year] = {}
+      if (!groups[year][month]) groups[year][month] = { txs: [], pnl: 0 }
+      
+      groups[year][month].txs.push(t)
+      groups[year][month].pnl += t.net_amount
+    })
+    
+    return groups
+  }, [filtered])
+
+  const sortedYears = Object.keys(groupedData).sort((a, b) => b.localeCompare(a))
 
   async function deleteTx(id: number) {
     if (!confirm('確定刪除這筆交易紀錄？')) return
@@ -43,17 +75,26 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     setDeleting(null)
   }
 
+  const toggleYear = (y: string) => {
+    setExpandedYears(prev => ({ ...prev, [y]: !prev[y] }))
+  }
+
+  const toggleMonth = (y: string, m: string) => {
+    const key = `${y}-${m}`
+    setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   return (
-    <div className="p-4 space-y-3 pb-32">
+    <div className="p-4 space-y-4 pb-32">
       {/* Search */}
       <input
         value={filter}
         onChange={e => setFilter(e.target.value)}
-        placeholder="輸入代號或名稱篩選…"
+        placeholder="搜尋代號、名稱或備註…"
         className="input-base"
       />
 
-      {filtered.length === 0 ? (
+      {sortedYears.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-20 gap-3">
           <div className="text-4xl opacity-20">🗒️</div>
           <p className="text-sm text-white/40">
@@ -61,16 +102,67 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
           </p>
         </div>
       ) : (
-        <div className="space-y-2">
-          {filtered.map(tx => (
-            <TxRow 
-              key={tx.id} 
-              tx={tx} 
-              settings={settings}
-              deleting={deleting === tx.id} 
-              onDelete={() => deleteTx(tx.id)} 
-              onUpdated={onRefresh}
-            />
+        <div className="space-y-4">
+          {sortedYears.map(year => (
+            <div key={year} className="space-y-2">
+              {/* Year Header */}
+              <button 
+                onClick={() => toggleYear(year)}
+                className="w-full flex items-center gap-2 px-1 py-2 group"
+              >
+                <span className={`text-xs transition-transform duration-200 ${expandedYears[year] ? 'rotate-90' : ''}`} style={{ color: 'var(--gold)' }}>▶</span>
+                <span className="font-black text-lg text-white group-active:opacity-60">{year}年</span>
+                <div className="h-[1px] flex-1 bg-white/5" />
+              </button>
+
+              {expandedYears[year] && (
+                <div className="pl-2 space-y-3">
+                  {Object.keys(groupedData[year])
+                    .sort((a, b) => Number(b) - Number(a))
+                    .map(month => {
+                      const data = groupedData[year][month]
+                      const isExpanded = expandedMonths[`${year}-${month}`]
+                      
+                      return (
+                        <div key={`${year}-${month}`} className="space-y-2">
+                          {/* Month Header */}
+                          <button 
+                            onClick={() => toggleMonth(year, month)}
+                            className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 active:bg-white/10 transition-colors"
+                          >
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-sm text-white/80">{month}月</span>
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 text-white/40">{data.txs.length}筆</span>
+                            </div>
+                            <div className="flex items-center gap-3">
+                              <span className={`font-mono text-xs font-bold ${data.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                {data.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(data.pnl))}
+                              </span>
+                              <span className={`text-[10px] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} style={{ color: 'var(--t3)' }}>▼</span>
+                            </div>
+                          </button>
+
+                          {/* Transaction Rows */}
+                          {isExpanded && (
+                            <div className="space-y-2 pt-1">
+                              {data.txs.map(tx => (
+                                <TxRow 
+                                  key={tx.id} 
+                                  tx={tx} 
+                                  settings={settings}
+                                  deleting={deleting === tx.id} 
+                                  onDelete={() => deleteTx(tx.id)} 
+                                  onUpdated={onRefresh}
+                                />
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
@@ -120,7 +212,7 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
         </div>
 
         {/* Date */}
-        <span className="text-[11px] flex-1 ml-1 text-white/30">{tx.trade_date}</span>
+        <span className="text-[11px] flex-1 ml-1 text-white/30">{tx.trade_date.split('-').slice(1).join('/')}</span>
 
         {/* Net amount */}
         <span className={`font-bold font-mono text-sm shrink-0 ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
@@ -205,7 +297,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
 
       <div className="flex flex-col items-center">
         <Label>交易日期</Label>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base text-center w-full py-2 text-sm" style={{ colorScheme: 'dark' }} />
+        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base text-center w-full py-2 text-sm" style={{ colorScheme: 'dark', width: '100%', maxWidth: '100%' }} />
       </div>
 
       <div className="grid grid-cols-3 gap-2">
