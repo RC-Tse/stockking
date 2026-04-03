@@ -10,8 +10,8 @@ export async function createClient() {
     {
       cookies: {
         getAll() { return cookieStore.getAll() },
-        setAll(list) {
-          try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options)) }
+        setAll(list: { name: string; value: string; options?: Record<string, unknown> }[]) {
+          try { list.forEach(({ name, value, options }) => cookieStore.set(name, value, options as Parameters<typeof cookieStore.set>[2])) }
           catch { /* Server Component 中可忽略 */ }
         },
       },
