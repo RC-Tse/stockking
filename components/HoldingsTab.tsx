@@ -66,6 +66,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                 key={h.symbol}
                 h={h}
                 q={quotes[h.symbol]}
+                settings={settings}
                 txs={transactions.filter(t => t.symbol === h.symbol)}
                 isExpanded={expanded === h.symbol}
                 onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)}
@@ -259,8 +260,8 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
   )
 }
 
-function HoldingItem({ h, q, txs, isExpanded, onToggle, onUpdated }: {
-  h: Holding; q?: Quote; txs: Transaction[]; isExpanded: boolean; onToggle: () => void; onUpdated: () => void
+function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
+  h: Holding; q?: Quote; settings: UserSettings; txs: Transaction[]; isExpanded: boolean; onToggle: () => void; onUpdated: () => void
 }) {
   const isUp = h.unrealized_pnl >= 0
   const color = isUp ? 'var(--red)' : 'var(--grn)'
@@ -314,7 +315,7 @@ function HoldingItem({ h, q, txs, isExpanded, onToggle, onUpdated }: {
         <div className="border-t px-3 py-2 space-y-2 bg-white/5" style={{ borderColor: 'var(--border)' }}>
           <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--t3)' }}>交易紀錄</div>
           {txs.map(t => (
-            <TxRow key={t.id} t={t} onUpdated={onUpdated} />
+            <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} />
           ))}
         </div>
       )}
@@ -322,19 +323,24 @@ function HoldingItem({ h, q, txs, isExpanded, onToggle, onUpdated }: {
   )
 }
 
-function TxRow({ t, onUpdated }: { t: Transaction; onUpdated: () => void }) {
+function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSettings; onUpdated: () => void }) {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   const [date, setDate] = useState(t.trade_date)
   const [shares, setShares] = useState(t.shares)
   const [price, setPrice] = useState(t.price)
-  const [note, setNote] = useState(t.note)
+  const [note, setNote] = useState(t.note || '')
+  
   const isBuy = t.action === 'BUY' || t.action === 'DCA'
+  const amount = shares * price
+  const fee    = calcFee(amount, settings, t.action === 'SELL')
+  const tax    = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
+  const net    = isBuy ? -(amount + fee) : (amount - fee - tax)
 
   async function handleSave() {
     setLoading(true)
     await fetch('/api/transactions', {
-      method: 'PATCH',
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: t.id, trade_date: date, shares, price, note })
     })
@@ -343,19 +349,54 @@ function TxRow({ t, onUpdated }: { t: Transaction; onUpdated: () => void }) {
     onUpdated()
   }
 
+  async function handleDelete() {
+    if (!confirm('確定刪除這筆交易紀錄？')) return
+    setLoading(true)
+    await fetch('/api/transactions', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: t.id }),
+    })
+    setLoading(false)
+    onUpdated()
+  }
+
   if (isEditing) {
     return (
-      <div className="p-2 rounded-lg bg-black/20 border border-white/10 space-y-2">
+      <div className="p-3 rounded-lg bg-black/40 border-2 border-gold/30 space-y-3 my-1">
         <div className="flex gap-2">
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="flex-1 input-base text-xs py-1 h-8" />
-          <input type="number" value={shares} onChange={e => setShares(Number(e.target.value))} className="w-20 input-base text-xs py-1 h-8" placeholder="股數" />
-          <input type="number" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-20 input-base text-xs py-1 h-8" placeholder="價" />
+          <div className="flex-1">
+            <Label>交易日期</Label>
+            <input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-full input-base text-xs py-1 h-8" style={{ colorScheme: 'dark' }} />
+          </div>
+          <div className="w-20">
+            <Label>股數</Label>
+            <input type="number" value={shares} onChange={e => setShares(Number(e.target.value))} className="w-full input-base text-xs py-1 h-8 font-mono" />
+          </div>
+          <div className="w-20">
+            <Label>成交價</Label>
+            <input type="number" step="0.01" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full input-base text-xs py-1 h-8 font-mono" />
+          </div>
         </div>
-        <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base text-xs py-1 h-8" placeholder="備註" />
+        <div>
+          <Label>備註</Label>
+          <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base text-xs py-1 h-8" placeholder="備註..." />
+        </div>
+
+        {/* Preview */}
+        <div className="flex justify-between items-center text-[10px] bg-white/5 p-1.5 rounded">
+          <span style={{ color: 'var(--t3)' }}>
+            手續費: {Math.round(fee)} {tax > 0 ? `| 交易稅: ${Math.round(tax)}` : ''}
+          </span>
+          <span className="font-bold" style={{ color: net >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+            淨收支: {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
+          </span>
+        </div>
+
         <div className="flex gap-2 justify-end">
-          <button onClick={() => setIsEditing(false)} className="text-[10px] px-3 py-1 rounded bg-white/10">取消</button>
-          <button onClick={handleSave} disabled={loading} className="text-[10px] px-3 py-1 rounded bg-gold text-black font-bold">
-            {loading ? '儲存中...' : '儲存'}
+          <button onClick={() => setIsEditing(false)} className="text-[10px] px-3 py-1.5 rounded bg-white/10">取消</button>
+          <button onClick={handleSave} disabled={loading} className="text-[10px] px-3 py-1.5 rounded bg-gold text-black font-bold">
+            {loading ? '儲存中...' : '儲存修改'}
           </button>
         </div>
       </div>
@@ -375,12 +416,19 @@ function TxRow({ t, onUpdated }: { t: Transaction; onUpdated: () => void }) {
       </div>
       <div className="text-right">
         <div className="text-xs font-mono font-bold" style={{ color: t.net_amount >= 0 ? 'var(--red)' : 'var(--grn)' }}>
-          {t.net_amount >= 0 ? '+' : ''}{fmtMoney(t.net_amount)}
+          {t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}
         </div>
-        <button onClick={() => setIsEditing(true)} className="text-[10px] text-gold hover:underline">編輯</button>
+        <div className="flex gap-2 justify-end mt-0.5">
+          <button onClick={() => setIsEditing(true)} className="text-[10px] text-gold hover:underline">編輯</button>
+          <button onClick={handleDelete} className="text-[10px] text-red-400 hover:underline">刪除</button>
+        </div>
       </div>
     </div>
   )
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return <label className="text-[9px] mb-0.5 block font-bold opacity-50 uppercase tracking-tighter">{children}</label>
 }
 
 function shortMoney(v: number): string {

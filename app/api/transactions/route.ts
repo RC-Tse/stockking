@@ -49,7 +49,7 @@ export async function DELETE(req: NextRequest) {
   }
 }
 
-export async function PATCH(req: NextRequest) {
+export async function PUT(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
@@ -59,14 +59,17 @@ export async function PATCH(req: NextRequest) {
   // Fetch current to keep action/symbol for recalculation
   const { data: current } = await supabase.from('transactions').select('*').eq('id', id).single()
   if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  if (current.user_id !== user.id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   const { data: sr } = await supabase.from('settings').select('*').eq('user_id', user.id).single()
   const s: UserSettings = sr ?? DEFAULT_SETTINGS
 
+  const sym = current.symbol
+  const action = current.action
   const amount = Number(shares) * Number(price)
-  const fee = calcFee(amount, s, current.action === 'SELL')
-  const tax = current.action === 'SELL' ? calcTax(amount, current.symbol, s) : 0
-  const net_amount = (current.action === 'BUY' || current.action === 'DCA') ? -(amount + fee) : (amount - fee - tax)
+  const fee = calcFee(amount, s, action === 'SELL')
+  const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
+  const net_amount = (action === 'BUY' || action === 'DCA') ? -(amount + fee) : (amount - fee - tax)
 
   const { data, error } = await supabase.from('transactions').update({
     trade_date, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, note

@@ -16,11 +16,10 @@ import AddDrawer        from './AddDrawer'
 
 export interface AppUser { id: string; email: string; name: string; avatar: string }
 
-type Tab = 'holdings' | 'calendar' | 'concepts' | 'transactions' | 'settings'
+type Tab = 'holdings' | 'concepts' | 'transactions' | 'settings'
 
 const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'holdings',     icon: '📊', label: '持股'  },
-  { id: 'calendar',     icon: '📅', label: '月曆'  },
   { id: 'concepts',     icon: '💡', label: '概念股' },
   { id: 'transactions', icon: '📋', label: '紀錄'  },
   { id: 'settings',     icon: '⚙️', label: '設定'  },
@@ -222,10 +221,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
                 onRefresh={refresh} 
                 onRefreshCal={refreshCal}
               />}
-              {tab === 'calendar'     && <CalendarTab entries={calEntries} onRefresh={refreshCal} />}
 
               {tab === 'concepts'     && <ConceptsTab quotes={quotes} onFetchQuotes={fetchQuotes} />}
-              {tab === 'transactions' && <TransactionsTab txs={txs} onRefresh={refresh} />}
+              {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} />}
               {tab === 'settings'     && (
                 <SettingsTab settings={settings} onSave={async (s) => {
                   const r = await fetch('/api/settings', {
