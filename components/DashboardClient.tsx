@@ -44,7 +44,7 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       const net = v.bought - v.sold
       const avg_cost = v.cost / v.bought
       const total_cost = Math.round(net * avg_cost)
-      const cp = quotes[sym]?.price ?? 0
+      const cp = quotes[sym]?.price || 0
       const mv = Math.round(cp * net)
       const fee = calcFee(mv, settings, true)
       const tax = calcTax(mv, sym, settings)

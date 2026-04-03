@@ -115,7 +115,7 @@ function HoldingRow({ h, q }: { h: Holding; q?: Quote }) {
           <div className="font-black text-lg font-mono" style={{ color: 'var(--t1)' }}>
             {h.current_price > 0 ? h.current_price.toFixed(2) : '—'}
           </div>
-          {q && (
+          {q && q.change !== undefined && (
             <div className="text-xs font-mono" style={{ color: q.change >= 0 ? 'var(--red)' : 'var(--grn)' }}>
               {q.change >= 0 ? '+' : ''}{q.change.toFixed(2)}
               <span className="opacity-70 ml-1">({q.change_pct >= 0 ? '+' : ''}{q.change_pct.toFixed(2)}%)</span>
