@@ -411,11 +411,11 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
           </div>
           <div>
             <Label>{tradeType === 'FULL' ? '張數' : '股數'}</Label>
-            <input type="number" value={tradeType === 'FULL' ? lots : shares} onChange={e => { const v = Math.max(1, parseInt(e.target.value) || 0); tradeType === 'FULL' ? setLots(v) : setShares(v) }} className="w-full input-base text-center h-10 font-mono text-sm" />
+            <input type="number" inputMode="numeric" pattern="[0-9]*" value={tradeType === 'FULL' ? lots : shares} onChange={e => { const v = Math.max(1, parseInt(e.target.value) || 0); tradeType === 'FULL' ? setLots(v) : setShares(v) }} className="w-full input-base text-center h-10 font-mono text-sm" />
           </div>
           <div>
             <Label>成交價</Label>
-            <input type="number" step="0.01" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full input-base text-center h-10 font-mono text-sm" />
+            <input type="number" inputMode="decimal" pattern="[0-9.]*" step="0.01" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full input-base text-center h-10 font-mono text-sm" />
           </div>
         </div>
 

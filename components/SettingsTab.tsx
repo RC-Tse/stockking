@@ -60,17 +60,17 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <input value={form.broker_name} onChange={e => set('broker_name', e.target.value)} className="input-base font-bold" />
             </Field>
             <Field label="最低手續費（元）">
-              <input type="number" value={form.fee_min} min={1} onChange={e => set('fee_min', Number(e.target.value))} className="input-base font-black font-mono" />
+              <input type="number" inputMode="numeric" pattern="[0-9]*" value={form.fee_min} min={1} onChange={e => set('fee_min', Number(e.target.value))} className="input-base font-black font-mono" />
             </Field>
           </Section>
 
           <Section title="📈 買入手續費">
             <div className="grid grid-cols-2 gap-3">
               <Field label="基礎費率">
-                <input type="number" value={form.buy_fee_rate} step="0.000001" onChange={e => set('buy_fee_rate', Number(e.target.value))} className="input-base font-black font-mono" />
+                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.buy_fee_rate} step="0.000001" onChange={e => set('buy_fee_rate', Number(e.target.value))} className="input-base font-black font-mono" />
               </Field>
               <Field label="折扣">
-                <input type="number" value={form.buy_discount} step="0.01" min="0.01" max="1" onChange={e => set('buy_discount', Number(e.target.value))} className="input-base font-black font-mono" />
+                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.buy_discount} step="0.01" min="0.01" max="1" onChange={e => set('buy_discount', Number(e.target.value))} className="input-base font-black font-mono" />
               </Field>
             </div>
             <Rate label="實際買入費率" value={effBuy} />
@@ -79,10 +79,10 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
           <Section title="📉 賣出手續費">
             <div className="grid grid-cols-2 gap-3">
               <Field label="基礎費率">
-                <input type="number" value={form.sell_fee_rate} step="0.000001" onChange={e => set('sell_fee_rate', Number(e.target.value))} className="input-base font-black font-mono" />
+                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.sell_fee_rate} step="0.000001" onChange={e => set('sell_fee_rate', Number(e.target.value))} className="input-base font-black font-mono" />
               </Field>
               <Field label="折扣">
-                <input type="number" value={form.sell_discount} step="0.01" min="0.01" max="1" onChange={e => set('sell_discount', Number(e.target.value))} className="input-base font-black font-mono" />
+                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.sell_discount} step="0.01" min="0.01" max="1" onChange={e => set('sell_discount', Number(e.target.value))} className="input-base font-black font-mono" />
               </Field>
             </div>
             <Rate label="實際賣出費率" value={effSell} />
@@ -91,10 +91,10 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
           <Section title="💰 交易稅">
             <div className="grid grid-cols-2 gap-3">
               <Field label="股票交易稅">
-                <input type="number" value={form.tax_stock} step="0.0001" onChange={e => set('tax_stock', Number(e.target.value))} className="input-base font-black font-mono" />
+                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.tax_stock} step="0.0001" onChange={e => set('tax_stock', Number(e.target.value))} className="input-base font-black font-mono" />
               </Field>
               <Field label="ETF 交易稅">
-                <input type="number" value={form.tax_etf} step="0.0001" onChange={e => set('tax_etf', Number(e.target.value))} className="input-base font-black font-mono" />
+                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.tax_etf} step="0.0001" onChange={e => set('tax_etf', Number(e.target.value))} className="input-base font-black font-mono" />
               </Field>
             </div>
           </Section>
@@ -118,11 +118,11 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
         <div className="space-y-4">
           <Section title="🎯 年度與總投資目標">
             <Field label="年獲利目標（元）">
-              <input type="number" inputMode="numeric" value={form.year_goal || ''} onChange={e => set('year_goal', Number(e.target.value))} className="input-base font-black font-mono text-xl py-4" placeholder="例如：100000" />
+              <input type="number" inputMode="numeric" pattern="[0-9]*" value={form.year_goal || ''} onChange={e => set('year_goal', Number(e.target.value))} className="input-base font-black font-mono text-xl py-4" placeholder="例如：100000" />
               <p className="text-[10px] mt-2 text-white/20 font-bold tracking-wider">用於計算持股頁面的「今年損益達成率」</p>
             </Field>
             <Field label="總市值目標（元）">
-              <input type="number" inputMode="numeric" value={form.total_goal || ''} onChange={e => set('total_goal', Number(e.target.value))} className="input-base font-black font-mono text-xl py-4" placeholder="例如：10000000" />
+              <input type="number" inputMode="numeric" pattern="[0-9]*" value={form.total_goal || ''} onChange={e => set('total_goal', Number(e.target.value))} className="input-base font-black font-mono text-xl py-4" placeholder="例如：10000000" />
               <p className="text-[10px] mt-2 text-white/20 font-bold tracking-wider">用於計算持股頁面的「資產總目標達成率」</p>
             </Field>
           </Section>
@@ -131,24 +131,6 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
         <button onClick={submit} disabled={saving} className="btn-primary w-full py-4 rounded-2xl font-black text-lg active:scale-95 transition-all">
           {saving ? '處理中…' : saved ? '✅ 目標已更新' : '💾 儲存目標設定'}
         </button>
-      </div>
-    )
-  }
-
-  if (view === 'UI') {
-    return (
-      <div className="p-4 space-y-6 slide-in">
-        <button onClick={() => setView('MAIN')} className="text-xs text-gold flex items-center gap-1 font-black bg-gold/10 px-3 py-1.5 rounded-full active:scale-95 transition-all">
-          ‹ 返回設定
-        </button>
-        <h2 className="text-2xl font-black text-white px-1">介面設定</h2>
-        
-        <div className="flex flex-col items-center justify-center py-24 gap-4 glass rounded-[2.5rem] border border-white/5 bg-white/[0.02]">
-          <div className="text-6xl animate-bounce">🛠️</div>
-          <p className="text-white/40 text-sm font-black tracking-[0.2em]">
-            COMING SOON
-          </p>
-        </div>
       </div>
     )
   }

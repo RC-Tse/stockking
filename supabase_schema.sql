@@ -68,3 +68,16 @@ CREATE POLICY "own_settings" ON public.settings
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS year_goal NUMERIC DEFAULT 0;
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS total_goal NUMERIC DEFAULT 0;
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS dca_fee_rate NUMERIC DEFAULT 0.001425;
+
+-- 5. dca_plans ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.dca_plans (
+  id BIGSERIAL PRIMARY KEY,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  symbol TEXT NOT NULL,
+  amount NUMERIC NOT NULL,
+  days_of_month INTEGER[] NOT NULL DEFAULT '{}',
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+ALTER TABLE public.dca_plans ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "own_dca" ON public.dca_plans FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);

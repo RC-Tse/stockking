@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { UserSettings, calcFee, calcTax, fmtMoney, codeOnly } from '@/types'
 
 interface Props {
@@ -18,11 +18,6 @@ type Action = 'BUY' | 'SELL'
 type TradeType = 'FULL' | 'FRACTIONAL'
 
 export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
-  const now = new Date()
-  const currentYear = now.getFullYear()
-  const currentMonth = now.getMonth() + 1
-  const currentDay = now.getDate()
-
   const [mode, setMode] = useState<Mode>('SELECT')
   
   // Order states
@@ -34,60 +29,45 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   const [lots,      setLots]      = useState<number | ''>('')
   const [shares,    setShares]    = useState<number | ''>('')
   const [price,     setPrice]     = useState<number | ''>('')
-  
-  // Custom Date States
-  const [selYear,  setSelYear]  = useState(currentYear)
-  const [selMonth, setSelMonth] = useState(currentMonth)
-  const [selDay,   setSelDay]   = useState(currentDay)
-
   const [note,      setNote]      = useState('')
   const [saving,    setSaving]    = useState(false)
+
+  // DCA states
+  const [dcaAmount, setDcaAmount] = useState<number | ''>('')
+  const [dcaDays,   setDcaDays]   = useState<number[]>([])
+
+  // Custom Date Picker states
+  const [showDatePicker, setShowDatePicker] = useState(false)
+  const [viewDate, setViewDate] = useState(new Date())
+  const [selectedDate, setSelectedDate] = useState(new Date())
 
   // Reset when opened
   useEffect(() => {
     if (open) {
       setMode('SELECT')
       setAction('BUY'); setTradeType('FULL'); setSymbol(''); setStockName('')
-      setLots(''); setShares(''); setPrice('')
-      setSelYear(currentYear); setSelMonth(currentMonth); setSelDay(currentDay)
-      setNote(''); setSaving(false)
+      setLots(''); setShares(''); setPrice(''); setNote('')
+      setDcaAmount(''); setDcaDays([])
+      const today = new Date()
+      setSelectedDate(today)
+      setViewDate(today)
+      setSaving(false)
     }
-  }, [open, currentYear, currentMonth, currentDay])
-
-  const years = useMemo(() => {
-    const arr = []
-    for (let i = 0; i < 5; i++) arr.push(currentYear - i)
-    return arr
-  }, [currentYear])
-
-  const daysInMonth = useMemo(() => {
-    return new Date(selYear, selMonth, 0).getDate()
-  }, [selYear, selMonth])
-
-  // Adjust day if month change makes it invalid (e.g. Feb 30 -> Feb 28)
-  useEffect(() => {
-    if (selDay > daysInMonth) setSelDay(daysInMonth)
-  }, [daysInMonth, selDay])
-
-  const tradeDate = `${selYear}-${String(selMonth).padStart(2, '0')}-${String(selDay).padStart(2, '0')}`
+  }, [open])
 
   async function fetchStockName(s: string) {
     let sym = s.trim().toUpperCase()
     if (!sym) return
-    
     if (/^\d+$/.test(sym)) {
       sym = sym + '.TW'
       setSymbol(sym)
     }
-
     setFetchingName(true)
     try {
       const res = await fetch(`/api/stocks?symbols=${sym}`)
       if (res.ok) {
         const data = await res.json()
         setStockName(data[sym]?.name_zh || '')
-      } else {
-        setStockName('')
       }
     } catch (err) {
       setStockName('')
@@ -96,14 +76,14 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     }
   }
 
-  const actualLots = lots === '' ? 0 : lots
-  const actualShrs = shares === '' ? 0 : shares
-  const finalShares = tradeType === 'FULL' ? actualLots * 1000 : actualShrs
+  const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = typeof price === 'number' ? price : 0
   const amount = finalShares * safePrice
   const fee    = safePrice > 0 ? calcFee(amount, settings, action === 'SELL') : 0
   const tax    = safePrice > 0 && action === 'SELL' ? calcTax(amount, symbol, settings) : 0
   const net    = action === 'BUY' ? -(amount + fee) : (amount - fee - tax)
+
+  const tradeDateStr = selectedDate.toISOString().split('T')[0]
 
   async function submitOrder() {
     if (!symbol.trim() || safePrice <= 0 || finalShares <= 0) return
@@ -111,7 +91,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     await onSave({
       symbol: symbol.trim().toUpperCase(),
       action,
-      trade_date: tradeDate,
+      trade_date: tradeDateStr,
       shares: finalShares,
       price: safePrice,
       trade_type: tradeType,
@@ -120,56 +100,45 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     setSaving(false)
   }
 
-  function handleMinus() {
-    if (tradeType === 'FULL') {
-      if (lots === '' || lots <= 1) setLots('')
-      else setLots(lots - 1)
-    } else {
-      if (shares === '' || shares <= 1) setShares('')
-      else setShares(shares - 1)
+  async function submitDCA() {
+    if (!symbol.trim() || !dcaAmount || dcaDays.length === 0) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/dca', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ symbol: symbol.trim().toUpperCase(), amount: dcaAmount, days_of_month: dcaDays })
+      })
+      if (res.ok) {
+        alert('定期定額計畫已儲存')
+        onClose()
+      } else {
+        alert('儲存失敗')
+      }
+    } catch (e) {
+      alert('系統錯誤')
+    } finally {
+      setSaving(false)
     }
   }
 
-  function handlePlus() {
-    if (tradeType === 'FULL') {
-      if (lots === '') setLots(1)
-      else setLots(lots + 1)
-    } else {
-      if (shares === '') setShares(1)
-      else setShares(shares + 1)
-    }
+  const toggleDcaDay = (d: number) => {
+    setDcaDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d].sort((a,b) => a-b))
   }
 
-  const canSubmit = symbol.trim() !== '' && finalShares > 0 && safePrice > 0 && stockName !== ''
-
-  function onBackdrop(e: React.MouseEvent) {
-    if (e.target === e.currentTarget) onClose()
-  }
+  const canSubmitOrder = symbol.trim() !== '' && finalShares > 0 && safePrice > 0 && stockName !== ''
+  const canSubmitDca = symbol.trim() !== '' && Number(dcaAmount) > 0 && dcaDays.length > 0 && stockName !== ''
 
   if (!open) return null
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-end"
-      style={{ background: 'rgba(0,0,0,0.7)' }}
-      onClick={onBackdrop}
-    >
-      <div
-        className="w-full slide-up rounded-t-[2.5rem] pb-safe overflow-hidden flex flex-col md:max-w-[480px] md:mx-auto"
-        style={{
-          background: '#0d1018',
-          border: '1px solid rgba(255,255,255,0.1)',
-          borderBottom: 'none',
-          maxHeight: '92dvh',
-        }}
-        onClick={e => e.stopPropagation()}
-      >
+    <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.7)' }} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="w-full slide-up rounded-t-[2.5rem] pb-safe overflow-hidden flex flex-col md:max-w-[480px] md:mx-auto" style={{ background: '#0d1018', border: '1px solid rgba(255,255,255,0.1)', borderBottom: 'none', maxHeight: '92dvh' }}>
         <div className="flex justify-center pt-4 pb-2 shrink-0">
           <div className="w-12 h-1.5 rounded-full bg-white/10" />
         </div>
 
         <div className="px-6 pt-2 pb-8 overflow-y-auto overflow-x-hidden flex-1 w-full" style={{ overflowX: 'hidden' }}>
-          
           {mode === 'SELECT' && (
             <div className="space-y-8 py-8">
               <div className="text-center space-y-2">
@@ -181,8 +150,8 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                   <div className="text-5xl group-hover:scale-110 transition-transform duration-300">📝</div>
                   <div className="font-black text-white text-lg tracking-tight">單筆下單</div>
                 </button>
-                <button onClick={() => alert('定期定額功能開發中，敬請期待')} className="group glass rounded-3xl p-8 flex flex-col items-center gap-4 active:scale-95 transition-all border border-white/5 opacity-40 grayscale">
-                  <div className="text-5xl">⏳</div>
+                <button onClick={() => setMode('DCA')} className="group glass rounded-3xl p-8 flex flex-col items-center gap-4 active:scale-95 transition-all border border-white/5 hover:border-gold/30">
+                  <div className="text-5xl group-hover:scale-110 transition-transform duration-300">⏳</div>
                   <div className="font-black text-white text-lg tracking-tight">定期定額</div>
                 </button>
               </div>
@@ -199,113 +168,65 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                 <div className="w-14" />
               </div>
 
-              {/* Action */}
               <div className="space-y-2">
                 <Label>交易類型</Label>
                 <div className="flex gap-2.5">
                   {(['BUY','SELL'] as Action[]).map(a => (
-                    <button key={a} onClick={() => setAction(a)}
-                      className={`flex-1 py-3.5 rounded-2xl text-sm font-black transition-all border-2 ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400 shadow-[0_0_15px_rgba(248,113,113,0.3)]' : 'bg-green-400/20 text-green-400 border-green-400 shadow-[0_0_15px_rgba(74,222,128,0.3)]') : 'bg-white/5 text-white/30 border-transparent'}`}>
+                    <button key={a} onClick={() => setAction(a)} className={`flex-1 py-3.5 rounded-2xl text-sm font-black transition-all border-2 ${action === a ? (a === 'BUY' ? 'bg-red-400/20 text-red-400 border-red-400' : 'bg-green-400/20 text-green-400 border-green-400') : 'bg-white/5 text-white/30 border-transparent'}`}>
                       {a === 'BUY' ? '買入紀錄' : '賣出紀錄'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Symbol */}
               <div className="space-y-2">
                 <div className="flex justify-between items-end px-1">
                   <Label>股票代號</Label>
-                  {fetchingName ? (
-                    <span className="text-[10px] animate-pulse text-gold font-bold">搜尋中…</span>
-                  ) : stockName ? (
-                    <span className="text-[11px] font-black text-gold uppercase bg-gold/10 px-2 py-0.5 rounded-md border border-gold/20">{stockName}</span>
-                  ) : null}
+                  {fetchingName ? <span className="text-[10px] animate-pulse text-gold font-bold">搜尋中…</span> : stockName ? <span className="text-[11px] font-black text-gold uppercase bg-gold/10 px-2 py-0.5 rounded-md border border-gold/20">{stockName}</span> : null}
                 </div>
-                <input
-                  value={symbol}
-                  onChange={e => setSymbol(e.target.value)}
-                  onBlur={e => fetchStockName(e.target.value)}
-                  placeholder="輸入代號，如 2330"
-                  className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10 focus:border-gold/50 transition-colors"
-                  autoCapitalize="characters"
-                />
+                <input value={symbol} onChange={e => setSymbol(e.target.value)} onBlur={e => fetchStockName(e.target.value)} placeholder="輸入代號，如 2330" className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10" autoCapitalize="characters" />
               </div>
 
-              {/* Trade type */}
               <div className="space-y-2">
                 <Label>交易方式</Label>
                 <div className="flex gap-2.5">
                   {(['FULL','FRACTIONAL'] as TradeType[]).map(t => (
-                    <button key={t} onClick={() => setTradeType(t)}
-                      className={`flex-1 py-3 rounded-2xl text-[11px] font-black tracking-wider transition-all border ${tradeType === t ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/30 border-transparent'}`}>
+                    <button key={t} onClick={() => setTradeType(t)} className={`flex-1 py-3 rounded-2xl text-[11px] font-black tracking-wider transition-all border ${tradeType === t ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/30 border-transparent'}`}>
                       {t === 'FULL' ? '整張 (1000股)' : '盤後零股'}
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Quantity */}
               <div className="space-y-2">
                 <Label>{tradeType === 'FULL' ? '交易張數' : '交易股數'}</Label>
                 <div className="flex items-center gap-4">
-                  <button onClick={handleMinus}
-                    className="btn-ghost w-14 h-14 flex items-center justify-center text-2xl font-black rounded-2xl border-2 border-white/5 bg-white/5 text-white/60 active:scale-95 transition-all">
-                    −
-                  </button>
-                  <input
-                    type="number" inputMode="numeric" pattern="[0-9]*"
-                    value={tradeType === 'FULL' ? lots : shares}
-                    onFocus={e => e.target.select()}
-                    onClick={e => (e.target as HTMLInputElement).value === '' ? null : (tradeType === 'FULL' ? setLots('') : setShares(''))}
-                    onChange={e => {
-                      const v = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
-                      tradeType === 'FULL' ? setLots(v) : setShares(v)
-                    }}
-                    placeholder="0"
-                    className="flex-1 text-center font-black font-mono text-3xl input-base w-full bg-transparent text-white placeholder:text-white/10"
-                  />
-                  <button onClick={handlePlus}
-                    className="btn-ghost w-14 h-14 flex items-center justify-center text-2xl font-black rounded-2xl border-2 border-white/5 bg-white/5 text-white/60 active:scale-95 transition-all">
-                    +
-                  </button>
+                  <button onClick={() => tradeType === 'FULL' ? setLots(l => l===''||l<=1?'':l-1) : setShares(s => s===''||s<=1?'':s-1)} className="btn-ghost w-14 h-14 flex items-center justify-center text-2xl font-black rounded-2xl border-2 border-white/5 bg-white/5 text-white/60">−</button>
+                  <input type="number" inputMode="numeric" pattern="[0-9]*" value={tradeType === 'FULL' ? lots : shares} onFocus={e => e.target.select()} onChange={e => { const v = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0); tradeType === 'FULL' ? setLots(v) : setShares(v) }} placeholder="0" className="flex-1 text-center font-black font-mono text-3xl input-base w-full bg-transparent text-white" />
+                  <button onClick={() => tradeType === 'FULL' ? setLots(l => Number(l||0)+1) : setShares(s => Number(s||0)+1)} className="btn-ghost w-14 h-14 flex items-center justify-center text-2xl font-black rounded-2xl border-2 border-white/5 bg-white/5 text-white/60">+</button>
                 </div>
-                <p className="text-[11px] text-center font-black font-mono text-white/20 tracking-widest uppercase">
-                  = {finalShares.toLocaleString()} TOTAL SHARES
-                </p>
               </div>
 
               <div className="space-y-4">
-                {/* Price */}
                 <div className="space-y-2">
                   <Label>成交價格 (每股)</Label>
-                  <input type="number" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" step="0.01" min="0" className="input-base font-black font-mono text-xl w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" />
+                  <input type="number" inputMode="decimal" pattern="[0-9.]*" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} placeholder="0.00" step="0.01" min="0" className="input-base font-black font-mono text-xl w-full text-white bg-white/5 border-white/10" />
                 </div>
 
-                {/* Custom Date Selector */}
                 <div className="space-y-2">
                   <Label>成交日期</Label>
-                  <div className="flex gap-2">
-                    <select value={selYear} onChange={e => setSelYear(Number(e.target.value))} className="flex-1 input-base bg-white/5 border-white/10 py-4 px-2 rounded-2xl font-black font-mono text-center appearance-none">
-                      {years.map(y => <option key={y} value={y}>{y}年</option>)}
-                    </select>
-                    <select value={selMonth} onChange={e => setSelMonth(Number(e.target.value))} className="w-20 input-base bg-white/5 border-white/10 py-4 px-2 rounded-2xl font-black font-mono text-center appearance-none">
-                      {Array.from({length: 12}, (_, i) => i + 1).map(m => <option key={m} value={m}>{m}月</option>)}
-                    </select>
-                    <select value={selDay} onChange={e => setSelDay(Number(e.target.value))} className="w-20 input-base bg-white/5 border-white/10 py-4 px-2 rounded-2xl font-black font-mono text-center appearance-none">
-                      {Array.from({length: daysInMonth}, (_, i) => i + 1).map(d => <option key={d} value={d}>{d}日</option>)}
-                    </select>
-                  </div>
+                  <button onClick={() => setShowDatePicker(true)} className="input-base w-full text-left font-black font-mono text-lg py-4 bg-white/5 border-white/10 flex justify-between items-center">
+                    <span>{tradeDateStr}</span>
+                    <span className="text-gold">📅</span>
+                  </button>
                 </div>
               </div>
 
-              {/* Note */}
               <div className="space-y-2">
                 <Label>操作備註</Label>
-                <input value={note} onChange={e => setNote(e.target.value)} placeholder="選填，例如：長期持有、波段操作" className="input-base w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl font-bold" />
+                <input value={note} onChange={e => setNote(e.target.value)} placeholder="選填，例如：長期持有、波段操作" className="input-base w-full text-white bg-white/5 border-white/10 font-bold" />
               </div>
 
-              {/* Fee preview */}
               {safePrice > 0 && finalShares > 0 && (
                 <div className="rounded-3xl p-5 space-y-2.5 bg-white/[0.03] border border-white/10">
                   <FeeRow label="估算交易金額" value={fmtMoney(Math.round(amount))} />
@@ -320,17 +241,81 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                 </div>
               )}
 
-              {/* Submit */}
-              <button 
-                onClick={submitOrder} 
-                disabled={saving || !canSubmit} 
-                className={`w-full py-5 text-lg font-black rounded-xl transition-all mt-4 ${canSubmit ? 'bg-gradient-to-br from-[#FFD700] to-[#FF8C00] text-black active:scale-95 shadow-[0_8px_32px_rgba(255,215,0,0.2)]' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`}>
+              <button onClick={submitOrder} disabled={saving || !canSubmitOrder} className={`w-full py-5 text-lg font-black rounded-xl transition-all mt-4 ${canSubmitOrder ? 'active:scale-95' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`} style={{ background: canSubmitOrder ? 'linear-gradient(135deg, #c9a564, #e8c880)' : undefined, color: canSubmitOrder ? '#000' : undefined }}>
                 {saving ? '處理中…' : '✅ 確認新增交易紀錄'}
+              </button>
+            </div>
+          )}
+
+          {mode === 'DCA' && (
+            <div className="space-y-6">
+              <div className="flex items-center justify-between">
+                <button onClick={() => setMode('SELECT')} className="flex items-center gap-1 text-xs text-gold font-black px-3 py-1.5 bg-gold/10 rounded-full active:bg-gold/20">
+                  <span>‹</span> 返回
+                </button>
+                <h2 className="font-black text-base text-white tracking-widest uppercase">設定定期定額</h2>
+                <div className="w-14" />
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex justify-between items-end px-1">
+                  <Label>股票代號</Label>
+                  {fetchingName ? <span className="text-[10px] animate-pulse text-gold font-bold">搜尋中…</span> : stockName ? <span className="text-[11px] font-black text-gold uppercase bg-gold/10 px-2 py-0.5 rounded-md border border-gold/20">{stockName}</span> : null}
+                </div>
+                <input value={symbol} onChange={e => setSymbol(e.target.value)} onBlur={e => fetchStockName(e.target.value)} placeholder="輸入代號，如 0050" className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10" autoCapitalize="characters" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>每次申購金額</Label>
+                <input type="number" inputMode="numeric" pattern="[0-9]*" value={dcaAmount} onChange={e => setDcaAmount(e.target.value===''?'':Number(e.target.value))} placeholder="例如：5000" className="input-base font-black font-mono text-xl w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" />
+              </div>
+
+              <div className="space-y-2">
+                <Label>每月交易日 (可複選)</Label>
+                <div className="grid grid-cols-7 gap-2">
+                  {Array.from({length: 28}, (_, i) => i + 1).map(d => (
+                    <button key={d} onClick={() => toggleDcaDay(d)} className={`aspect-square rounded-xl flex items-center justify-center text-sm font-black transition-all border ${dcaDays.includes(d) ? 'bg-gold text-black border-gold' : 'bg-white/5 text-white/30 border-white/5'}`}>{d}</button>
+                  ))}
+                </div>
+              </div>
+
+              <button onClick={submitDCA} disabled={saving || !canSubmitDca} className={`w-full py-5 text-lg font-black rounded-xl transition-all mt-4 ${canSubmitDca ? 'active:scale-95' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`} style={{ background: canSubmitDca ? 'linear-gradient(135deg, #c9a564, #e8c880)' : undefined, color: canSubmitDca ? '#000' : undefined }}>
+                {saving ? '處理中…' : '💾 儲存定期定額計畫'}
               </button>
             </div>
           )}
         </div>
       </div>
+
+      {showDatePicker && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.8)' }}>
+          <div className="w-full max-w-[320px] glass p-5 space-y-4" style={{ background: '#141820', border: '1px solid rgba(255,255,255,0.1)' }}>
+            <div className="flex items-center justify-between">
+              <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-2 text-gold">◀</button>
+              <div className="flex gap-2 font-black text-white">
+                <span>{viewDate.getFullYear()}年</span>
+                <span>{viewDate.getMonth()+1}月</span>
+              </div>
+              <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className="p-2 text-gold">▶</button>
+            </div>
+            <div className="grid grid-cols-7 gap-1 text-center">
+              {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-[10px] font-bold text-white/30">{d}</div>)}
+              {(() => {
+                const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay()
+                const days = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0).getDate()
+                const cells = []
+                for (let i=0; i<start; i++) cells.push(<div key={`e-${i}`} />)
+                for (let d=1; d<=days; d++) {
+                  const isSel = selectedDate.getFullYear() === viewDate.getFullYear() && selectedDate.getMonth() === viewDate.getMonth() && selectedDate.getDate() === d
+                  cells.push(<button key={d} onClick={() => { setSelectedDate(new Date(viewDate.getFullYear(), viewDate.getMonth(), d)); setShowDatePicker(false); }} className={`aspect-square flex items-center justify-center text-sm font-bold rounded-lg ${isSel ? 'bg-gold text-black' : 'text-white/80 hover:bg-white/5'}`}>{d}</button>)
+                }
+                return cells
+              })()}
+            </div>
+            <button onClick={() => setShowDatePicker(false)} className="w-full py-2 text-xs font-bold text-white/40">取消</button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
