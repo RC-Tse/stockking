@@ -36,8 +36,42 @@ export async function DELETE(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  const { id } = await req.json()
-  const { error } = await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id)
+  try {
+    const { id } = await req.json()
+    const { error } = await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  } catch {
+    const id = req.nextUrl.searchParams.get('id')
+    const { error } = await supabase.from('transactions').delete().eq('id', id).eq('user_id', user.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true })
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+  const body = await req.json()
+  const { id, trade_date, shares, price, note = '' } = body
+
+  // Fetch current to keep action/symbol for recalculation
+  const { data: current } = await supabase.from('transactions').select('*').eq('id', id).single()
+  if (!current) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const { data: sr } = await supabase.from('settings').select('*').eq('user_id', user.id).single()
+  const s: UserSettings = sr ?? DEFAULT_SETTINGS
+
+  const amount = Number(shares) * Number(price)
+  const fee = calcFee(amount, s, current.action === 'SELL')
+  const tax = current.action === 'SELL' ? calcTax(amount, current.symbol, s) : 0
+  const net_amount = (current.action === 'BUY' || current.action === 'DCA') ? -(amount + fee) : (amount - fee - tax)
+
+  const { data, error } = await supabase.from('transactions').update({
+    trade_date, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, note
+  }).eq('id', id).eq('user_id', user.id).select().single()
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ success: true })
+  return NextResponse.json(data)
 }

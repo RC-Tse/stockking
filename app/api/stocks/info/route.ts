@@ -5,6 +5,10 @@ export async function GET(req: NextRequest) {
   if (!symbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
 
   try {
+    if (!symbol.endsWith('.TW') && !symbol.endsWith('.TWO')) {
+      return NextResponse.json({ error: 'Only Taiwan stocks supported' }, { status: 400 })
+    }
+
     const res = await fetch(
       `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbol}`,
       { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
@@ -14,11 +18,14 @@ export async function GET(req: NextRequest) {
     const data = await res.json()
     const result = data.quoteResponse?.result?.[0]
     
-    if (!result) return NextResponse.json({ error: 'Symbol not found' }, { status: 404 })
+    // 確保抓到的是台股 (Yahoo 有時會回傳不同後綴的結果)
+    if (!result || !result.symbol.includes('.TW')) {
+      return NextResponse.json({ error: 'Symbol not found' }, { status: 404 })
+    }
 
     return NextResponse.json({
       symbol: result.symbol,
-      name: result.longName || result.shortName || result.symbol,
+      name: result.shortName || result.longName || result.symbol,
     })
   } catch (err) {
     console.error('Error fetching stock info:', err)

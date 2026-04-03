@@ -41,8 +41,20 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   }, [open, today])
 
   async function fetchStockName(s: string) {
-    const sym = s.trim().toUpperCase()
-    if (!sym || sym.length < 2) return
+    let sym = s.trim().toUpperCase()
+    if (!sym) return
+    
+    // 自動補上 .TW (如果只有數字)
+    if (/^\d+$/.test(sym)) {
+      sym = sym + '.TW'
+      setSymbol(sym)
+    }
+
+    if (!sym.endsWith('.TW') && !sym.endsWith('.TWO')) {
+      setStockName('僅支援 .TW 或 .TWO')
+      return
+    }
+
     setFetchingName(true)
     try {
       const res = await fetch(`/api/stocks/info?symbol=${sym}`)
@@ -50,10 +62,10 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
         const data = await res.json()
         setStockName(data.name)
       } else {
-        setStockName('找不到此代號')
+        setStockName('查無此台股代號')
       }
     } catch (err) {
-      setStockName('')
+      setStockName('查詢失敗')
     } finally {
       setFetchingName(false)
     }

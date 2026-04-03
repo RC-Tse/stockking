@@ -203,8 +203,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
         {loading
           ? <LoadingSkeleton />
           : <>
-              {tab === 'holdings'     && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} onRefresh={refresh} />}
+              {tab === 'holdings'     && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} onRefresh={refresh} />}
               {tab === 'calendar'     && <CalendarTab entries={calEntries} onRefresh={refreshCal} />}
+
               {tab === 'concepts'     && <ConceptsTab quotes={quotes} onFetchQuotes={fetchQuotes} />}
               {tab === 'transactions' && <TransactionsTab txs={txs} onRefresh={refresh} />}
               {tab === 'settings'     && (
