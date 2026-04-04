@@ -1,12 +1,13 @@
 'use client'
 
-import { useState, useMemo } from 'react'
-import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax } from '@/types'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax, DCAPlan } from '@/types'
 
 interface Props {
   txs: Transaction[]
   settings: UserSettings
   onRefresh: () => void
+  onEditDca?: (plan: DCAPlan) => void
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -21,10 +22,12 @@ const ACTION_BG: Record<string, string> = {
 
 type TabMode = 'SELF' | 'DCA'
 
-export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
+export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }: Props) {
   const [tab, setTab] = useState<TabMode>('SELF')
   const [filter, setFilter] = useState('')
   const [deleting, setDeleting] = useState<number | null>(null)
+  const [dcaPlans, setDcaPlans] = useState<DCAPlan[]>([])
+  const [showCancelled, setShowCancelled] = useState(false)
   
   // States for accordion
   const now = new Date()
@@ -33,6 +36,20 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
   
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({ [currentYear]: true })
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({ [`${currentYear}-${currentMonth}`]: true })
+
+  const fetchDcaPlans = useCallback(async () => {
+    const res = await fetch('/api/dca')
+    if (res.ok) {
+      const data = await res.json()
+      setDcaPlans(data)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (tab === 'DCA') {
+      fetchDcaPlans()
+    }
+  }, [tab, fetchDcaPlans])
 
   const filtered = useMemo(() => {
     let result = txs
@@ -88,6 +105,15 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     setDeleting(null)
   }
 
+  async function toggleDcaStatus(plan: DCAPlan) {
+    const res = await fetch('/api/dca', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: plan.id, is_active: !plan.is_active })
+    })
+    if (res.ok) fetchDcaPlans()
+  }
+
   const toggleYear = (y: string) => {
     setExpandedYears(prev => ({ ...prev, [y]: !prev[y] }))
   }
@@ -97,102 +123,221 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     setExpandedMonths(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
+  const activePlans = dcaPlans.filter(p => p.is_active)
+  const inactivePlans = dcaPlans.filter(p => !p.is_active)
+
   return (
     <div className="p-4 space-y-4 pb-32">
       {/* Tabs */}
-      <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
+      <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/5">
         <button 
           onClick={() => setTab('SELF')}
-          className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${tab === 'SELF' ? 'bg-white/10 text-white shadow-xl' : 'text-white/40'}`}
+          className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'SELF' ? 'text-white bg-white/5' : 'text-white/30'}`}
         >
           自行交易
+          {tab === 'SELF' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
         </button>
         <button 
           onClick={() => setTab('DCA')}
-          className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${tab === 'DCA' ? 'bg-gold-dim text-gold shadow-xl' : 'text-white/40'}`}
+          className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'DCA' ? 'text-white bg-white/5' : 'text-white/30'}`}
         >
           定期定額
+          {tab === 'DCA' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
         </button>
       </div>
 
-      {/* Search */}
-      <input
-        value={filter}
-        onChange={e => setFilter(e.target.value)}
-        placeholder="搜尋代號、名稱或備註…"
-        className="input-base"
-      />
+      {tab === 'SELF' ? (
+        <>
+          {/* Search */}
+          <input
+            value={filter}
+            onChange={e => setFilter(e.target.value)}
+            placeholder="搜尋代號、名稱或備註…"
+            className="input-base"
+          />
 
-      {sortedYears.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 gap-3">
-          <div className="text-4xl opacity-20">🗒️</div>
-          <p className="text-sm text-white/40">
-            {filter ? '查無符合的紀錄' : '尚無交易紀錄'}
-          </p>
-        </div>
-      ) : (
-        <div className="space-y-4">
-          {sortedYears.map(year => (
-            <div key={year} className="space-y-2">
-              {/* Year Header */}
-              <button 
-                onClick={() => toggleYear(year)}
-                className="w-full flex items-center gap-2 px-1 py-2 group"
-              >
-                <span className={`text-xs transition-transform duration-200 ${expandedYears[year] ? 'rotate-90' : ''}`} style={{ color: 'var(--gold)' }}>▶</span>
-                <span className="font-black text-lg text-white group-active:opacity-60">{year}年</span>
-                <div className="h-[1px] flex-1 bg-white/5" />
-              </button>
-
-              {expandedYears[year] && (
-                <div className="pl-2 space-y-3">
-                  {Object.keys(groupedData[year])
-                    .sort((a, b) => Number(b) - Number(a))
-                    .map(month => {
-                      const data = groupedData[year][month]
-                      const isExpanded = expandedMonths[`${year}-${month}`]
-                      
-                      return (
-                        <div key={`${year}-${month}`} className="space-y-2">
-                          {/* Month Header */}
-                          <button 
-                            onClick={() => toggleMonth(year, month)}
-                            className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 active:bg-white/10 transition-colors"
-                          >
-                            <div className="flex items-center gap-2">
-                              <span className="font-bold text-sm text-white/80">{month}月</span>
-                              <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 text-white/40">{data.txs.length}筆</span>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              <span className={`font-mono text-xs font-bold ${data.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                {data.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(data.pnl))}
-                              </span>
-                              <span className={`text-[10px] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} style={{ color: 'var(--t3)' }}>▼</span>
-                            </div>
-                          </button>
-
-                          {/* Transaction Rows */}
-                          {isExpanded && (
-                            <div className="space-y-2 pt-1">
-                              {data.txs.map(tx => (
-                                <TxRow 
-                                  key={tx.id} 
-                                  tx={tx} 
-                                  settings={settings}
-                                  deleting={deleting === tx.id} 
-                                  onDelete={() => deleteTx(tx.id)} 
-                                  onUpdated={onRefresh}
-                                />
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )
-                    })}
-                </div>
-              )}
+          {sortedYears.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-3">
+              <div className="text-4xl opacity-20">🗒️</div>
+              <p className="text-sm text-white/40">
+                {filter ? '查無符合的紀錄' : '尚無交易紀錄'}
+              </p>
             </div>
-          ))}
+          ) : (
+            <div className="space-y-4">
+              {sortedYears.map(year => (
+                <div key={year} className="space-y-2">
+                  {/* Year Header */}
+                  <button 
+                    onClick={() => toggleYear(year)}
+                    className="w-full flex items-center gap-2 px-1 py-2 group"
+                  >
+                    <span className={`text-xs transition-transform duration-200 ${expandedYears[year] ? 'rotate-90' : ''}`} style={{ color: 'var(--gold)' }}>▶</span>
+                    <span className="font-black text-lg text-white group-active:opacity-60">{year}年</span>
+                    <div className="h-[1px] flex-1 bg-white/5" />
+                  </button>
+
+                  {expandedYears[year] && (
+                    <div className="pl-2 space-y-3">
+                      {Object.keys(groupedData[year])
+                        .sort((a, b) => Number(b) - Number(a))
+                        .map(month => {
+                          const data = groupedData[year][month]
+                          const isExpanded = expandedMonths[`${year}-${month}`]
+                          
+                          return (
+                            <div key={`${year}-${month}`} className="space-y-2">
+                              {/* Month Header */}
+                              <button 
+                                onClick={() => toggleMonth(year, month)}
+                                className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 active:bg-white/10 transition-colors"
+                              >
+                                <div className="flex items-center gap-2">
+                                  <span className="font-bold text-sm text-white/80">{month}月</span>
+                                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 text-white/40">{data.txs.length}筆</span>
+                                </div>
+                                <div className="flex items-center gap-3">
+                                  <span className={`font-mono text-xs font-bold ${data.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                    {data.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(data.pnl))}
+                                  </span>
+                                  <span className={`text-[10px] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} style={{ color: 'var(--t3)' }}>▼</span>
+                                </div>
+                              </button>
+
+                              {/* Transaction Rows */}
+                              {isExpanded && (
+                                <div className="space-y-2 pt-1">
+                                  {data.txs.map(tx => (
+                                    <TxRow 
+                                      key={tx.id} 
+                                      tx={tx} 
+                                      settings={settings}
+                                      deleting={deleting === tx.id} 
+                                      onDelete={() => deleteTx(tx.id)} 
+                                      onUpdated={onRefresh}
+                                    />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="space-y-8">
+          {/* ① 我的定期定額計畫 */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-black text-white/30 uppercase tracking-[0.2em] px-1 flex justify-between items-center">
+              <span>進行中的計畫</span>
+              <span className="text-[10px] bg-gold/10 text-gold px-2 py-0.5 rounded-md">{activePlans.length}</span>
+            </h3>
+            {activePlans.length === 0 ? (
+              <div className="glass p-8 text-center rounded-2xl border border-white/5 text-white/20 text-xs">
+                尚無進行中的定期定額計畫
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {activePlans.map(plan => (
+                  <div key={plan.id} className="glass p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-black text-white">{getStockName(plan.symbol, plan.name_zh)}</span>
+                        <span className="text-[10px] font-mono text-white/30">{codeOnly(plan.symbol)}</span>
+                      </div>
+                      <div className="text-[11px] font-bold text-white/40">
+                        每次 {fmtMoney(plan.amount)} 元 · 每月 {plan.days_of_month.join('、')} 日
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => onEditDca?.(plan)} className="text-[10px] font-black bg-white/5 text-white/60 px-3 py-1.5 rounded-lg border border-white/10 active:scale-95 transition-all">編輯</button>
+                      <button onClick={() => toggleDcaStatus(plan)} className="text-[10px] font-black bg-red-400/10 text-red-400 px-3 py-1.5 rounded-lg border border-red-400/10 active:scale-95 transition-all">暫停</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ② 申購紀錄 */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-black text-white/30 uppercase tracking-[0.2em] px-1">申購紀錄 (歷史)</h3>
+            {sortedYears.length === 0 ? (
+              <div className="glass p-8 text-center rounded-2xl border border-white/5 text-white/20 text-xs">
+                尚無定期定額交易紀錄
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {sortedYears.map(year => (
+                  <div key={year} className="space-y-2">
+                    <button onClick={() => toggleYear(year)} className="w-full flex items-center gap-2 px-1 py-1 group">
+                      <span className={`text-[10px] transition-transform ${expandedYears[year] ? 'rotate-90' : ''}`} style={{ color: 'var(--gold)' }}>▶</span>
+                      <span className="font-black text-sm text-white/60">{year}年</span>
+                      <div className="h-[1px] flex-1 bg-white/5" />
+                    </button>
+                    {expandedYears[year] && (
+                      <div className="space-y-3">
+                        {Object.keys(groupedData[year]).sort((a,b) => Number(b)-Number(a)).map(month => {
+                          const data = groupedData[year][month]
+                          const isExpanded = expandedMonths[`${year}-${month}`]
+                          return (
+                            <div key={month} className="space-y-2">
+                              <button onClick={() => toggleMonth(year, month)} className="w-full flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
+                                <span className="font-bold text-xs text-white/40">{month}月 ({data.txs.length}筆)</span>
+                                <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-180' : ''}`} style={{ color: 'var(--t3)' }}>▼</span>
+                              </button>
+                              {isExpanded && (
+                                <div className="space-y-2">
+                                  {data.txs.map(tx => (
+                                    <TxRow key={tx.id} tx={tx} settings={settings} deleting={deleting === tx.id} onDelete={() => deleteTx(tx.id)} onUpdated={onRefresh} />
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* ③ 已撤銷的計畫 */}
+          <div className="space-y-3">
+            <button onClick={() => setShowCancelled(!showCancelled)} className="w-full text-xs font-black text-white/20 uppercase tracking-[0.2em] px-1 flex justify-between items-center py-2 border-t border-white/5 mt-8">
+              <span>已撤銷的計畫 ({inactivePlans.length})</span>
+              <span className={`transition-transform ${showCancelled ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+            {showCancelled && (
+              <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+                {inactivePlans.length === 0 ? (
+                  <div className="text-center py-4 text-[10px] text-white/10 font-bold uppercase tracking-widest italic">目前無撤銷計畫</div>
+                ) : (
+                  inactivePlans.map(plan => (
+                    <div key={plan.id} className="glass p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-4 opacity-50">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="font-black text-white">{getStockName(plan.symbol, plan.name_zh)}</span>
+                          <span className="text-[10px] font-mono text-white/30">{codeOnly(plan.symbol)}</span>
+                        </div>
+                        <div className="text-[11px] font-bold text-white/40">
+                          每次 {fmtMoney(plan.amount)} 元 · 每月 {plan.days_of_month.join('、')} 日
+                        </div>
+                      </div>
+                      <button onClick={() => toggleDcaStatus(plan)} className="text-[10px] font-black bg-gold/10 text-gold px-3 py-1.5 rounded-lg border border-gold/10 active:scale-95 transition-all">重新啟用</button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
         </div>
       )}
     </div>

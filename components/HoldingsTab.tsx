@@ -86,12 +86,19 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </button>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-4">
-          <StatBox label="投入成本" value={shortMoney(totalCost)} />
-          <StatBox label="目前市值" value={shortMoney(totalMV)} />
+        <div className="flex items-center mb-4">
+          <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/3 text-center" />
+          <StatBox 
+            label="目前市值" 
+            value={fmtMoney(totalMV)} 
+            className="w-1/3 text-center" 
+            upDown={totalMV > totalCost ? 1 : totalMV < totalCost ? -1 : 0} 
+            baseColor={true}
+          />
           <StatBox
             label="總損益比"
             value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
+            className="w-1/3 text-center border-l border-white/5"
             upDown={totalPnl}
           />
         </div>
@@ -492,12 +499,14 @@ function shortMoney(v: number): string {
   return `${sign}${abs.toFixed(0)}`
 }
 
-function StatBox({ label, value, upDown }: { label: string; value: string; upDown?: number }) {
-  const col = upDown === undefined ? 'text-white' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
+function StatBox({ label, value, upDown, className = '', baseColor = false }: { 
+  label: string; value: string; upDown?: number; className?: string; baseColor?: boolean 
+}) {
+  const col = upDown === undefined ? 'text-white' : upDown > 0 ? 'text-red-400' : upDown < 0 ? 'text-green-400' : 'text-white'
   return (
-    <div className="flex flex-col">
-      <div className="text-[10px] mb-0.5 opacity-40 font-bold uppercase tracking-tighter">{label}</div>
-      <div className={`font-black font-mono text-sm md:text-base leading-tight ${col}`}>{value}</div>
+    <div className={`flex flex-col ${className}`}>
+      <div className="text-[10px] mb-1 opacity-40 font-bold uppercase tracking-tighter">{label}</div>
+      <div className={`font-black font-mono text-xs md:text-sm leading-tight ${col}`}>{value}</div>
     </div>
   )
 }

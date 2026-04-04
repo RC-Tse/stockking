@@ -18,6 +18,24 @@ export interface Transaction {
   created_at: string
 }
 
+export interface DCAPlan {
+  id: number
+  user_id: string
+  symbol: string
+  amount: number
+  days_of_month: number[]
+  dividend_reinvest: boolean
+  smart_buy_enabled: boolean
+  smart_buy_threshold: string
+  smart_buy_amount: number
+  smart_sell_enabled: boolean
+  smart_sell_threshold: string
+  smart_sell_amount: number
+  is_active: boolean
+  created_at: string
+  name_zh?: string
+}
+
 export interface Holding {
   symbol: string
   shares: number
