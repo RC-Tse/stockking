@@ -390,7 +390,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
       {selectedDate && (
         <div className="animate-slide-up card-base p-5 space-y-5 border-white/10 shadow-2xl">
           <div className="flex justify-between items-center border-b border-white/5 pb-3">
-            <div className="flex flex-col"><h3 className="font-black text-base text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項</h3>{(() => { const entry = entries.find(e => e.entry_date === selectedDate); if (!entry) return null; return <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>當天總損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({entry.pnl_pct?.toFixed(2)}%)</span> })()}</div>
+            <div className="flex flex-col"><h3 className="font-black text-base text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項</h3>{(() => { const entry = entries.find((e: CalendarEntry) => e.entry_date === selectedDate); if (!entry) return null; return <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>當天總損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({entry.pnl_pct?.toFixed(2)}%)</span> })()}</div>
             {loading && <RefreshCw size={14} className="animate-spin text-gold" />}
           </div>
           {dayDetails?.map(det => (
