@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef, useEffect } from 'react'
+import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 interface Props {
   value: string // YYYY-MM-DD
@@ -14,14 +15,11 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [view, setView] = useState<View>('CALENDAR')
   
-  // viewDate determines which month/year the calendar or grid is currently showing
-  // It defaults to the current value or today
   const initialDate = value ? new Date(value) : new Date()
   const [viewDate, setViewDate] = useState(initialDate)
   
   const containerRef = useRef<HTMLDivElement>(null)
 
-  // Close when clicking outside
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
@@ -34,14 +32,13 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [isOpen])
 
-  // Format display value: YYYY年MM月DD日
   const displayValue = value ? (() => {
     const [y, m, d] = value.split('-')
     return `${y}年${m}月${d}日`
   })() : ''
 
   const currentYear = viewDate.getFullYear()
-  const currentMonth = viewDate.getMonth() // 0-indexed
+  const currentMonth = viewDate.getMonth() 
 
   const moveMonth = (delta: number) => {
     setViewDate(new Date(currentYear, currentMonth + delta, 1))
@@ -63,66 +60,53 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
           setView('CALENDAR')
           if (value) setViewDate(new Date(value))
         }}
-        className="input-base w-full text-left font-black font-mono text-lg py-4 bg-white/5 border-white/10 cursor-pointer focus:outline-none"
+        className="input-base cursor-pointer focus:border-gold font-mono font-black"
         placeholder="選擇日期"
       />
 
       {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 z-[100] glass p-5 space-y-4 shadow-2xl animate-in fade-in slide-in-from-top-2" 
-             style={{ background: '#141820', border: '1px solid rgba(255,255,255,0.1)', minWidth: '300px' }}>
+        <div className="absolute top-full left-0 right-0 mt-2 z-[100] p-5 space-y-6 shadow-2xl animate-slide-up glass" 
+             style={{ minWidth: '300px' }}>
           
-          {/* Header */}
           <div className="flex items-center justify-between">
-            <button 
-              onClick={() => moveMonth(-1)} 
-              className="p-2 text-gold disabled:opacity-20"
-              disabled={view !== 'CALENDAR'}
-            >◀</button>
+            <button onClick={() => moveMonth(-1)} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-gold active:scale-90 transition-all" disabled={view !== 'CALENDAR'}>
+              <ChevronLeft size={20}/>
+            </button>
             
-            <div className="flex gap-2 font-black text-white">
-              <button 
-                onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')}
-                className={`px-2 py-1 rounded transition-colors ${view === 'YEAR' ? 'bg-gold text-black' : 'hover:bg-white/5'}`}
-              >
-                {currentYear}年
+            <div className="flex gap-2 font-black text-white text-[20px]">
+              <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded ${view === 'YEAR' ? 'text-gold' : ''}`}>
+                {currentYear} 年
               </button>
-              <button 
-                onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')}
-                className={`px-2 py-1 rounded transition-colors ${view === 'MONTH' ? 'bg-gold text-black' : 'hover:bg-white/5'}`}
-              >
-                {currentMonth + 1}月
+              <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded ${view === 'MONTH' ? 'text-gold' : ''}`}>
+                {currentMonth + 1} 月
               </button>
             </div>
             
-            <button 
-              onClick={() => moveMonth(1)} 
-              className="p-2 text-gold disabled:opacity-20"
-              disabled={view !== 'CALENDAR'}
-            >▶</button>
+            <button onClick={() => moveMonth(1)} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-gold active:scale-90 transition-all" disabled={view !== 'CALENDAR'}>
+              <ChevronRight size={20}/>
+            </button>
           </div>
 
-          {/* View: CALENDAR */}
           {view === 'CALENDAR' && (
-            <div className="grid grid-cols-7 gap-1 text-center">
-              {['日','一','二','三','四','五','六'].map(d => (
-                <div key={d} className="text-[10px] font-bold text-white/30 py-1">{d}</div>
+            <div className="grid grid-cols-7 gap-1.5">
+              {['日','一','二','三','四','五','六'].map((d, i) => (
+                <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-gold':'text-white/20'}`}>{d}</div>
               ))}
               {(() => {
                 const startDay = new Date(currentYear, currentMonth, 1).getDay()
                 const daysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate()
                 const cells = []
-                for (let i = 0; i < startDay; i++) {
-                  cells.push(<div key={`empty-${i}`} />)
-                }
+                for (let i = 0; i < startDay; i++) cells.push(<div key={`empty-${i}`} />)
                 for (let d = 1; d <= daysInMonth; d++) {
                   const dateStr = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
                   const isSelected = value === dateStr
+                  const isToday = new Date().toISOString().split('T')[0] === dateStr
                   cells.push(
                     <button
                       key={d}
                       onClick={() => selectDate(d)}
-                      className={`aspect-square flex items-center justify-center text-sm font-bold rounded-lg transition-all ${
-                        isSelected ? 'bg-gold text-black' : 'text-white/80 hover:bg-white/5'
+                      className={`aspect-square flex items-center justify-center text-[14px] font-black rounded-full transition-all border ${
+                        isSelected ? 'bg-gold text-bg-base border-gold' : isToday ? 'border-gold/50 text-white' : 'bg-bg-hover text-white border-transparent'
                       }`}
                     >
                       {d}
@@ -134,53 +118,25 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
             </div>
           )}
 
-          {/* View: YEAR */}
           {view === 'YEAR' && (
-            <div className="grid grid-cols-3 gap-2 py-2">
+            <div className="grid grid-cols-3 gap-2">
               {(() => {
-                const thisYear = new Date().getFullYear()
-                const years = []
-                for (let y = thisYear - 7; y <= thisYear + 2; y++) {
-                  years.push(y)
-                }
-                return years.map(y => (
-                  <button
-                    key={y}
-                    onClick={() => {
-                      setViewDate(new Date(y, currentMonth, 1))
-                      setView('CALENDAR')
-                    }}
-                    className={`py-3 rounded-xl text-sm font-black transition-all ${
-                      currentYear === y 
-                        ? 'bg-[#c9a564] text-[#0d1018]' 
-                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                    }`}
-                  >
-                    {y}
-                  </button>
+                const thisY = new Date().getFullYear()
+                return Array.from({length:10}, (_,i)=>thisY-7+i).map(y => (
+                  <button key={y} onClick={() => { setViewDate(new Date(y, currentMonth, 1)); setView('CALENDAR') }}
+                    className={`py-4 rounded-xl font-black transition-all ${currentYear === y ? 'bg-gold text-bg-base' : 'bg-bg-hover text-white/40'}`}
+                  >{y}</button>
                 ))
               })()}
             </div>
           )}
 
-          {/* View: MONTH */}
           {view === 'MONTH' && (
-            <div className="grid grid-cols-3 gap-2 py-2">
+            <div className="grid grid-cols-3 gap-2">
               {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
-                <button
-                  key={m}
-                  onClick={() => {
-                    setViewDate(new Date(currentYear, m - 1, 1))
-                    setView('CALENDAR')
-                  }}
-                  className={`py-3 rounded-xl text-sm font-black transition-all ${
-                    currentMonth + 1 === m 
-                      ? 'bg-[#c9a564] text-[#0d1018]' 
-                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
-                  }`}
-                >
-                  {m}月
-                </button>
+                <button key={m} onClick={() => { setViewDate(new Date(currentYear, m - 1, 1)); setView('CALENDAR') }}
+                  className={`py-4 rounded-xl font-black transition-all ${currentMonth + 1 === m ? 'bg-gold text-bg-base' : 'bg-bg-hover text-white/40'}`}
+                >{m}月</button>
               ))}
             </div>
           )}

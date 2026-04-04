@@ -4,7 +4,7 @@
   "description": "專業台股長期投資追蹤工具",
   "start_url": "/dashboard",
   "display": "standalone",
-  "background_color": "#080a0e",
+  "background_color": "#0a0c10",
   "theme_color": "#d4af37",
   "icons": [
     {

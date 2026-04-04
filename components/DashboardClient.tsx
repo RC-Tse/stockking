@@ -10,11 +10,10 @@ import {
 import { 
   BarChart2, 
   ClipboardList, 
-  Settings as SettingsIcon, 
+  Settings2, 
   Plus 
 } from 'lucide-react'
 import HoldingsTab      from './HoldingsTab'
-import ConceptsTab      from './ConceptsTab'
 import TransactionsTab  from './TransactionsTab'
 import SettingsTab      from './SettingsTab'
 import AddDrawer        from './AddDrawer'
@@ -26,7 +25,7 @@ type Tab = 'holdings' | 'transactions' | 'settings'
 const TABS: { id: Tab; icon: any; label: string }[] = [
   { id: 'holdings',     icon: BarChart2, label: '持股'  },
   { id: 'transactions', icon: ClipboardList, label: '紀錄'  },
-  { id: 'settings',     icon: SettingsIcon, label: '設定'  },
+  { id: 'settings',     icon: Settings2, label: '設定'  },
 ]
 
 // ─── FIFO holdings computation ───────────────────────────────────────────────
@@ -89,7 +88,6 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
     .filter((h): h is Holding => h !== null)
 }
 
-// ─── component ───────────────────────────────────────────────────────────────
 export default function DashboardClient({ user }: { user: AppUser }) {
   const [tab, setTab]             = useState<Tab>('holdings')
   const [txs, setTxs]             = useState<Transaction[]>([])
@@ -104,16 +102,10 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const router = useRouter()
   const supabase = createClient()
 
-  // Apply theme
   useEffect(() => {
-    if (settings.theme) {
-      document.documentElement.setAttribute('data-theme', settings.theme)
-    } else {
-      document.documentElement.setAttribute('data-theme', 'luxury')
-    }
+    document.documentElement.setAttribute('data-theme', settings.theme || 'luxury')
   }, [settings.theme])
 
-  // ── fetch transactions + settings ─────────────────────────────
   const refresh = useCallback(async () => {
     const [txRes, setRes] = await Promise.all([
       fetch('/api/transactions'), fetch('/api/settings'),
@@ -125,7 +117,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     setLoading(false)
 
     const syms = Array.from(new Set(
-      txData.filter(t => t.action === 'BUY' || t.action === 'DCA').map(t => t.symbol)
+      txData.map(t => t.symbol)
     ))
     if (syms.length) {
       const qRes = await fetch(`/api/stocks?symbols=${syms.join(',')}`)
@@ -151,32 +143,8 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     fetch('/api/stockname/refresh').catch(() => {})
   }, [refresh, refreshCal])
 
-  // ── Auto-save today's P&L to calendar at 2 PM ─────────────────
-  useEffect(() => {
-    if (autoCalSaved.current || holdings.length === 0) return
-    const now = new Date()
-    if (now.getHours() < 14) return
-    const todayStr = now.toISOString().split('T')[0]
-    if (calEntries.some(e => e.entry_date === todayStr)) return
-    autoCalSaved.current = true
-    const pnl = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
-    const cost = holdings.reduce((s, h) => s + h.total_cost, 0)
-    const pnlPctStr = cost ? `${pnl >= 0 ? '+' : ''}${(pnl / cost * 100).toFixed(2)}%` : ''
-    fetch('/api/calendar', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        entry_date: todayStr,
-        pnl: Math.round(pnl),
-        note: `自動更新・盈虧比 ${pnlPctStr}`,
-      }),
-    }).then(r => {
-      if (r.ok) refreshCal(now.getFullYear(), now.getMonth() + 1)
-    })
-  }, [holdings, calEntries, refreshCal])
-
-  // ── 統一損益計算邏輯 ──
-  const { totalPnl, totalCost } = useMemo(() => {
+  // Unified PnL logic
+  const { totalPnl, pnlPct, totalMV } = useMemo(() => {
     let buyTotal = 0
     let sellTotal = 0
     for (const t of txs) {
@@ -184,122 +152,86 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       if (t.action === 'SELL') sellTotal += t.net_amount
     }
     const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
+    const tp = sellTotal + currentMV - buyTotal
     return {
-      totalPnl: sellTotal + currentMV - buyTotal,
-      totalCost: buyTotal
+      totalPnl: tp,
+      totalMV: currentMV,
+      pnlPct: buyTotal ? (tp / buyTotal) * 100 : 0
     }
   }, [txs, holdings])
-
-  const pnlPct = totalCost ? (totalPnl / totalCost) * 100 : 0
-  const totalMV = holdings.reduce((s, h) => s + h.market_value, 0)
 
   const signOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
   }
 
-  // ── render ─────────────────────────────────────────────────────
   return (
     <div className="min-h-dvh flex flex-col bg-base md:max-w-[480px] md:mx-auto md:border-x md:border-white/5">
 
       {/* ══ HEADER ══════════════════════════════════════════════ */}
-      <header className="sticky top-0 z-40 pt-safe bg-[#0d1018e0] backdrop-blur-xl border-b border-white/5">
+      <header className="sticky top-0 z-40 pt-safe bg-[#0a0c10e0] backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center justify-between px-4 py-3 gap-2">
-
           {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xl leading-none">👑</span>
-            <span className="text-gold font-black text-sm tracking-tight hidden xs:block">少年存股王</span>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="2">
+              <path d="M2 19h20M3 9l4 4 5-8 5 8 4-4 1 10H2L3 9z"/>
+            </svg>
           </div>
 
-          {/* Summary pill */}
-          <div className="flex-1 flex justify-center">
-            <div className="glass-sm flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono border border-white/5">
-              <span className="opacity-50">損益</span>
-              <span className={totalPnl >= 0 ? 'text-red-400 font-bold' : 'text-green-400 font-bold'}>
-                {totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(totalPnl))}
-                <span className="ml-0.5 opacity-60 text-[10px]">({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
-              </span>
-            </div>
+          {/* Summary */}
+          <div className="flex-1 flex flex-col items-center">
+            <span className="text-[18px] font-black text-white leading-tight">
+              {fmtMoney(totalMV)}
+            </span>
+            <span className={`text-[11px] font-bold ${totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+              {totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(totalPnl))} ({pnlPct.toFixed(1)}%)
+            </span>
           </div>
 
-          {/* Avatar → sign out */}
-          <button onClick={signOut} title="登出"
-            className="shrink-0 w-8 h-8 rounded-full overflow-hidden flex items-center justify-center text-xs font-black bg-gold-dim border border-white/10 text-gold">
-            {user.avatar
-              ? <img src={user.avatar} alt="" className="w-full h-full object-cover" />
-              : (user.name?.[0] ?? user.email[0]).toUpperCase()}
+          {/* Avatar */}
+          <button onClick={signOut}
+            className="shrink-0 w-8 h-8 rounded-full border-2 border-gold-dim overflow-hidden bg-bg-surface flex items-center justify-center text-[10px] font-black text-gold">
+            {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name?.[0] || 'U'}
           </button>
         </div>
       </header>
 
       {/* ══ CONTENT ═════════════════════════════════════════════ */}
-      <main className="flex-1 overflow-y-auto pb-32 text-[15px] md:text-[16px]">
-        {loading
-          ? <LoadingSkeleton />
-          : <>
-              {tab === 'holdings'     && <HoldingsTab 
-                holdings={holdings} 
-                quotes={quotes} 
-                settings={settings} 
-                transactions={txs} 
-                calEntries={calEntries}
-                onRefresh={refresh} 
-                onRefreshCal={refreshCal}
-              />}
-
-              {tab === 'transactions' && <TransactionsTab 
-                txs={txs} 
-                settings={settings} 
-                onRefresh={refresh} 
-                onEditDca={(plan) => {
-                  setEditingDcaPlan(plan)
-                  setDrawerOpen(true)
-                }}
-              />}
-              {tab === 'settings'     && (
-                <SettingsTab settings={settings} onSignOut={signOut} onSave={async (s) => {
-                  const r = await fetch('/api/settings', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(s),
-                  })
-                  if (r.ok) setSettings(s)
-                }} />
-              )}
-            </>
-        }
+      <main className="flex-1 overflow-y-auto pb-32">
+        {loading ? <div className="p-10 text-center opacity-20 animate-pulse">載入中...</div> : (
+          <>
+            {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} onRefresh={refresh} onRefreshCal={refreshCal} />}
+            {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} onEditDca={setEditingDcaPlan} />}
+            {tab === 'settings' && <SettingsTab settings={settings} onSignOut={signOut} onSave={async s => {
+              await fetch('/api/settings', { method: 'POST', body: JSON.stringify(s) })
+              setSettings(s)
+            }} />}
+          </>
+        )}
       </main>
 
       {/* ══ FAB ═════════════════════════════════════════════════ */}
       {(tab === 'holdings' || tab === 'transactions') && (
         <button
-          onClick={() => {
-            setEditingDcaPlan(null)
-            setDrawerOpen(true)
-          }}
-          className="fixed bottom-[82px] right-4 z-30 w-[50px] h-[50px] rounded-full flex items-center justify-center text-white transition-all active:scale-90 border border-white/10 shadow-2xl"
-          style={{ 
-            background: 'var(--gold)',
-            color: 'var(--bg-base)'
-          }}>
-          <Plus size={24} strokeWidth={3} />
+          onClick={() => { setEditingDcaPlan(null); setDrawerOpen(true); }}
+          className="fixed bottom-[82px] right-4 z-30 w-14 h-14 rounded-full flex items-center justify-center text-[#0a0c10] shadow-[0_4px_20px_rgba(212,175,55,0.4)] active:scale-90 transition-all border border-white/10"
+          style={{ background: 'linear-gradient(135deg, #d4af37, #f0d060)' }}>
+          <Plus size={28} strokeWidth={3} />
         </button>
       )}
 
       {/* ══ BOTTOM NAV ══════════════════════════════════════════ */}
-      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#0d1018f5] backdrop-blur-2xl border-t border-white/10">
+      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#080a0eF2] backdrop-blur-2xl border-t border-[#d4af3740]">
         <div className="flex h-16">
           {TABS.map(t => {
             const Icon = t.icon
+            const active = tab === t.id
             return (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${tab === t.id ? 'text-gold' : 'text-white/30'}`}>
-                <Icon size={22} fill={tab === t.id ? "currentColor" : "none"} strokeWidth={tab === t.id ? 2.5 : 2} />
-                <span className="font-bold text-[10px] tracking-wide uppercase">
-                  {t.label}
-                </span>
-                {tab === t.id && <div className="absolute bottom-1 inset-x-6 h-1 bg-gold rounded-full" />}
+                className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${active ? 'text-gold' : 'text-white/30'}`}>
+                <Icon size={22} strokeWidth={active ? 2.5 : 2} />
+                <span className="font-bold text-[10px] uppercase tracking-wider">{t.label}</span>
+                {active && <div className="absolute bottom-0 inset-x-8 h-0.5 bg-gold rounded-full" />}
               </button>
             )
           })}
@@ -311,32 +243,13 @@ export default function DashboardClient({ user }: { user: AppUser }) {
         open={drawerOpen}
         settings={settings}
         initialPlan={editingDcaPlan}
-        onClose={() => {
-          setDrawerOpen(false)
-          setEditingDcaPlan(null)
+        onClose={() => { setDrawerOpen(false); setEditingDcaPlan(null); }}
+        onSave={async p => {
+          await fetch('/api/transactions', { method: 'POST', body: JSON.stringify(p) })
+          setDrawerOpen(false); refresh();
         }}
-        onSave={async (payload) => {
-          await fetch('/api/transactions', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-          })
-          setDrawerOpen(false)
-          refresh()
-        }}
-        onSavePlan={() => {
-          refresh()
-        }}
+        onSavePlan={() => refresh()}
       />
-    </div>
-  )
-}
-
-function LoadingSkeleton() {
-  return (
-    <div className="p-4 space-y-3">
-      <div className="shimmer h-28 rounded-2xl" />
-      {[0,1,2].map(i => <div key={i} className="shimmer h-20 rounded-xl" />)}
     </div>
   )
 }
