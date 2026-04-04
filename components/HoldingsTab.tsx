@@ -128,6 +128,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
   const totalAchieved = settings.total_goal > 0 ? (currentMV / settings.total_goal) * 100 : null
 
+  const [expanded, setExpanded] = useState<string | null>(null)
+  const [closedExpanded, setClosedExpanded] = useState(false)
+
   return (
     <div className="p-3 md:p-4 space-y-4">
       {/* 1. 持股概覽卡片 */}
