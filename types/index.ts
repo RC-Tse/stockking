@@ -127,11 +127,12 @@ export function calcFee(amount: number, s: UserSettings, isSell = false): number
   const rate = isSell
     ? s.sell_fee_rate * s.sell_discount
     : s.buy_fee_rate * s.buy_discount
-  return Math.floor(Math.max(amount * rate, s.fee_min))
+  return Math.max(Math.floor(amount * rate), s.fee_min)
 }
 
 export function calcTax(amount: number, symbol: string, s: UserSettings): number {
-  return amount * (isEtf(symbol) ? s.tax_etf : s.tax_stock)
+  const rate = isEtf(symbol) ? s.tax_etf : s.tax_stock
+  return Math.floor(amount * rate)
 }
 
 export function fmtPrice(v: number): string {

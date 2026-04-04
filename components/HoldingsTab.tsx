@@ -497,12 +497,12 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
         <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 text-xs font-bold">
           <div className="flex justify-between">
             <span className="opacity-40">手續費</span>
-            <span className="font-mono text-white">{fmtMoney(Math.round(fee))}</span>
+            <span className="font-mono text-white">{fmtMoney(fee)}</span>
           </div>
           <div className="flex justify-between items-center pt-2 border-t border-white/5">
             <span className="opacity-60 uppercase text-[10px]">預估淨收支</span>
             <span className={`text-lg font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
+              {net >= 0 ? '+' : ''}{fmtMoney(net)}
             </span>
           </div>
         </div>

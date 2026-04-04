@@ -292,12 +292,12 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
                   {safePrice > 0 && finalShares > 0 && (
                     <div className="rounded-3xl p-5 space-y-2.5 bg-white/[0.03] border border-white/10">
                       <FeeRow label="估算交易金額" value={fmtMoney(Math.round(amount))} />
-                      <FeeRow label="券商手續費"   value={fmtMoney(Math.round(fee))} />
-                      {tax > 0 && <FeeRow label="證券交易稅"  value={fmtMoney(Math.round(tax))} />}
+                      <FeeRow label="券商手續費"   value={fmtMoney(fee)} />
+                      {tax > 0 && <FeeRow label="證券交易稅"  value={fmtMoney(tax)} />}
                       <div className="border-t border-white/10 pt-3 mt-3 flex justify-between items-center">
                         <span className="text-xs font-black text-white/40 uppercase tracking-widest">預估淨收支</span>
                         <span className={`font-black font-mono text-xl ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                          {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
+                          {net >= 0 ? '+' : ''}{fmtMoney(net)}
                         </span>
                       </div>
                     </div>

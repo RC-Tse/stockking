@@ -151,7 +151,9 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
                       setView('CALENDAR')
                     }}
                     className={`py-3 rounded-xl text-sm font-black transition-all ${
-                      currentYear === y ? 'bg-gold text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'
+                      currentYear === y 
+                        ? 'bg-[#c9a564] text-[#0d1018]' 
+                        : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                     }`}
                   >
                     {y}
@@ -172,7 +174,9 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
                     setView('CALENDAR')
                   }}
                   className={`py-3 rounded-xl text-sm font-black transition-all ${
-                    currentMonth + 1 === m ? 'bg-gold text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'
+                    currentMonth + 1 === m 
+                      ? 'bg-[#c9a564] text-[#0d1018]' 
+                      : 'bg-white/5 text-white/60 hover:bg-white/10 hover:text-white'
                   }`}
                 >
                   {m}月
