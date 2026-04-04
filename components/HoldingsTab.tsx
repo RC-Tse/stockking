@@ -183,12 +183,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </div>
         </div>
 
-        <div className="text-center mb-4">
-          <p className="text-[13px] md:text-[9px] text-white/20 font-bold tracking-wider">
-            註：已實現 = 已賣出配對損益，未實現 = 目前持股浮動損益
-          </p>
-        </div>
-
         {/* 📋 目標追蹤區塊 */}
         <div className="pt-5 border-t border-white/10 space-y-5">
           <div className="space-y-2">
@@ -678,26 +672,43 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
 
   return (
     <div className={`glass rounded-xl overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-gold' : 'border-white/5'}`}>
-      <div className="p-3 md:p-4 cursor-pointer active:bg-white/5" onClick={onToggle}>
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-black text-lg md:text-base text-white leading-tight">{q?.name_zh || h.symbol}</span>
-              <span className="font-mono px-1.5 py-0.5 rounded-md text-sm md:text-[10px] bg-white/5 text-white/40">{codeOnly(h.symbol)}</span>
-              <span className="text-sm md:text-[10px] font-mono px-2 py-0.5 rounded-full bg-gold-dim text-gold">{h.shares >= 1000 ? `${(h.shares/1000).toFixed(h.shares%1000===0?0:2)}張` : `${h.shares}股`}</span>
-            </div>
-            <div className="text-sm md:text-[11px] mt-1 font-mono text-white/40">平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}</div>
-          </div>
-          <div className="text-right shrink-0">
-            <div className="font-black text-2xl md:text-lg font-mono text-white leading-tight">{h.current_price > 0 ? h.current_price.toFixed(2) : '—'}</div>
-            {q && q.change !== undefined && (
-              <div className={`text-sm md:text-[11px] font-mono ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>{q.change >= 0 ? '+' : ''}{q.change.toFixed(2)} ({q.change_pct >= 0 ? '+' : ''}{q.change_pct.toFixed(2)}%)</div>
-            )}
-          </div>
+      <div className="p-4 cursor-pointer active:bg-white/5 flex flex-col gap-2.5" onClick={onToggle}>
+        {/* 第一列：名稱與股價 */}
+        <div className="flex justify-between items-center">
+          <span className="text-[16px] font-[800] text-white truncate mr-2">{q?.name_zh || h.symbol}</span>
+          <span className="text-[18px] font-[800] text-white font-mono shrink-0">
+            {h.current_price > 0 ? h.current_price.toFixed(2) : '—'}
+          </span>
         </div>
-        <div className="mt-2.5 flex items-center justify-between">
-          <span className={`font-bold font-mono text-lg md:text-sm ${color}`}>{isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)} 元</span>
-          <span className={`text-sm md:text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${dimBg} ${color}`}>{arrow} {Math.abs(h.pnl_pct).toFixed(2)}%</span>
+
+        {/* 第二列：代號股數與漲跌 */}
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="font-mono px-1.5 py-0.5 rounded-md text-[12px] bg-white/5 text-white/40 shrink-0">{codeOnly(h.symbol)}</span>
+            <span className="text-[12px] font-mono px-2 py-0.5 rounded-full bg-gold-dim text-gold shrink-0">
+              {h.shares >= 1000 ? `${(h.shares/1000).toFixed(h.shares%1000===0?0:2)}張` : `${h.shares}股`}
+            </span>
+          </div>
+          {q && q.change !== undefined && (
+            <div className={`text-[12px] font-mono shrink-0 ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+              {q.change >= 0 ? '+' : ''}{q.change.toFixed(2)} ({q.change_pct >= 0 ? '+' : ''}{q.change_pct.toFixed(2)}%)
+            </div>
+          )}
+        </div>
+
+        {/* 第三列：平均成本與持有成本 */}
+        <div className="text-[12px] font-mono text-white/40 whitespace-nowrap overflow-hidden text-ellipsis">
+          平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}
+        </div>
+
+        {/* 第四列：損益金額與損益比 */}
+        <div className="flex justify-between items-center">
+          <span className={`font-bold font-mono text-[16px] ${color}`}>
+            {isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)} 元
+          </span>
+          <span className={`text-[12px] font-mono px-2 py-0.5 rounded-full font-bold ${dimBg} ${color} shrink-0`}>
+            {arrow} {Math.abs(h.pnl_pct).toFixed(2)}%
+          </span>
         </div>
       </div>
       {isExpanded && (
