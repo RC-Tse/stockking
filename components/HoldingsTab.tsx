@@ -121,8 +121,14 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
   const confirmDelete = async () => {
     if (!deletingId) return
-    await fetch('/api/transactions', { method: 'DELETE', body: JSON.stringify({ id: deletingId }) })
-    setDeletingId(null); onRefresh()
+    try {
+      const res = await fetch('/api/transactions', { method: 'DELETE', body: JSON.stringify({ id: deletingId }) })
+      if (!res.ok) throw new Error('Delete failed')
+      setDeletingId(null); onRefresh()
+    } catch (e) {
+      console.error(e)
+      alert('刪除失敗，請稍後再試')
+    }
   }
 
   return (
@@ -263,11 +269,11 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
           )}
         </div>
 
-        <div className="text-[12px] font-medium text-white/30 whitespace-nowrap overflow-hidden text-ellipsis">平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}</div>
+        <div className="text-[12px] font-medium text-white/30 whitespace-nowrap overflow-hidden text-ellipsis">平均成本 {(h.avg_cost ?? 0).toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}</div>
 
         <div className="flex justify-between items-center">
           <span className={`text-[16px] font-black font-mono ${color}`}>{isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)}</span>
-          <div className={`px-2.5 py-0.5 rounded-full text-[12px] font-black ${isUp ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>{isUp ? '+' : ''}{h.pnl_pct.toFixed(2)}%</div>
+          <div className={`px-2.5 py-0.5 rounded-full text-[12px] font-black ${isUp ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>{isUp ? '+' : ''}{(h.pnl_pct ?? 0).toFixed(2)}%</div>
         </div>
       </div>
       {isExpanded && (
@@ -291,7 +297,7 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
         </div>
         <div className="flex justify-between items-center">
           <span className="text-[10px] font-bold text-white/20">成本 {fmtMoney(Math.round(c.buyCost))} · 收入 {fmtMoney(Math.round(c.sellRev))}</span>
-          <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>{c.pnlPct.toFixed(2)}%</div>
+          <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>{(c.pnlPct ?? 0).toFixed(2)}%</div>
         </div>
       </div>
       {expanded && <div className="bg-black/20 border-t border-white/5 p-3 space-y-2">{transactions.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onRefresh} onDelete={onDelete} />)}</div>}
@@ -347,25 +353,25 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
   }, [transactions, year, month])
 
   const toggleDate = async (dateStr: string) => {
-    if (selectedDate === dateStr) { setSelectedDate(null); setDayDetails(null); return }
-    setSelectedDate(dateStr)
-    
-    // 優先使用 API 回傳的 details
-    const entry = entries.find((e: any) => e.entry_date === dateStr)
-    if (entry && entry.details) {
-      setDayDetails(entry.details)
-      return
-    }
-
-    setLoading(true)
     try {
+      if (selectedDate === dateStr) { setSelectedDate(null); setDayDetails(null); return }
+      setSelectedDate(dateStr)
+      
+      const entry = entries?.find((e: any) => e.entry_date === dateStr)
+      if (entry && entry.details) {
+        setDayDetails(Array.isArray(entry.details) ? entry.details : [])
+        return
+      }
+
+      setLoading(true)
       const inventory: any = {}
-      const sorted = [...transactions].filter(t => t.trade_date <= dateStr).sort((a,b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
+      const sorted = [...(transactions || [])].filter(t => t.trade_date <= dateStr).sort((a,b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
       for (const tx of sorted) {
+        if (!tx.symbol) continue
         if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-        if (tx.action !== 'SELL') inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee })
+        if (tx.action !== 'SELL') inventory[tx.symbol].push({ shares: Number(tx.shares) || 0, cost: (Number(tx.amount) || 0) + (Number(tx.fee) || 0) })
         else {
-          let rem = tx.shares
+          let rem = Number(tx.shares) || 0
           while (rem > 0 && inventory[tx.symbol].length) {
             const lot = inventory[tx.symbol][0]
             if (lot.shares <= rem) { rem -= lot.shares; inventory[tx.symbol].shift() }
@@ -373,17 +379,37 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
           }
         }
       }
-      const held = Object.keys(inventory).filter(s => inventory[s].reduce((sum: any, l: any) => sum + l.shares, 0) > 0)
+      const held = Object.keys(inventory).filter(s => {
+        const arr = inventory[s] || []
+        return arr.reduce((sum: number, l: any) => sum + (l.shares || 0), 0) > 0
+      })
       if (!held.length) { setDayDetails([]); return }
       const res = await fetch(`/api/stocks?symbols=${held.join(',')}&date=${dateStr}`)
-      const quotes = await res.json()
+      if (!res.ok) throw new Error('API fetch error')
+      const quotesData = await res.json() || {}
       const details = held.map(sym => {
-        const shares = inventory[sym].reduce((s: any, l: any) => s + l.shares, 0), cost = inventory[sym].reduce((s: any, l: any) => s + l.cost, 0)
-        const price = quotes[sym]?.price || 0, mv = Math.round(price * shares), pnl = mv - cost
-        return { symbol: sym, name_zh: quotes[sym]?.name_zh || getStockName(sym), shares, price, market_value: mv, pnl, pnl_pct: cost > 0 ? (pnl / cost) * 100 : 0 }
+        const arr = inventory[sym] || []
+        const shares = arr.reduce((s: number, l: any) => s + (l.shares || 0), 0)
+        const cost = arr.reduce((s: number, l: any) => s + (l.cost || 0), 0)
+        const q = quotesData[sym] || {}
+        const price = Number(q.price) || 0
+        const mv = Math.round(price * shares), pnl = mv - cost
+        return { 
+          symbol: sym, 
+          name_zh: q.name_zh || getStockName(sym), 
+          shares, 
+          price, 
+          market_value: mv, 
+          pnl, 
+          pnl_pct: cost > 0 ? (pnl / cost) * 100 : 0 
+        }
       })
-      setDayDetails(details.sort((a,b) => b.market_value - a.market_value))
-    } catch (e) { setDayDetails([]) } finally { setLoading(false) }
+      setDayDetails(details.sort((a,b) => (b.market_value || 0) - (a.market_value || 0)))
+    } catch (e) { 
+      console.error('toggleDate error:', e)
+      setDayDetails([])
+      alert('載入失敗，請稍後再試')
+    } finally { setLoading(false) }
   }
 
   return (
@@ -458,7 +484,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
                 return (
                   <div className="flex flex-col gap-0.5 mt-1">
                     <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      當日市值損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({entry.pnl_pct?.toFixed(2)}%)
+                      當日市值損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({(entry.pnl_pct ?? 0).toFixed(2)}%)
                     </span>
                     {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
                       <span className="text-[10px] font-black font-mono text-gold">
@@ -487,7 +513,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
                   {dayTxs.map((tx: Transaction) => (
                     <div key={tx.id} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='BUY'?'買入':'賣出'}</span><span className="font-black text-white truncate max-w-[100px]">{tx.name_zh}</span></div>
-                      <div className="text-right"><div className={`font-mono font-black ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-white/20 font-bold">{tx.shares.toLocaleString()}股 @ {tx.price.toFixed(2)}</div></div>
+                      <div className="text-right"><div className={`font-mono font-black ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-white/20 font-bold">{(tx.shares ?? 0).toLocaleString()}股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
                     </div>
                   ))}
                 </div>
@@ -541,7 +567,7 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   )
   return (
     <div className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0">
-      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.trade_type === 'DCA' && <span className="text-gold font-black">定期定額</span>}</div><div className="text-sm font-bold text-white/90">{t.shares.toLocaleString()}股 @ {t.price.toFixed(2)}</div></div>
+      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.trade_type === 'DCA' && <span className="text-gold font-black">定期定額</span>}</div><div className="text-sm font-bold text-white/90">{(t.shares ?? 0).toLocaleString()}股 @ {(t.price ?? 0).toFixed(2)}</div></div>
       <div className="text-right">
         <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
         <div className="flex gap-3 justify-end mt-1">

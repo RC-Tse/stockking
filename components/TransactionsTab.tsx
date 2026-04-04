@@ -210,7 +210,7 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
             <div key={tx.id} className="space-y-2 animate-in fade-in slide-in-from-left-2">
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-md font-black text-[9px] border ${tx.type==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.type==='BUY'?'買入':'賣出'}</span><span className="opacity-40 text-[11px] font-mono">{tx.trade_date}</span></div>
-                <span className="font-black text-white/80 text-[12px]">{tx.shares.toLocaleString()}股 @ {tx.price.toFixed(2)}</span>
+                <span className="font-black text-white/80 text-[12px]">{(tx.shares ?? 0).toLocaleString()}股 @ {(tx.price ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center pl-1"><span className="opacity-20 text-[10px] font-bold">費{fmtMoney(tx.fee)}{tx.tax>0&&` 稅${fmtMoney(tx.tax)}`}</span><span className={`font-mono font-black text-[12px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>{tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}</span></div>
               {tx.matches?.map((m:any,i:number)=><div key={i} className="pl-4 border-l-2 border-white/10 text-[10px] text-white/30 italic py-0.5 ml-1">↳ 沖銷 {m.date} 買入 ({m.shares}股)</div>)}
@@ -237,7 +237,7 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
             <span className="font-black text-white text-[16px] truncate">{tx.name_zh || getStockName(tx.symbol)}</span>
             <span className="text-[10px] font-mono opacity-20">{codeOnly(tx.symbol)}</span>
           </div>
-          <div className="text-[11px] font-bold text-white/20 mt-1">{tx.trade_date} · {tx.shares.toLocaleString()}股</div>
+          <div className="text-[11px] font-bold text-white/20 mt-1">{tx.trade_date} · {(tx.shares ?? 0).toLocaleString()}股</div>
         </div>
         <div className={`text-right font-black font-mono text-[16px] shrink-0 ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
           {tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}
@@ -246,8 +246,8 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
       {open && (
         <div className="bg-black/20 p-5 pt-0 border-t border-white/5 space-y-5 animate-slide-up">
           <div className="grid grid-cols-3 gap-4 pt-5">
-            <DetailItem label="股數" value={tx.shares.toLocaleString()}/>
-            <DetailItem label="價格" value={tx.price.toFixed(2)}/>
+            <DetailItem label="股數" value={(tx.shares ?? 0).toLocaleString()}/>
+            <DetailItem label="價格" value={(tx.price ?? 0).toFixed(2)}/>
             <DetailItem label="費用" value={fmtMoney(Math.floor(tx.fee+tx.tax))}/>
           </div>
           {tx.note && <div className="p-3 rounded-xl bg-white/5 text-[11px] text-white/40 italic leading-relaxed border border-white/5">"{tx.note}"</div>}
