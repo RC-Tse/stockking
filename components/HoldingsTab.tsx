@@ -17,61 +17,68 @@ interface Props {
 export default function HoldingsTab({ holdings, quotes, settings, transactions, calEntries, onRefresh, onRefreshCal }: Props) {
   const currentYear = new Date().getFullYear().toString()
 
-  // ── Calculate Realized PnL & Year PnL ──
+  // ── Calculate Realized PnL & Year PnL via FIFO ──
   const { totalRealized, ytdRealized, eoyCost } = useMemo(() => {
     let totalRealized = 0
     let ytdRealized = 0
-    let eoyCost = 0
+    let eoyCostTotal = 0
     
-    // Tracking current inventory cost basis for realized PnL calculation
-    const map: Record<string, { shares: number, cost: number }> = {}
-    const sortedTxs = [...transactions].sort((a, b) => a.trade_date.localeCompare(b.trade_date))
+    // inventory map: symbol -> Array<{ shares: number, cost: number }>
+    const inventory: Record<string, { shares: number, cost: number }[]> = {}
+    // EOY inventory map (for cost basis at the start of current year)
+    const eoyInventory: Record<string, { shares: number, cost: number }[]> = {}
 
-    sortedTxs.forEach(tx => {
-      if (!map[tx.symbol]) map[tx.symbol] = { shares: 0, cost: 0 }
-      const h = map[tx.symbol]
+    const sortedTxs = [...transactions].sort((a, b) => {
+      if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
+      return a.id - b.id
+    })
+
+    for (const tx of sortedTxs) {
+      if (!inventory[tx.symbol]) inventory[tx.symbol] = []
+      const lots = inventory[tx.symbol]
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
-        h.shares += tx.shares
-        h.cost += tx.amount + tx.fee
+        lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
       } else if (tx.action === 'SELL') {
-        const avgCostBefore = h.shares > 0 ? h.cost / h.shares : 0
-        const sellCostBasis = tx.shares * avgCostBefore
+        let sellRemaining = tx.shares
+        let totalSellCostBasis = 0
+
+        while (sellRemaining > 0 && lots.length > 0) {
+          if (lots[0].shares <= sellRemaining) {
+            totalSellCostBasis += lots[0].cost
+            sellRemaining -= lots[0].shares
+            lots.shift()
+          } else {
+            const unitCost = lots[0].cost / lots[0].shares
+            const partialCost = sellRemaining * unitCost
+            totalSellCostBasis += partialCost
+            lots[0].shares -= sellRemaining
+            lots[0].cost -= partialCost
+            sellRemaining = 0
+          }
+        }
         
-        const realized = tx.net_amount + sellCostBasis
+        const realized = tx.net_amount + totalSellCostBasis // net_amount is negative for BUY, positive for SELL
+        // Wait, for SELL, net_amount = amount - fee - tax. 
+        // Realized = (amount - fee - tax) - totalSellCostBasis
         totalRealized += realized
-        
         if (tx.trade_date >= `${currentYear}-01-01`) {
           ytdRealized += realized
         }
-
-        h.shares -= tx.shares
-        h.cost -= sellCostBasis
       }
 
-      // Track cost basis at the end of last year
+      // Snapshot inventory at the end of previous year
       if (tx.trade_date < `${currentYear}-01-01`) {
-        // This is handled by the loop as it progresses
+        eoyInventory[tx.symbol] = lots.map(l => ({ ...l }))
       }
-    });
+    }
 
-    // To get EOY cost, we'd need another pass or check date inside
-    const eoyMap: Record<string, { shares: number, cost: number }> = {}
-    sortedTxs.filter(t => t.trade_date < `${currentYear}-01-01`).forEach(tx => {
-      if (!eoyMap[tx.symbol]) eoyMap[tx.symbol] = { shares: 0, cost: 0 }
-      const h = eoyMap[tx.symbol]
-      if (tx.action === 'BUY' || tx.action === 'DCA') {
-        h.shares += tx.shares
-        h.cost += tx.amount + tx.fee
-      } else if (tx.action === 'SELL') {
-        const avg = h.shares > 0 ? h.cost / h.shares : 0
-        h.shares -= tx.shares
-        h.cost -= tx.shares * avg
-      }
+    // Sum up cost basis at end of previous year
+    Object.values(eoyInventory).forEach(lots => {
+      lots.forEach(l => { eoyCostTotal += l.cost })
     })
-    Object.values(eoyMap).forEach(v => { if (v.shares > 0) eoyCost += v.cost })
 
-    return { totalRealized, ytdRealized, eoyCost }
+    return { totalRealized, ytdRealized, eoyCost: eoyCostTotal }
   }, [transactions, currentYear])
 
   const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0)
@@ -282,47 +289,60 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
   const fetchDayDetails = useCallback(async (dateStr: string) => {
     setLoadingDetails(true)
     try {
-      // 1. Calculate holdings up to this date
-      const map: Record<string, { shares: number, cost: number }> = {}
-      transactions.filter(t => t.trade_date <= dateStr).forEach(tx => {
-        if (!map[tx.symbol]) map[tx.symbol] = { shares: 0, cost: 0 }
-        const h = map[tx.symbol]
-        if (tx.action === 'BUY' || tx.action === 'DCA') {
-          h.shares += tx.shares
-          h.cost += tx.amount + tx.fee
-        } else if (tx.action === 'SELL') {
-          const avgCost = h.shares > 0 ? h.cost / h.shares : 0
-          h.shares -= tx.shares
-          h.cost -= tx.shares * avgCost
-        }
-      })
+      // FIFO for historical details up to dateStr
+      const inventory: Record<string, { shares: number, cost: number }[]> = {}
+      const sortedTxs = [...transactions]
+        .filter(t => t.trade_date <= dateStr)
+        .sort((a, b) => {
+          if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
+          return a.id - b.id
+        })
 
-      const heldSymbols = Object.entries(map)
-        .filter(([, v]) => v.shares > 0)
-        .map(([s]) => s)
+      for (const tx of sortedTxs) {
+        if (!inventory[tx.symbol]) inventory[tx.symbol] = []
+        const lots = inventory[tx.symbol]
+        if (tx.action === 'BUY' || tx.action === 'DCA') {
+          lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
+        } else if (tx.action === 'SELL') {
+          let sellRem = tx.shares
+          while (sellRem > 0 && lots.length > 0) {
+            if (lots[0].shares <= sellRem) {
+              sellRem -= lots[0].shares
+              lots.shift()
+            } else {
+              const unit = lots[0].cost / lots[0].shares
+              lots[0].shares -= sellRem
+              lots[0].cost = lots[0].shares * unit
+              sellRem = 0
+            }
+          }
+        }
+      }
+
+      const heldSymbols = Object.keys(inventory).filter(s => inventory[s].reduce((sum, l) => sum + l.shares, 0) > 0)
 
       if (heldSymbols.length === 0) {
         setDayDetails([])
         return
       }
 
-      // 2. Fetch historical quotes for these symbols on that date
       const res = await fetch(`/api/stocks?symbols=${heldSymbols.join(',')}&date=${dateStr}`)
       if (!res.ok) throw new Error('Failed to fetch historical quotes')
       const quotes: Record<string, Quote> = await res.json()
 
-      // 3. Compute final details
       const details = heldSymbols.map(sym => {
-        const h = map[sym]
+        const lots = inventory[sym]
+        const shares = lots.reduce((s, l) => s + l.shares, 0)
+        const cost = lots.reduce((s, l) => s + l.cost, 0)
         const q = quotes[sym]
         const price = q?.price || 0
-        const mv = Math.round(price * h.shares)
-        const pnl = mv - h.cost
-        const pnl_pct = h.cost > 0 ? (pnl / h.cost) * 100 : 0
+        const mv = Math.round(price * shares)
+        const pnl = mv - cost
+        const pnl_pct = cost > 0 ? (pnl / cost) * 100 : 0
         return {
           symbol: sym,
           name_zh: q?.name_zh || getStockName(sym),
-          shares: h.shares,
+          shares,
           price,
           market_value: mv,
           pnl,

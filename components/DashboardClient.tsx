@@ -23,39 +23,71 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
   { id: 'settings',     icon: '⚙️', label: '設定'  },
 ]
 
-// ─── holdings computation ────────────────────────────────────────────────────
+// ─── FIFO holdings computation ───────────────────────────────────────────────
 function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settings: UserSettings): Holding[] {
-  const map: Record<string, { bought: number; sold: number; cost: number }> = {}
-  for (const tx of txs) {
-    if (!map[tx.symbol]) map[tx.symbol] = { bought: 0, sold: 0, cost: 0 }
+  // map by symbol to a list of buy lots (shares, unit_cost)
+  const inventory: Record<string, { shares: number; cost: number }[]> = {}
+  
+  // Sort transactions by date and then by creation time to ensure chronological order
+  const sorted = [...txs].sort((a, b) => {
+    if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
+    return a.id - b.id
+  })
+
+  for (const tx of sorted) {
+    if (!inventory[tx.symbol]) inventory[tx.symbol] = []
+    const lots = inventory[tx.symbol]
+
     if (tx.action === 'BUY' || tx.action === 'DCA') {
-      map[tx.symbol].bought += tx.shares
-      map[tx.symbol].cost   += tx.amount + tx.fee
-    } else {
-      map[tx.symbol].sold += tx.shares
+      // Add new buy lot
+      const total_cost = tx.amount + tx.fee
+      lots.push({ shares: tx.shares, cost: total_cost })
+    } else if (tx.action === 'SELL') {
+      // Subtract from oldest lots first (FIFO)
+      let sellRemaining = tx.shares
+      while (sellRemaining > 0 && lots.length > 0) {
+        if (lots[0].shares <= sellRemaining) {
+          sellRemaining -= lots[0].shares
+          lots.shift()
+        } else {
+          // Partial lot reduction
+          const unitCost = lots[0].cost / lots[0].shares
+          lots[0].shares -= sellRemaining
+          lots[0].cost = lots[0].shares * unitCost
+          sellRemaining = 0
+        }
+      }
     }
   }
-  return Object.entries(map)
-    .filter(([, v]) => v.bought - v.sold > 0)
-    .map(([sym, v]) => {
-      const net = v.bought - v.sold
-      const avg_cost = v.cost / v.bought
-      const total_cost = Math.round(net * avg_cost)
+
+  return Object.entries(inventory)
+    .map(([sym, lots]) => {
+      const netShares = lots.reduce((s, l) => s + l.shares, 0)
+      if (netShares <= 0) return null
+
+      const totalCost = lots.reduce((s, l) => s + l.cost, 0)
+      const avgCost = totalCost / netShares
+      
       const cp = quotes[sym]?.price || 0
-      const mv = Math.round(cp * net)
+      const mv = Math.round(cp * netShares)
+      
+      // Compute estimated exit costs
       const fee = calcFee(mv, settings, true)
       const tax = calcTax(mv, sym, settings)
-      const upnl = mv - fee - tax - total_cost
+      const upnl = mv - fee - tax - totalCost
+
       return {
-        symbol: sym, shares: net,
-        avg_cost: Math.round(avg_cost * 100) / 100,
-        total_cost,
+        symbol: sym,
+        shares: netShares,
+        avg_cost: Math.round(avgCost * 100) / 100,
+        total_cost: Math.round(totalCost),
         current_price: cp,
         market_value: mv,
         unrealized_pnl: Math.round(upnl),
-        pnl_pct: total_cost ? Math.round(upnl / total_cost * 10000) / 100 : 0,
+        pnl_pct: totalCost ? Math.round(upnl / totalCost * 10000) / 100 : 0,
       }
     })
+    .filter((h): h is Holding => h !== null)
 }
 
 // ─── component ───────────────────────────────────────────────────────────────
