@@ -48,10 +48,9 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
 
 async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: string) {
   try {
-    // date: YYYY-MM-DD
     const targetDate = new Date(date)
-    const start = Math.floor(targetDate.getTime() / 1000)
-    const end = start + 86400 * 3 // Fetch 3 days to ensure we get a trading day if target is holiday
+    const end = Math.floor(targetDate.getTime() / 1000) + 86400
+    const start = end - 86400 * 7 // Fetch 7 days to ensure we get at least two trading days
 
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${start}&period2=${end}&interval=1d`,
@@ -65,24 +64,31 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
     const closes = result.indicators.quote[0].close
     const timestamps = result.timestamp || []
     
-    // Find the timestamp closest to our target date (within target date)
-    // or just take the first available close in the range
-    let price = closes[0]
-    for (let i = 0; i < timestamps.length; i++) {
+    // Find the entry for the target date
+    let targetIdx = -1
+    for (let i = timestamps.length - 1; i >= 0; i--) {
       const d = new Date(timestamps[i] * 1000)
       const dStr = d.toISOString().split('T')[0]
-      if (dStr === date && closes[i] !== null) {
-        price = closes[i]
+      if (dStr <= date && closes[i] !== null) {
+        targetIdx = i
         break
       }
     }
 
-    if (price === null || price === undefined) return null
+    if (targetIdx === -1) return null
+
+    const price = closes[targetIdx]
+    const prevPrice = targetIdx > 0 ? closes[targetIdx - 1] : null
+    const change = prevPrice !== null ? Math.round((price - prevPrice) * 100) / 100 : 0
+    const change_pct = (prevPrice !== null && prevPrice !== 0) ? Math.round(change / prevPrice * 10000) / 100 : 0
 
     return {
       symbol,
       name_zh: nameZh,
       price: Math.round(price * 100) / 100,
+      prev: prevPrice !== null ? Math.round(prevPrice * 100) / 100 : null,
+      change,
+      change_pct
     }
   } catch (err) {
     console.error(`Error fetching historical ${symbol} for ${date}:`, err)
