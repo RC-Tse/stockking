@@ -20,19 +20,28 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
   }, [year, month, onRefresh])
 
   const days = useMemo(() => {
-    const firstDay = new Date(year, month - 1, 1).getDay()
-    const lastDate = new Date(year, month, 0).getDate()
-    const arr = []
-    for (let i = 0; i < firstDay; i++) arr.push(null)
-    for (let i = 1; i <= lastDate; i++) arr.push(i)
-    return arr
+    const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const cells = []
+    
+    // 前面補空格
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      cells.push(null)
+    }
+    
+    // 加入當月所有日期
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push(d)
+    }
+    return cells
   }, [year, month])
 
   const entryMap = useMemo(() => {
     const map: Record<number, CalendarEntry> = {}
     entries.forEach(e => {
-      const d = new Date(e.entry_date).getDate()
-      map[d] = e
+      // 安全解析日期，避免時區造成誤差
+      const day = parseInt(e.entry_date.split(\'-\')[2], 10)
+      map[day] = e
     })
     return map
   }, [entries])

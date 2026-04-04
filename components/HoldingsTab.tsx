@@ -294,23 +294,39 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
   useEffect(() => { onRefresh(year, month) }, [year, month, onRefresh])
 
   const days = useMemo(() => {
-    const start = new Date(year, month - 1, 1).getDay(), last = new Date(year, month, 0).getDate(), arr = []
-    for (let i = 0; i < start; i++) arr.push(null)
-    for (let i = 1; i <= last; i++) arr.push(i)
-    return arr
+    const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
+    const daysInMonth = new Date(year, month, 0).getDate()
+    const cells = []
+    
+    // 前面補空格
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      cells.push(null)
+    }
+    
+    // 加入當月所有日期
+    for (let d = 1; d <= daysInMonth; d++) {
+      cells.push(d)
+    }
+    return cells
   }, [year, month])
 
   const entryMap = useMemo(() => {
     const map: Record<number, any> = {}
-    entries.forEach((e: any) => map[new Date(e.entry_date).getDate()] = e)
+    entries.forEach((e: any) => {
+      // 安全解析日期，避免時區造成誤差
+      const day = parseInt(e.entry_date.split(\'-\')[2], 10)
+      map[day] = e
+    })
     return map
   }, [entries])
 
   const hasTxMap = useMemo(() => {
     const map: Record<number, boolean> = {}
     transactions.forEach((t: Transaction) => {
-      const dStr = t.trade_date.split('-')
-      if (parseInt(dStr[0]) === year && parseInt(dStr[1]) === month) map[parseInt(dStr[2])] = true
+      const dParts = t.trade_date.split(\'-\')
+      if (parseInt(dParts[0]) === year && parseInt(dParts[1]) === month) {
+        map[parseInt(dParts[2])] = true
+      }
     })
     return map
   }, [transactions, year, month])
@@ -323,7 +339,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
       const sorted = [...transactions].filter(t => t.trade_date <= dateStr).sort((a,b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
       for (const tx of sorted) {
         if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-        if (tx.action !== 'SELL') inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee })
+        if (tx.action !== \'SELL\') inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee })
         else {
           let rem = tx.shares
           while (rem > 0 && inventory[tx.symbol].length) {
@@ -335,7 +351,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
       }
       const held = Object.keys(inventory).filter(s => inventory[s].reduce((sum: any, l: any) => sum + l.shares, 0) > 0)
       if (!held.length) { setDayDetails([]); return }
-      const res = await fetch(`/api/stocks?symbols=${held.join(',')}&date=${dateStr}`)
+      const res = await fetch(`/api/stocks?symbols=${held.join(\',\')}&date=${dateStr}`)
       const quotes = await res.json()
       const details = held.map(sym => {
         const shares = inventory[sym].reduce((s: any, l: any) => s + l.shares, 0), cost = inventory[sym].reduce((s: any, l: any) => s + l.cost, 0)
@@ -352,18 +368,18 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
         <div className="flex items-center justify-between">
           <button onClick={() => setViewDate(new Date(year, month - 2, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-gold active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronLeft size={20}/></button>
           <div className="flex gap-2 font-black text-white text-[20px]">
-            <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded transition-colors ${view === 'YEAR' ? 'text-gold' : 'active:opacity-60'}`}>{year} 年</button>
-            <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded transition-colors ${view === 'MONTH' ? 'text-gold' : 'active:opacity-60'}`}>{month} 月</button>
+            <button onClick={() => setView(view === \'YEAR\' ? \'CALENDAR\' : \'YEAR\')} className={`px-2 rounded transition-colors ${view === \'YEAR\' ? \'text-gold\' : \'active:opacity-60\'}`}>{year} 年</button>
+            <button onClick={() => setView(view === \'MONTH\' ? \'CALENDAR\' : \'MONTH\')} className={`px-2 rounded transition-colors ${view === \'MONTH\' ? \'text-gold\' : \'active:opacity-60\'}`}>{month} 月</button>
           </div>
           <button onClick={() => setViewDate(new Date(year, month, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-gold active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronRight size={20}/></button>
         </div>
 
-        {view === 'CALENDAR' && (
+        {view === \'CALENDAR\' && (
           <div className="grid grid-cols-7 gap-2">
-            {['日','一','二','三','四','五','六'].map((d, i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-gold':'text-white/20'}`}>{d}</div>)}
+            {[\'日\',\'一\',\'二\',\'三\',\'四\',\'五\',\'六\'].map((d, i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?\'text-red-400\':i===6?\'text-gold\':\'text-white/20\'}`}>{d}</div>)}
             {days.map((d, i) => {
-              if (d === null) return <div key={i} />
-              const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`, entry = entryMap[d], pnlPct = entry?.pnl_pct || 0
+              if (d === null) return <div key={`empty-${i}`} style={{ height: \'52px\' }} />
+              const dateStr = `${year}-${String(month).padStart(2,\'0\')}-${String(d).padStart(2,\'0\')}`, entry = entryMap[d], pnlPct = entry?.pnl_pct || 0
               const isToday = new Date().toISOString().split('T')[0] === dateStr, isSel = selectedDate === dateStr
               let bg = '#1e2535'
               if (pnlPct > 0) bg = `rgba(224, 80, 80, ${Math.min(0.85, 0.3 + (pnlPct/5)*0.55)})`
