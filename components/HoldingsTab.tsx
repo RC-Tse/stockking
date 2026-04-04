@@ -174,7 +174,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         </div>
       </div>
 
-      <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} />
+      <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} holdings={holdings} quotes={quotes} />
 
       <div className="space-y-4">
         {holdings.sort((a, b) => b.market_value - a.market_value).map(h => (
@@ -305,7 +305,7 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
   )
 }
 
-function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
+function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes }: any) {
   const [viewDate, setViewDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [view, setView] = useState<any>('CALENDAR')
@@ -482,7 +482,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
           <div style={{color:'#d4af37', fontWeight:800, marginBottom:12}}>
             {selectedDate} 持股細項
           </div>
-          {(holdings ?? []).map(h => (
+          {(holdings ?? []).map((h: any) => (
             <div key={h?.symbol ?? 'unknown'} style={{marginBottom:8, color:'#f0ece4'}}>
               <span>{h?.symbol ?? '—'}</span>
               <span style={{float:'right'}}>{(h?.current_price ?? 0).toLocaleString()}</span>
