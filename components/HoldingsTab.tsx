@@ -456,9 +456,18 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
       <div className="flex items-center gap-3">
         <div className={`w-1 h-10 rounded-full ${isBuy ? 'bg-red-500' : 'bg-green-500'}`} />
         <div>
-          <div className="text-sm font-mono opacity-40">{t.trade_date}</div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <div className="text-[11px] font-mono opacity-40">{t.trade_date}</div>
+            {t.trade_type === 'DCA' ? (
+              <span className="text-[9px] font-black px-1 py-0.5 rounded bg-gold-dim text-gold border border-gold/20 leading-none">定期定額</span>
+            ) : isBuy ? (
+              <span className="text-[9px] font-black px-1 py-0.5 rounded bg-red-400/10 text-red-400 border border-red-400/20 leading-none">買入</span>
+            ) : (
+              <span className="text-[9px] font-black px-1 py-0.5 rounded bg-green-400/10 text-green-400 border border-green-400/20 leading-none">賣出</span>
+            )}
+          </div>
           <div className="text-sm font-bold text-white/90">
-            <span className={isBuy ? 'text-red-400' : 'text-green-400'}>{isBuy ? '買' : '賣'}</span> {t.shares}股 @ {t.price}
+            {t.shares}股 @ {t.price}
           </div>
         </div>
       </div>

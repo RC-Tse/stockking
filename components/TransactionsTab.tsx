@@ -19,7 +19,10 @@ const ACTION_BG: Record<string, string> = {
   BUY: 'bg-red-400/10', SELL: 'bg-green-400/10', DCA: 'bg-gold/10',
 }
 
+type TabMode = 'SELF' | 'DCA'
+
 export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
+  const [tab, setTab] = useState<TabMode>('SELF')
   const [filter, setFilter] = useState('')
   const [deleting, setDeleting] = useState<number | null>(null)
   
@@ -31,13 +34,23 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
   const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({ [currentYear]: true })
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({ [`${currentYear}-${currentMonth}`]: true })
 
-  const filtered = filter.trim()
-    ? txs.filter(t => 
+  const filtered = useMemo(() => {
+    let result = txs
+    if (tab === 'SELF') {
+      result = result.filter(t => t.trade_type !== 'DCA')
+    } else {
+      result = result.filter(t => t.trade_type === 'DCA')
+    }
+
+    if (filter.trim()) {
+      result = result.filter(t => 
         codeOnly(t.symbol).includes(filter.toUpperCase()) || 
         t.symbol.includes(filter.toUpperCase()) ||
         (t.name_zh || getStockName(t.symbol)).includes(filter)
       )
-    : txs
+    }
+    return result
+  }, [txs, tab, filter])
 
   // Grouping logic
   const groupedData = useMemo(() => {
@@ -86,6 +99,22 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
 
   return (
     <div className="p-4 space-y-4 pb-32">
+      {/* Tabs */}
+      <div className="flex bg-white/5 p-1 rounded-xl border border-white/5">
+        <button 
+          onClick={() => setTab('SELF')}
+          className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${tab === 'SELF' ? 'bg-white/10 text-white shadow-xl' : 'text-white/40'}`}
+        >
+          自行交易
+        </button>
+        <button 
+          onClick={() => setTab('DCA')}
+          className={`flex-1 py-2 text-xs font-black rounded-lg transition-all ${tab === 'DCA' ? 'bg-gold-dim text-gold shadow-xl' : 'text-white/40'}`}
+        >
+          定期定額
+        </button>
+      </div>
+
       {/* Search */}
       <input
         value={filter}
@@ -193,13 +222,19 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
     )
   }
 
+  const isDCA = tx.trade_type === 'DCA'
+
   return (
     <div className={`glass rounded-xl overflow-hidden border border-white/5 transition-all ${open ? 'border-white/20' : ''}`} style={{ opacity: deleting ? 0.5 : 1 }}>
       <button className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-white/5" onClick={() => setOpen(!open)}>
-        {/* Action badge */}
-        <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${bgColor} ${color}`}>
-          {ACTION_LABEL[tx.action] ?? tx.action}
-        </span>
+        {/* Action badge / DCA Label */}
+        {isDCA ? (
+          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-gold-dim text-gold border border-gold/20 shrink-0 whitespace-nowrap">定期定額</span>
+        ) : (
+          <span className={`text-[10px] font-bold px-2 py-1 rounded-lg shrink-0 ${bgColor} ${color}`}>
+            {ACTION_LABEL[tx.action] ?? tx.action}
+          </span>
+        )}
 
         {/* Symbol + Name */}
         <div className="flex flex-col min-w-0">
@@ -225,12 +260,13 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
       {open && (
         <div className="px-4 pb-3 space-y-3 border-t border-white/5 bg-white/[0.02]">
           <div className="grid grid-cols-3 gap-2 pt-3">
-            <Detail label="股數"  value={`${tx.shares.toLocaleString()} 股`} />
+            {isDCA && <Detail label="申購金額" value={fmtMoney(Math.round(tx.amount + tx.fee))} />}
+            <Detail label="買入股數"  value={`${tx.shares.toLocaleString()} 股`} />
             <Detail label="成交價" value={`${Number(tx.price).toFixed(2)}`} />
-            <Detail label="金額"  value={fmtMoney(Math.round(tx.amount))} />
+            {!isDCA && <Detail label="金額"  value={fmtMoney(Math.round(tx.amount))} />}
             <Detail label="手續費" value={fmtMoney(Math.round(tx.fee))} />
-            <Detail label="交易稅" value={fmtMoney(Math.round(tx.tax))} />
-            <Detail label="類型"  value={tx.trade_type} />
+            {tx.tax > 0 && <Detail label="交易稅" value={fmtMoney(Math.round(tx.tax))} />}
+            <Detail label="淨收支"  value={fmtMoney(Math.round(tx.net_amount))} />
           </div>
           {tx.note && (
             <div className="text-[11px] px-2 py-1.5 rounded-lg bg-white/5 text-white/50 border border-white/5 italic">
