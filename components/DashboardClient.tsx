@@ -25,10 +25,8 @@ const TABS: { id: Tab; icon: string; label: string }[] = [
 
 // ─── FIFO holdings computation ───────────────────────────────────────────────
 function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settings: UserSettings): Holding[] {
-  // map by symbol to a list of buy lots (shares, unit_cost)
   const inventory: Record<string, { shares: number; cost: number }[]> = {}
   
-  // Sort transactions by date and then by creation time to ensure chronological order
   const sorted = [...txs].sort((a, b) => {
     if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
     return a.id - b.id
@@ -39,18 +37,14 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
     const lots = inventory[tx.symbol]
 
     if (tx.action === 'BUY' || tx.action === 'DCA') {
-      // Add new buy lot
-      const total_cost = tx.amount + tx.fee
-      lots.push({ shares: tx.shares, cost: total_cost })
+      lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
     } else if (tx.action === 'SELL') {
-      // Subtract from oldest lots first (FIFO)
       let sellRemaining = tx.shares
       while (sellRemaining > 0 && lots.length > 0) {
         if (lots[0].shares <= sellRemaining) {
           sellRemaining -= lots[0].shares
           lots.shift()
         } else {
-          // Partial lot reduction
           const unitCost = lots[0].cost / lots[0].shares
           lots[0].shares -= sellRemaining
           lots[0].cost = lots[0].shares * unitCost
@@ -71,7 +65,6 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       const cp = quotes[sym]?.price || 0
       const mv = Math.round(cp * netShares)
       
-      // Compute estimated exit costs
       const fee = calcFee(mv, settings, true)
       const tax = calcTax(mv, sym, settings)
       const upnl = mv - fee - tax - totalCost
@@ -116,7 +109,6 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     setSettings(setData)
     setLoading(false)
 
-    // Fetch quotes for all held symbols
     const syms = Array.from(new Set(
       txData.filter(t => t.action === 'BUY' || t.action === 'DCA').map(t => t.symbol)
     ))
@@ -141,8 +133,6 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     refresh()
     const now = new Date()
     refreshCal(now.getFullYear(), now.getMonth() + 1)
-    
-    // 啟動時更新一次股票名稱清單
     fetch('/api/stockname/refresh').catch(() => {})
   }, [refresh, refreshCal])
 
@@ -170,11 +160,24 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     })
   }, [holdings, calEntries, refreshCal])
 
-  // ── summary ────────────────────────────────────────────────────
-  const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0)
-  const totalMV   = holdings.reduce((s, h) => s + h.market_value, 0)
-  const totalPnl  = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
-  const pnlPct    = totalCost ? totalPnl / totalCost * 100 : 0
+  // ── 統一損益計算邏輯 ──
+  // 總損益 = 所有賣出淨收入 + 目前持股市值 - 所有買入總成本
+  const { totalPnl, totalCost } = useMemo(() => {
+    let buyTotal = 0
+    let sellTotal = 0
+    for (const t of txs) {
+      if (t.action === 'BUY' || t.action === 'DCA') buyTotal += (t.amount + t.fee)
+      if (t.action === 'SELL') sellTotal += t.net_amount
+    }
+    const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
+    return {
+      totalPnl: sellTotal + currentMV - buyTotal,
+      totalCost: buyTotal
+    }
+  }, [txs, holdings])
+
+  const pnlPct = totalCost ? (totalPnl / totalCost) * 100 : 0
+  const totalMV = holdings.reduce((s, h) => s + h.market_value, 0)
 
   const signOut = async () => {
     await supabase.auth.signOut()
@@ -198,10 +201,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
           {/* Summary pill */}
           <div className="flex-1 flex justify-center">
             <div className="glass-sm flex items-center gap-2 px-3 py-1.5 text-[11px] font-mono border border-white/5">
-              <span className="opacity-50">市值</span>
-              <span className="text-white font-bold">{fmtMoney(totalMV)}</span>
-              <span className={totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}>
-                {totalPnl >= 0 ? '+' : ''}{fmtMoney(totalPnl)}
+              <span className="opacity-50">損益</span>
+              <span className={totalPnl >= 0 ? 'text-red-400 font-bold' : 'text-green-400 font-bold'}>
+                {totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(totalPnl))}
                 <span className="ml-0.5 opacity-60 text-[10px]">({pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)</span>
               </span>
             </div>

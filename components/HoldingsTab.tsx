@@ -17,16 +17,24 @@ interface Props {
 export default function HoldingsTab({ holdings, quotes, settings, transactions, calEntries, onRefresh, onRefreshCal }: Props) {
   const currentYear = new Date().getFullYear().toString()
 
-  // ── Calculate Realized PnL & Year PnL via FIFO ──
-  const { totalRealized, ytdRealized, eoyCost } = useMemo(() => {
+  // ── Calculate Unified PnL Metrics ──
+  const { 
+    totalRealized, ytdRealized, eoyHeldCost, 
+    allTimeBuyTotal, allTimeSellTotal,
+    yearBuyTotal, yearSellTotal,
+    closedHoldings
+  } = useMemo(() => {
     let totalRealized = 0
     let ytdRealized = 0
-    let eoyCostTotal = 0
     
-    // inventory map: symbol -> Array<{ shares: number, cost: number }>
+    let allTimeBuyTotal = 0
+    let allTimeSellTotal = 0
+    let yearBuyTotal = 0
+    let yearSellTotal = 0
+
+    // FIFO tracking
     const inventory: Record<string, { shares: number, cost: number }[]> = {}
-    // EOY inventory map (for cost basis at the start of current year)
-    const eoyInventory: Record<string, { shares: number, cost: number }[]> = {}
+    const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
 
     const sortedTxs = [...transactions].sort((a, b) => {
       if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
@@ -35,66 +43,109 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
     for (const tx of sortedTxs) {
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
+      if (!stockHistory[tx.symbol]) stockHistory[tx.symbol] = { buyCost: 0, sellRev: 0 }
+      
       const lots = inventory[tx.symbol]
+      const isThisYear = tx.trade_date >= `${currentYear}-01-01`
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
-        lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
+        const cost = tx.amount + tx.fee
+        lots.push({ shares: tx.shares, cost })
+        allTimeBuyTotal += cost
+        stockHistory[tx.symbol].buyCost += cost
+        if (isThisYear) yearBuyTotal += cost
       } else if (tx.action === 'SELL') {
+        allTimeSellTotal += tx.net_amount
+        stockHistory[tx.symbol].sellRev += tx.net_amount
+        if (isThisYear) yearSellTotal += tx.net_amount
+
         let sellRemaining = tx.shares
         let totalSellCostBasis = 0
-
         while (sellRemaining > 0 && lots.length > 0) {
           if (lots[0].shares <= sellRemaining) {
             totalSellCostBasis += lots[0].cost
             sellRemaining -= lots[0].shares
             lots.shift()
           } else {
-            const unitCost = lots[0].cost / lots[0].shares
-            const partialCost = sellRemaining * unitCost
-            totalSellCostBasis += partialCost
+            const unit = lots[0].cost / lots[0].shares
+            const partial = sellRemaining * unit
+            totalSellCostBasis += partial
             lots[0].shares -= sellRemaining
-            lots[0].cost -= partialCost
+            lots[0].cost -= partial
             sellRemaining = 0
           }
         }
-        
-        const realized = tx.net_amount + totalSellCostBasis // net_amount is negative for BUY, positive for SELL
-        // Wait, for SELL, net_amount = amount - fee - tax. 
-        // Realized = (amount - fee - tax) - totalSellCostBasis
-        totalRealized += realized
-        if (tx.trade_date >= `${currentYear}-01-01`) {
-          ytdRealized += realized
-        }
-      }
-
-      // Snapshot inventory at the end of previous year
-      if (tx.trade_date < `${currentYear}-01-01`) {
-        eoyInventory[tx.symbol] = lots.map(l => ({ ...l }))
+        const profit = tx.net_amount - totalSellCostBasis
+        totalRealized += profit
+        if (isThisYear) ytdRealized += profit
       }
     }
 
-    // Sum up cost basis at end of previous year
-    Object.values(eoyInventory).forEach(lots => {
-      lots.forEach(l => { eoyCostTotal += l.cost })
+    // Calculate cost basis of holdings as of Jan 1st
+    let eoyHeldCost = 0
+    const tempInv: Record<string, { shares: number, cost: number }[]> = {}
+    sortedTxs.filter(t => t.trade_date < `${currentYear}-01-01`).forEach(tx => {
+      if (!tempInv[tx.symbol]) tempInv[tx.symbol] = []
+      const lots = tempInv[tx.symbol]
+      if (tx.action === 'BUY' || tx.action === 'DCA') {
+        lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
+      } else if (tx.action === 'SELL') {
+        let rem = tx.shares
+        while (rem > 0 && lots.length > 0) {
+          if (lots[0].shares <= rem) { rem -= lots[0].shares; lots.shift() }
+          else { 
+            const u = lots[0].cost / lots[0].shares
+            lots[0].shares -= rem; lots[0].cost -= rem * u; rem = 0 
+          }
+        }
+      }
+    })
+    // Now we have inventory at end of last year.
+    // BUT we only care about those still held TODAY.
+    Object.keys(tempInv).forEach(sym => {
+      const currentNetShares = inventory[sym]?.reduce((s, l) => s + l.shares, 0) || 0
+      if (currentNetShares > 0) {
+        // How many of the start-of-year shares are still here?
+        const startShares = tempInv[sym].reduce((s, l) => s + l.shares, 0)
+        const stillHeld = Math.min(startShares, currentNetShares)
+        if (stillHeld > 0) {
+          const avgAtStart = tempInv[sym].reduce((s, l) => s + l.cost, 0) / startShares
+          eoyHeldCost += stillHeld * avgAtStart
+        }
+      }
     })
 
-    return { totalRealized, ytdRealized, eoyCost: eoyCostTotal }
+    // Identify closed positions
+    const closedHoldings = Object.entries(stockHistory)
+      .filter(([sym]) => (inventory[sym]?.reduce((s, l) => s + l.shares, 0) || 0) === 0)
+      .map(([sym, data]) => ({
+        symbol: sym,
+        buyCost: data.buyCost,
+        sellRev: data.sellRev,
+        pnl: data.sellRev - data.buyCost,
+        pnlPct: data.buyCost > 0 ? (data.sellRev - data.buyCost) / data.buyCost * 100 : 0
+      }))
+      .sort((a, b) => b.pnl - a.pnl)
+
+    return { totalRealized, ytdRealized, eoyHeldCost, allTimeBuyTotal, allTimeSellTotal, yearBuyTotal, yearSellTotal, closedHoldings }
   }, [transactions, currentYear])
 
-  const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0)
-  const totalMV   = holdings.reduce((s, h) => s + h.market_value, 0)
-  const totalUnrealized = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
+  const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
   
-  const totalPnl = totalRealized + totalUnrealized
+  // 總損益 = 賣出總收入 + 目前持股市值 - 買入總成本
+  const totalPnl = allTimeSellTotal + currentMV - allTimeBuyTotal
+  const totalCost = allTimeBuyTotal
   const pnlPct = totalCost ? (totalPnl / totalCost) * 100 : 0
 
-  const yearPnl = (ytdRealized || 0) + totalUnrealized // YTD Realized + Current Unrealized
-  const yearPnlPct = eoyCost > 0 ? (yearPnl / eoyCost) * 100 : 0
+  // 年損益 = 今年賣出收入 - 今年買入成本 + (目前持股市值 - 年初持股成本)
+  const yearPnl = yearSellTotal - yearBuyTotal + (currentMV - eoyHeldCost)
+  const yearPnlPct = eoyHeldCost > 0 ? (yearPnl / eoyHeldCost) * 100 : 0
 
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [closedExpanded, setClosedExpanded] = useState(false)
 
   const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
-  const totalAchieved = settings.total_goal > 0 ? (totalMV / settings.total_goal) * 100 : null
+  const totalAchieved = settings.total_goal > 0 ? (currentMV / settings.total_goal) * 100 : null
 
   return (
     <div className="p-3 md:p-4 space-y-4">
@@ -116,9 +167,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/2 text-center px-1" />
             <StatBox 
               label="目前市值" 
-              value={fmtMoney(totalMV)} 
+              value={fmtMoney(currentMV)} 
               className="w-1/2 text-center px-1" 
-              upDown={totalMV > totalCost ? 1 : totalMV < totalCost ? -1 : 0}
+              upDown={currentMV > totalCost ? 1 : currentMV < totalCost ? -1 : 0}
             />
           </div>
           {/* 第二列：總損益金額、總損益比 */}
@@ -155,62 +206,48 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
         {/* 📋 目標追蹤區塊 */}
         <div className="pt-5 border-t border-white/10 space-y-5">
-          {/* 年度目標 */}
           <div className="space-y-2">
             <div className="flex justify-between items-end">
-              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">
-                📈 年度目標
-              </span>
+              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">📈 年度目標</span>
               {settings.year_goal > 0 ? (
                 <span className={`text-[11px] font-black font-mono ${yearPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {fmtMoney(Math.round(yearPnl))} / {yearAchieved?.toFixed(1)}%
                 </span>
               ) : (
-                <a href="#settings" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' })); }} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</a>
+                <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</button>
               )}
             </div>
             {settings.year_goal > 0 && (
               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-1000 ${yearPnl >= 0 ? 'bg-red-500' : 'bg-green-500'}`}
-                  style={{ width: `${Math.min(100, Math.max(0, yearAchieved || 0))}%` }}
-                />
+                <div className={`h-full transition-all duration-1000 ${yearPnl >= 0 ? 'bg-red-500' : 'bg-green-500'}`} style={{ width: `${Math.min(100, Math.max(0, yearAchieved || 0))}%` }} />
               </div>
             )}
           </div>
 
-          {/* 總目標 */}
           <div className="space-y-2">
             <div className="flex justify-between items-end">
-              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">
-                🏆 總目標
-              </span>
+              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">🏆 總目標</span>
               {settings.total_goal > 0 ? (
                 <span className="text-[11px] font-black font-mono text-gold">
-                  {fmtMoney(totalMV)} / {totalAchieved?.toFixed(1)}%
+                  {fmtMoney(currentMV)} / {totalAchieved?.toFixed(1)}%
                 </span>
               ) : (
-                <a href="#settings" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' })); }} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</a>
+                <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</button>
               )}
             </div>
             {settings.total_goal > 0 && (
               <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-1000 ${(totalAchieved || 0) >= 50 ? 'bg-gold' : 'bg-white/20'}`}
-                  style={{ width: `${Math.min(100, Math.max(0, totalAchieved || 0))}%` }}
-                />
+                <div className={`h-full transition-all duration-1000 ${(totalAchieved || 0) >= 50 ? 'bg-gold' : 'bg-white/20'}`} style={{ width: `${Math.min(100, Math.max(0, totalAchieved || 0))}%` }} />
               </div>
             )}
           </div>
         </div>
       </div>
 
-      {/* 2. 損益月曆區塊 */}
       <div className="px-0.5">
         <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} />
       </div>
 
-      {/* 3. 各持股明細列表 */}
       <div className="space-y-3">
         {holdings.length === 0 ? (
           <Empty icon="📭" text="尚無持股紀錄" sub={<>點右下角 <GoldSpan>+</GoldSpan> 新增第一筆交易</>} />
@@ -229,6 +266,59 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                 onUpdated={onRefresh}
               />
             ))
+        )}
+
+        {/* 📁 已結算股票 */}
+        {closedHoldings.length > 0 && (
+          <div className="pt-4 mt-4 border-t border-white/5">
+            <button 
+              onClick={() => setClosedExpanded(!closedExpanded)}
+              className="w-full flex items-center justify-between p-4 glass rounded-2xl border border-white/5 active:bg-white/5 transition-all"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📁</span>
+                <span className="font-black text-sm text-white/60">已結算股票 ({closedHoldings.length}檔)</span>
+              </div>
+              <span className={`text-xs transition-transform duration-300 ${closedExpanded ? 'rotate-180' : ''}`}>▼</span>
+            </button>
+            
+            {closedExpanded && (
+              <div className="space-y-3 mt-3 animate-in fade-in slide-in-from-top-2">
+                {closedHoldings.map(c => (
+                  <div key={c.symbol} className="glass rounded-xl overflow-hidden border border-white/5">
+                    <div className="p-4" onClick={() => setExpanded(expanded === `closed-${c.symbol}` ? null : `closed-${c.symbol}`)}>
+                      <div className="flex justify-between items-start mb-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="font-black text-white">{getStockName(c.symbol)}</span>
+                            <span className="text-[10px] font-mono text-white/30">{codeOnly(c.symbol)}</span>
+                          </div>
+                          <div className="text-[10px] font-bold text-white/20 mt-0.5">
+                            成本 {fmtMoney(Math.round(c.buyCost))} · 收入 {fmtMoney(Math.round(c.sellRev))}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className={`font-black font-mono text-sm ${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                            {c.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(c.pnl))}
+                          </div>
+                          <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>
+                            {c.pnlPct >= 0 ? '+' : ''}{c.pnlPct.toFixed(2)}%
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    {expanded === `closed-${c.symbol}` && (
+                      <div className="bg-white/[0.02] border-t border-white/5 p-3 space-y-2">
+                        {transactions.filter(t => t.symbol === c.symbol).map(t => (
+                          <TxRow key={t.id} t={t} settings={settings} onUpdated={onRefresh} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>
@@ -289,7 +379,6 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
   const fetchDayDetails = useCallback(async (dateStr: string) => {
     setLoadingDetails(true)
     try {
-      // FIFO for historical details up to dateStr
       const inventory: Record<string, { shares: number, cost: number }[]> = {}
       const sortedTxs = [...transactions]
         .filter(t => t.trade_date <= dateStr)
@@ -373,14 +462,12 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
     <div className="space-y-4">
       <div className="glass rounded-2xl p-4 border border-white/5 space-y-4 bg-black/20">
         <div className="flex flex-col gap-3">
-          {/* Header styled like DatePicker */}
           <div className="flex items-center justify-between">
             <button 
               onClick={() => moveMonth(-1)} 
               className="p-2 text-gold disabled:opacity-20 transition-colors"
               disabled={view !== 'CALENDAR'}
             >◀</button>
-            
             <div className="flex gap-2 font-black text-white">
               <button 
                 onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')}
@@ -395,7 +482,6 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
                 {month}月
               </button>
             </div>
-            
             <button 
               onClick={() => moveMonth(1)} 
               className="p-2 text-gold disabled:opacity-20 transition-colors"
@@ -421,7 +507,6 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
           )}
         </div>
 
-        {/* View: CALENDAR */}
         {view === 'CALENDAR' && (
           <div className="grid grid-cols-7 gap-1">
             {['日','一','二','三','四','五','六'].map(d => (
@@ -433,7 +518,6 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
               const entry = entryMap[d]
               const pnlPct = entry?.pnl_pct || 0
               const isSelected = selectedDate === dateStr
-              
               let bgColor = 'transparent'
               if (pnlPct > 0) {
                 const intensity = Math.min(100, (pnlPct / 10) * 100)
@@ -441,9 +525,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
               } else if (pnlPct < 0) {
                 const intensity = Math.min(100, (Math.abs(pnlPct) / 10) * 100)
                 bgColor = `rgba(74, 222, 128, ${0.1 + (intensity / 100) * 0.6})`
-              } else if (entry) {
-                bgColor = 'rgba(255, 255, 255, 0.05)'
-              }
+              } else if (entry) { bgColor = 'rgba(255, 255, 255, 0.05)' }
 
               return (
                 <div key={d} 
@@ -467,63 +549,42 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
           </div>
         )}
 
-        {/* View: YEAR Grid */}
         {view === 'YEAR' && (
           <div className="grid grid-cols-3 gap-2 py-2">
             {(() => {
-              const thisYear = new Date().getFullYear()
+              const currentYear = new Date().getFullYear()
               const years = []
-              for (let y = thisYear - 7; y <= thisYear + 2; y++) {
-                years.push(y)
-              }
+              for (let y = currentYear - 7; y <= currentYear + 2; y++) years.push(y)
               return years.map(y => (
                 <button
                   key={y}
-                  onClick={() => {
-                    setViewDate(new Date(y, viewDate.getMonth(), 1))
-                    setView('CALENDAR')
-                  }}
-                  className={`py-3 rounded-xl text-sm font-black transition-all ${
-                    year === y ? 'bg-[#c9a564] text-[#0d1018]' : 'bg-white/5 text-white/60 hover:bg-white/10'
-                  }`}
-                >
-                  {y}
-                </button>
+                  onClick={() => { setViewDate(new Date(y, viewDate.getMonth(), 1)); setView('CALENDAR') }}
+                  className={`py-3 rounded-xl text-sm font-black transition-all ${year === y ? 'bg-[#c9a564] text-[#0d1018]' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                >{y}</button>
               ))
             })()}
           </div>
         )}
 
-        {/* View: MONTH Grid */}
         {view === 'MONTH' && (
           <div className="grid grid-cols-3 gap-2 py-2">
             {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
               <button
                 key={m}
-                onClick={() => {
-                  setViewDate(new Date(year, m - 1, 1))
-                  setView('CALENDAR')
-                }}
-                className={`py-3 rounded-xl text-sm font-black transition-all ${
-                  month === m ? 'bg-[#c9a564] text-[#0d1018]' : 'bg-white/5 text-white/60 hover:bg-white/10'
-                }`}
-              >
-                {m}月
-              </button>
+                onClick={() => { setViewDate(new Date(year, m - 1, 1)); setView('CALENDAR') }}
+                className={`py-3 rounded-xl text-sm font-black transition-all ${month === m ? 'bg-[#c9a564] text-[#0d1018]' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+              >{m}月</button>
             ))}
           </div>
         )}
       </div>
 
-      {/* Date Detail View Card */}
       {selectedDate && (
         <div className="animate-in fade-in slide-in-from-top-2">
           <div className="glass rounded-2xl p-4 border border-white/10 space-y-4">
             <div className="flex items-center justify-between border-b border-white/5 pb-2">
               <div className="flex flex-col">
-                <h3 className="font-black text-sm text-white">
-                  {selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項
-                </h3>
+                <h3 className="font-black text-sm text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項</h3>
                 {(() => {
                   const entry = entries.find(e => e.entry_date === selectedDate)
                   if (!entry) return null
@@ -549,9 +610,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
                           <span className="font-black text-xs text-white truncate">{det.name_zh}</span>
                           <span className="text-[9px] font-mono text-white/30">{codeOnly(det.symbol)}</span>
                         </div>
-                        <div className="text-[10px] font-bold text-white/40">
-                          {det.shares.toLocaleString()} 股 @ {det.price.toFixed(2)}
-                        </div>
+                        <div className="text-[10px] font-bold text-white/40">{det.shares.toLocaleString()} 股 @ {det.price.toFixed(2)}</div>
                       </div>
                       <div className="text-right shrink-0">
                         <div className="text-xs font-black text-white">{fmtMoney(det.market_value)}</div>
@@ -565,50 +624,36 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
               )
             ) : null}
 
-            {/* 當天交易紀錄 */}
             {(() => {
               const dayTxs = transactions.filter(t => t.trade_date === selectedDate)
               if (dayTxs.length === 0) return null
               return (
-                <>
-                  <div className="border-t border-white/5 pt-4">
-                    <h4 className="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
-                      <span>📋 當天交易</span>
-                      <span className="h-[1px] flex-1 bg-white/5" />
-                    </h4>
-                    <div className="space-y-3">
-                      {dayTxs.map(tx => {
-                        const isBuy = tx.action === 'BUY' || tx.action === 'DCA'
-                        const label = tx.trade_type === 'DCA' ? '定期定額' : (tx.action === 'BUY' ? '買入' : '賣出')
-                        const labelCol = tx.trade_type === 'DCA' ? 'text-gold bg-gold/10 border-gold/20' : (isBuy ? 'text-red-400 bg-red-400/10 border-red-400/20' : 'text-green-400 bg-green-400/10 border-green-400/20')
-                        
-                        return (
-                          <div key={tx.id} className="flex items-center justify-between gap-4">
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-0.5">
-                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border leading-none ${labelCol}`}>
-                                  {label}
-                                </span>
-                                <span className="text-xs font-black text-white truncate">
-                                  {tx.name_zh || getStockName(tx.symbol)}
-                                </span>
-                                <span className="text-[9px] font-mono text-white/20">{codeOnly(tx.symbol)}</span>
-                              </div>
-                              <div className="text-[10px] font-bold text-white/40">
-                                {tx.shares.toLocaleString()} 股 @ {Number(tx.price).toFixed(2)}
-                                <span className="mx-1.5 opacity-30">·</span>
-                                費+稅 {fmtMoney(tx.fee + tx.tax)}
-                              </div>
+                <div className="border-t border-white/5 pt-4">
+                  <h4 className="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                    <span>📋 當天交易</span>
+                    <span className="h-[1px] flex-1 bg-white/5" />
+                  </h4>
+                  <div className="space-y-3">
+                    {dayTxs.map(tx => {
+                      const isBuy = tx.action === 'BUY' || tx.action === 'DCA'
+                      const label = tx.trade_type === 'DCA' ? '定期定額' : (tx.action === 'BUY' ? '買入' : '賣出')
+                      const labelCol = tx.trade_type === 'DCA' ? 'text-gold bg-gold/10 border-gold/20' : (isBuy ? 'text-red-400 bg-red-400/10 border-red-400/20' : 'text-green-400 bg-green-400/10 border-green-400/20')
+                      return (
+                        <div key={tx.id} className="flex items-center justify-between gap-4">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border leading-none ${labelCol}`}>{label}</span>
+                              <span className="text-xs font-black text-white truncate">{tx.name_zh || getStockName(tx.symbol)}</span>
+                              <span className="text-[9px] font-mono text-white/20">{codeOnly(tx.symbol)}</span>
                             </div>
-                            <div className={`text-xs font-black font-mono ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                              {tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}
-                            </div>
+                            <div className="text-[10px] font-bold text-white/40">{tx.shares.toLocaleString()} 股 @ {Number(tx.price).toFixed(2)} <span className="mx-1.5 opacity-30">·</span> 費+稅 {fmtMoney(tx.fee + tx.tax)}</div>
                           </div>
-                        )
-                      })}
-                    </div>
+                          <div className={`text-xs font-black font-mono ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div>
+                        </div>
+                      )
+                    })}
                   </div>
-                </>
+                </div>
               )
             })()}
           </div>
@@ -633,44 +678,27 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-black text-base text-white leading-tight">{q?.name_zh || h.symbol}</span>
-              <span className="font-mono px-1.5 py-0.5 rounded-md text-[10px] bg-white/5 text-white/40">
-                {codeOnly(h.symbol)}
-              </span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gold-dim text-gold">
-                {h.shares >= 1000 ? `${(h.shares/1000).toFixed(h.shares%1000===0?0:2)}張` : `${h.shares}股`}
-              </span>
+              <span className="font-mono px-1.5 py-0.5 rounded-md text-[10px] bg-white/5 text-white/40">{codeOnly(h.symbol)}</span>
+              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gold-dim text-gold">{h.shares >= 1000 ? `${(h.shares/1000).toFixed(h.shares%1000===0?0:2)}張` : `${h.shares}股`}</span>
             </div>
-            <div className="text-[11px] mt-1 font-mono text-white/40">
-              平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}
-            </div>
+            <div className="text-[11px] mt-1 font-mono text-white/40">平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}</div>
           </div>
           <div className="text-right shrink-0">
-            <div className="font-black text-lg font-mono text-white leading-tight">
-              {h.current_price > 0 ? h.current_price.toFixed(2) : '—'}
-            </div>
+            <div className="font-black text-lg font-mono text-white leading-tight">{h.current_price > 0 ? h.current_price.toFixed(2) : '—'}</div>
             {q && q.change !== undefined && (
-              <div className={`text-[11px] font-mono ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {q.change >= 0 ? '+' : ''}{q.change.toFixed(2)} ({q.change_pct >= 0 ? '+' : ''}{q.change_pct.toFixed(2)}%)
-              </div>
+              <div className={`text-[11px] font-mono ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>{q.change >= 0 ? '+' : ''}{q.change.toFixed(2)} ({q.change_pct >= 0 ? '+' : ''}{q.change_pct.toFixed(2)}%)</div>
             )}
           </div>
         </div>
         <div className="mt-2.5 flex items-center justify-between">
-          <span className={`font-bold font-mono text-sm ${color}`}>
-            {isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)} 元
-          </span>
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${dimBg} ${color}`}>
-            {arrow} {Math.abs(h.pnl_pct).toFixed(2)}%
-          </span>
+          <span className={`font-bold font-mono text-sm ${color}`}>{isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)} 元</span>
+          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${dimBg} ${color}`}>{arrow} {Math.abs(h.pnl_pct).toFixed(2)}%</span>
         </div>
       </div>
-
       {isExpanded && (
         <div className="border-t border-white/5 px-3 py-2 space-y-2 bg-white/5">
           <div className="text-[10px] font-bold opacity-30 uppercase tracking-widest mb-1 pl-1">交易紀錄</div>
-          {txs.map(t => (
-            <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} />
-          ))}
+          {txs.map(t => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} />)}
         </div>
       )}
     </div>
@@ -681,7 +709,6 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
   
-  // Form states
   const [date, setDate] = useState(t.trade_date)
   const [shares, setShares] = useState<number | ''>(t.shares)
   const [price, setPrice] = useState<number | ''>(t.price)
@@ -697,7 +724,6 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   const tax    = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
   const net    = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
-  // Validation
   const hasChanged = date !== t.trade_date || actualShares !== t.shares || safePrice !== t.price || monthNote !== (t.note || '')
   const isValid = actualShares > 0 && safePrice > 0 && hasChanged
 
@@ -729,112 +755,33 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   if (isEditing) {
     return (
       <div className="p-4 rounded-xl bg-black/60 border-2 border-gold/40 space-y-5 my-2 slide-up">
-        <div className="flex flex-col items-center">
-          <Label>交易日期</Label>
-          <DatePicker value={date} onChange={setDate} />
-        </div>
-
+        <div className="flex flex-col items-center"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
         <div className="space-y-2">
           <Label>交易方式</Label>
           <div className="flex gap-2">
-            <button 
-              onClick={() => setTradeType('FULL')} 
-              className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${
-                tradeType === 'FULL' 
-                  ? 'bg-[#c9a56433] text-gold border-gold' 
-                  : 'bg-transparent text-white/30 border-white/10'
-              }`}
-            >
-              整張 (1000股)
-            </button>
-            <button 
-              onClick={() => setTradeType('FRACTIONAL')} 
-              className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${
-                tradeType === 'FRACTIONAL' 
-                  ? 'bg-[#c9a56433] text-gold border-gold' 
-                  : 'bg-transparent text-white/30 border-white/10'
-              }`}
-            >
-              零股
-            </button>
+            <button onClick={() => setTradeType('FULL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${tradeType === 'FULL' ? 'bg-[#c9a56433] text-gold border-gold' : 'bg-transparent text-white/30 border-white/10'}`}>整張 (1000股)</button>
+            <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${tradeType === 'FRACTIONAL' ? 'bg-[#c9a56433] text-gold border-gold' : 'bg-transparent text-white/30 border-white/10'}`}>零股</button>
           </div>
         </div>
-
         <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>{tradeType === 'FULL' ? '張數' : '股數'}</Label>
-            <input 
-              type="number" inputMode="numeric" 
-              value={tradeType === 'FULL' ? lots : shares} 
-              onFocus={(e) => {
-                if (tradeType === 'FULL') setLots('')
-                else setShares('')
-              }}
-              onChange={e => { 
-                const v = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
-                if (tradeType === 'FULL') setLots(v)
-                else setShares(v)
-              }} 
-              className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" 
-            />
-            {tradeType === 'FULL' && lots !== '' && (
-              <div className="text-[10px] text-center mt-1 text-white/30 font-bold">= {(Number(lots)*1000).toLocaleString()} 股</div>
-            )}
+            <input type="number" inputMode="numeric" value={tradeType === 'FULL' ? lots : shares} onFocus={() => { if (tradeType === 'FULL') setLots(''); else setShares('') }} onChange={e => { const v = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0); if (tradeType === 'FULL') setLots(v); else setShares(v) }} className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" />
+            {tradeType === 'FULL' && lots !== '' && <div className="text-[10px] text-center mt-1 text-white/30 font-bold">= {(Number(lots)*1000).toLocaleString()} 股</div>}
           </div>
           <div>
             <Label>成交價</Label>
-            <input 
-              type="number" inputMode="decimal" step="0.01" 
-              value={price} 
-              onFocus={() => setPrice('')}
-              onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} 
-              className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" 
-            />
+            <input type="number" inputMode="decimal" step="0.01" value={price} onFocus={() => setPrice('')} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" />
           </div>
         </div>
-
-        <div>
-          <Label>備註</Label>
-          <input value={monthNote} onChange={e => setMonthNote(e.target.value)} className="w-full input-base py-3 px-4 text-sm bg-white/5 border-white/10" placeholder="點此輸入備註..." />
-        </div>
-
+        <div><Label>備註</Label><input value={monthNote} onChange={e => setMonthNote(e.target.value)} className="w-full input-base py-3 px-4 text-sm bg-white/5 border-white/10" placeholder="點此輸入備註..." /></div>
         <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 text-xs font-bold">
-          <div className="flex justify-between">
-            <span className="opacity-40">手續費</span>
-            <span className="font-mono text-white">{fmtMoney(fee)}</span>
-          </div>
-          <div className="flex justify-between items-center pt-2 border-t border-white/5">
-            <span className="opacity-60 uppercase text-[10px]">預估淨收支</span>
-            <span className={`text-lg font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {net >= 0 ? '+' : ''}{fmtMoney(net)}
-            </span>
-          </div>
+          <div className="flex justify-between"><span className="opacity-40">手續費</span><span className="font-mono text-white">{fmtMoney(fee)}</span></div>
+          <div className="flex justify-between items-center pt-2 border-t border-white/5"><span className="opacity-60 uppercase text-[10px]">預估淨收支</span><span className={`text-lg font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>{net >= 0 ? '+' : ''}{fmtMoney(net)}</span></div>
         </div>
-
         <div className="flex gap-2 pt-1">
-          <button 
-            onClick={handleSave} 
-            disabled={!isValid || loading} 
-            className="w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95"
-            style={isValid ? { 
-              background: 'linear-gradient(135deg, #c9a564, #e8c880)', 
-              color: '#0d1018',
-              fontWeight: 800 
-            } : {
-              background: '#444',
-              color: '#888',
-              cursor: 'not-allowed',
-              opacity: 0.5
-            }}
-          >
-            {loading ? '儲存中...' : '儲存修改'}
-          </button>
-          <button 
-            onClick={() => setIsEditing(false)} 
-            className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all"
-          >
-            取消
-          </button>
+          <button onClick={handleSave} disabled={!isValid || loading} className="w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95" style={isValid ? { background: 'linear-gradient(135deg, #c9a564, #e8c880)', color: '#0d1018', fontWeight: 800 } : { background: '#444', color: '#888', cursor: 'not-allowed', opacity: 0.5 }}>{loading ? '儲存中...' : '儲存修改'}</button>
+          <button onClick={() => setIsEditing(false)} className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all">取消</button>
         </div>
       </div>
     )
@@ -847,23 +794,13 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
         <div>
           <div className="flex items-center gap-2 mb-0.5">
             <div className="text-[11px] font-mono opacity-40">{t.trade_date}</div>
-            {t.trade_type === 'DCA' ? (
-              <span className="text-[9px] font-black px-1 py-0.5 rounded bg-gold-dim text-gold border border-gold/20 leading-none">定期定額</span>
-            ) : isBuy ? (
-              <span className="text-[9px] font-black px-1 py-0.5 rounded bg-red-400/10 text-red-400 border border-red-400/20 leading-none">買入</span>
-            ) : (
-              <span className="text-[9px] font-black px-1 py-0.5 rounded bg-green-400/10 text-green-400 border border-green-400/20 leading-none">賣出</span>
-            )}
+            {t.trade_type === 'DCA' ? <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-gold-dim text-gold border border-gold/20 leading-none">定期定額</span> : isBuy ? <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-red-400/10 text-red-400 border border-red-400/20 leading-none">買入</span> : <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-green-400/10 text-green-400 border border-green-400/20 leading-none">賣出</span>}
           </div>
-          <div className="text-sm font-bold text-white/90">
-            {t.shares}股 @ {t.price}
-          </div>
+          <div className="text-sm font-bold text-white/90">{t.shares}股 @ {t.price}</div>
         </div>
       </div>
       <div className="text-right">
-        <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-          {t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}
-        </div>
+        <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
         <div className="flex gap-3 justify-end mt-1">
           <button onClick={() => setIsEditing(true)} className="text-sm font-bold text-gold hover:underline active:opacity-60">編輯</button>
           <button onClick={handleDelete} className="text-sm font-bold text-[#ff6b6b] hover:underline active:opacity-60">刪除</button>
