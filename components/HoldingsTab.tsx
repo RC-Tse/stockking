@@ -353,6 +353,10 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
   }, [transactions, year, month])
 
   const toggleDate = async (dateStr: string) => {
+    console.log('selectedDate:', dateStr)
+    console.log('holdings:', holdings)
+    console.log('quotes:', quotes)
+    console.log('transactions:', transactions)
     try {
       if (selectedDate === dateStr) { setSelectedDate(null); setDayDetails(null); return }
       setSelectedDate(dateStr)
@@ -474,52 +478,16 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
       </div>
 
       {selectedDate && (
-        <div className="animate-slide-up card-base p-5 space-y-5 border-white/10 shadow-2xl">
-          <div className="flex justify-between items-center border-b border-white/5 pb-3">
-            <div className="flex flex-col">
-              <h3 className="font-black text-base text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股損益細項</h3>
-              {(() => { 
-                const entry = entries.find((e: CalendarEntry) => e.entry_date === selectedDate); 
-                if (!entry) return null; 
-                return (
-                  <div className="flex flex-col gap-0.5 mt-1">
-                    <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      當日市值損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({(entry.pnl_pct ?? 0).toFixed(2)}%)
-                    </span>
-                    {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
-                      <span className="text-[10px] font-black font-mono text-gold">
-                        當日已實現損益 {entry.realized_pnl > 0 ? '+' : ''}{fmtMoney(entry.realized_pnl)}
-                      </span>
-                    )}
-                  </div>
-                )
-              })()}
-            </div>
-            {loading && <RefreshCw size={14} className="animate-spin text-gold" />}
+        <div style={{background:'#161c28', borderRadius:12, padding:16, margin:'8px 12px'}}>
+          <div style={{color:'#d4af37', fontWeight:800, marginBottom:12}}>
+            {selectedDate} 持股細項
           </div>
-          {dayDetails?.map(det => (
-            <div key={det.symbol} className="flex justify-between items-center py-1">
-              <div className="flex flex-col"><span className="text-sm font-black text-white">{det.name_zh}</span><span className="text-[10px] font-bold text-white/20">{(det.shares ?? 0).toLocaleString()} 股 @ {(det.price ?? 0).toFixed(2)}</span></div>
-              <div className="text-right"><div className="text-sm font-black text-white">{fmtMoney(det.market_value)}</div><div className={`text-[11px] font-bold ${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>{det.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(det.pnl))} ({det.pnl_pct.toFixed(2)}%)</div></div>
+          {(holdings ?? []).map(h => (
+            <div key={h?.symbol ?? 'unknown'} style={{marginBottom:8, color:'#f0ece4'}}>
+              <span>{h?.symbol ?? '—'}</span>
+              <span style={{float:'right'}}>{(h?.current_price ?? 0).toLocaleString()}</span>
             </div>
           ))}
-          {(() => {
-            const dayTxs = transactions.filter((t: Transaction) => t.trade_date === selectedDate)
-            if (!dayTxs.length) return null
-            return (
-              <div className="pt-4 border-t border-white/5 space-y-4">
-                <h4 className="text-[11px] font-black text-white/30 uppercase tracking-widest flex items-center gap-2"><ClipboardList size={14}/> 當天交易</h4>
-                <div className="space-y-3">
-                  {dayTxs.map((tx: Transaction) => (
-                    <div key={tx.id} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='BUY'?'買入':'賣出'}</span><span className="font-black text-white truncate max-w-[100px]">{tx.name_zh}</span></div>
-                      <div className="text-right"><div className={`font-mono font-black ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-white/20 font-bold">{(tx.shares ?? 0).toLocaleString()}股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )
-          })()}
         </div>
       )}
     </div>
