@@ -84,11 +84,12 @@ export interface UserSettings {
   sell_fee_rate: number
   sell_discount: number
   fee_min: number
+  dca_fee_rate: number
+  dca_fee_min: number
   tax_stock: number
   tax_etf: number
   max_holdings: number
   font_size: 'small' | 'medium' | 'large'
-  dca_fee_rate: number
   year_goal: number
   total_goal: number
   theme: 'luxury' | 'minimal' | 'tech' | 'morandi'
@@ -101,11 +102,12 @@ export const DEFAULT_SETTINGS: UserSettings = {
   sell_fee_rate: 0.001425,
   sell_discount: 0.285,
   fee_min: 20,
+  dca_fee_rate: 0.0001, // 預設較低的定期定額費率 (例如 1/10000)
+  dca_fee_min: 1,      // 預設最低 1 元
   tax_stock: 0.003,
   tax_etf: 0.001,
   max_holdings: 7,
   font_size: 'medium',
-  dca_fee_rate: 0.001425,
   year_goal: 0,
   total_goal: 0,
   theme: 'luxury'
@@ -126,7 +128,10 @@ export function codeOnly(symbol: string): string {
   return symbol.replace('.TW','').replace('.TWO','')
 }
 
-export function calcFee(amount: number, s: UserSettings, isSell = false): number {
+export function calcFee(amount: number, s: UserSettings, isSell = false, isDca = false): number {
+  if (isDca) {
+    return Math.max(Math.floor(amount * s.dca_fee_rate), s.dca_fee_min)
+  }
   const rate = isSell
     ? s.sell_fee_rate * s.sell_discount
     : s.buy_fee_rate * s.buy_discount

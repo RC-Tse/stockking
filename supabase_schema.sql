@@ -68,6 +68,7 @@ CREATE POLICY "own_settings" ON public.settings
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS year_goal NUMERIC DEFAULT 0;
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS total_goal NUMERIC DEFAULT 0;
 ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS dca_fee_rate NUMERIC DEFAULT 0.001425;
+ALTER TABLE public.settings ADD COLUMN IF NOT EXISTS dca_fee_min NUMERIC DEFAULT 1;
 
 -- 5. dca_plans ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS public.dca_plans (

@@ -509,7 +509,8 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = Number(price) || 0
   const amount = finalShares * safePrice
-  const fee = calcFee(amount, settings, t.action === 'SELL'), tax = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
+  const fee = calcFee(amount, settings, t.action === 'SELL', t.action === 'DCA')
+  const tax = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
   const net = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
   const isValid = finalShares > 0 && safePrice > 0 && (date !== t.trade_date || finalShares !== t.shares || safePrice !== t.price || note !== (t.note||''))
   

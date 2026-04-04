@@ -269,7 +269,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: any) {
   const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = Number(price) || 0
   const amount = finalShares * safePrice
-  const fee = calcFee(amount, settings, tx.action === 'SELL')
+  const fee = calcFee(amount, settings, tx.action === 'SELL', tx.action === 'DCA')
   const tax = tx.action === 'SELL' ? calcTax(amount, tx.symbol, settings) : 0
   const net = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
   

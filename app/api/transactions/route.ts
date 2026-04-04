@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
   const s: UserSettings = sr ?? DEFAULT_SETTINGS
   const sym = symbol.trim().toUpperCase()
   const amount = Number(shares) * Number(price)
-  const fee = calcFee(amount, s, action === 'SELL')
+  const fee = calcFee(amount, s, action === 'SELL', action === 'DCA')
   const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
   
   // 台股規則：金額、手續費、稅金皆先無條件捨去再相加減
@@ -85,7 +85,7 @@ export async function PUT(req: NextRequest) {
   const sym = current.symbol
   const action = current.action
   const amount = Number(shares) * Number(price)
-  const fee = calcFee(amount, s, action === 'SELL')
+  const fee = calcFee(amount, s, action === 'SELL', action === 'DCA')
   const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
   
   // 台股規則：金額、手續費、稅金皆先無條件捨去再相加減
