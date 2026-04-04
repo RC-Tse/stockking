@@ -86,21 +86,32 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </button>
         </div>
 
-        <div className="flex items-center mb-4">
-          <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/3 text-center" />
-          <StatBox 
-            label="目前市值" 
-            value={fmtMoney(totalMV)} 
-            className="w-1/3 text-center" 
-            upDown={totalMV > totalCost ? 1 : totalMV < totalCost ? -1 : 0} 
-            baseColor={true}
-          />
-          <StatBox
-            label="總損益比"
-            value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
-            className="w-1/3 text-center border-l border-white/5"
-            upDown={totalPnl}
-          />
+        <div className="space-y-4 mb-4">
+          {/* 第一列 */}
+          <div className="flex items-center">
+            <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/2 text-left px-1" />
+            <StatBox 
+              label="目前市值" 
+              value={fmtMoney(totalMV)} 
+              className="w-1/2 text-right px-1" 
+              upDown={totalMV > totalCost ? 1 : totalMV < totalCost ? -1 : 0}
+            />
+          </div>
+          {/* 第二列 */}
+          <div className="flex items-center border-t border-white/5 pt-4">
+            <StatBox 
+              label="總損益金額" 
+              value={`${totalPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(totalPnl))}`} 
+              className="w-1/2 text-left px-1"
+              upDown={totalPnl}
+            />
+            <StatBox
+              label="總損益比"
+              value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
+              className="w-1/2 text-right px-1"
+              upDown={totalPnl}
+            />
+          </div>
         </div>
 
         {/* 年損益與目標 */}
