@@ -30,6 +30,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
   const [view, setView] = useState<View>('MAIN')
   const [localSettings, setLocalSettings] = useState(settings)
   const [saving, setSaving] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<string | null>(null)
 
   const handleSave = async (updates: Partial<UserSettings>) => {
     const next = { ...localSettings, ...updates }
@@ -83,7 +84,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <div className="flex items-center gap-3">
                 <Layout size={18} className="text-gold" />
                 <div className="text-left">
-                  <div className="text-[15px] md:text-[13px] font-black text-white">交易計算參數</div>
+                  <div className="text-[15px] md:text-[13px] font-black text-white">手續費設定</div>
                   <div className="text-[14px] md:text-[12px] text-white/20 mt-0.5">調整手續費與稅率</div>
                 </div>
               </div>
@@ -180,7 +181,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
             <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-gold active:bg-white/10 transition-colors">
               <ChevronLeft size={20} />
             </button>
-            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em]">計算參數詳情</h3>
+            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em]">手續費設定</h3>
           </div>
 
           <div className="glass p-5 space-y-8 border border-white/5">
@@ -188,12 +189,12 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <h4 className="text-[11px] font-black text-gold/50 uppercase tracking-widest border-b border-gold/10 pb-2">買入手續費</h4>
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label>費率</Label>
-                  <input type="number" step="0.000001" value={localSettings.buy_fee_rate} onChange={e => handleSave({ buy_fee_rate: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+                  <Label>買入手續費費率</Label>
+                  <input type="number" step="0.000001" value={localSettings.buy_fee_rate} onChange={e => setLocalSettings(p => ({ ...p, buy_fee_rate: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
                 <div className="space-y-2">
-                  <Label>折數 (0.1 = 1折)</Label>
-                  <input type="number" step="0.05" value={localSettings.buy_discount} onChange={e => handleSave({ buy_discount: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+                  <Label>買入折扣 (0.1 = 1折)</Label>
+                  <input type="number" step="0.05" value={localSettings.buy_discount} onChange={e => setLocalSettings(p => ({ ...p, buy_discount: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
               </div>
             </div>
@@ -202,49 +203,62 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <h4 className="text-[11px] font-black text-gold/50 uppercase tracking-widest border-b border-gold/10 pb-2">賣出手續費 & 稅</h4>
               <div className="grid grid-cols-2 gap-6">
                 <div className="space-y-2">
-                  <Label>費率</Label>
-                  <input type="number" step="0.000001" value={localSettings.sell_fee_rate} onChange={e => handleSave({ sell_fee_rate: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+                  <Label>賣出手續費費率</Label>
+                  <input type="number" step="0.000001" value={localSettings.sell_fee_rate} onChange={e => setLocalSettings(p => ({ ...p, sell_fee_rate: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
                 <div className="space-y-2">
-                  <Label>折數</Label>
-                  <input type="number" step="0.05" value={localSettings.sell_discount} onChange={e => handleSave({ sell_discount: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+                  <Label>賣出折扣</Label>
+                  <input type="number" step="0.05" value={localSettings.sell_discount} onChange={e => setLocalSettings(p => ({ ...p, sell_discount: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
                 <div className="space-y-2">
                   <Label>股票交易稅</Label>
-                  <input type="number" step="0.001" value={localSettings.tax_stock} onChange={e => handleSave({ tax_stock: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+                  <input type="number" step="0.001" value={localSettings.tax_stock} onChange={e => setLocalSettings(p => ({ ...p, tax_stock: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
                 <div className="space-y-2">
                   <Label>ETF 交易稅</Label>
-                  <input type="number" step="0.001" value={localSettings.tax_etf} onChange={e => handleSave({ tax_etf: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+                  <input type="number" step="0.001" value={localSettings.tax_etf} onChange={e => setLocalSettings(p => ({ ...p, tax_etf: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
               </div>
             </div>
 
-            <div className="space-y-6">
-              <h4 className="text-[11px] font-black text-gold/50 uppercase tracking-widest border-b border-gold/10 pb-2">定期定額手續費</h4>
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-2">
-                  <Label>費率</Label>
-                  <input type="number" step="0.000001" value={localSettings.dca_fee_rate} onChange={e => handleSave({ dca_fee_rate: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
-                </div>
-                <div className="space-y-2">
-                  <Label>最低收費 (TWD)</Label>
-                  <input type="number" value={localSettings.dca_fee_min} onChange={e => handleSave({ dca_fee_min: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
-                </div>
+            <div className="space-y-4">
+              <h4 className="text-[11px] font-black text-gold/50 uppercase tracking-widest border-b border-gold/10 pb-2">定期定額</h4>
+              <div className="space-y-2">
+                <Label>定期定額手續費</Label>
+                <input type="number" inputMode="decimal" step="0.000001" value={localSettings.dca_fee_rate} onChange={e => setLocalSettings(p => ({ ...p, dca_fee_rate: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
               </div>
             </div>
 
             <div className="space-y-2 pt-2">
-              <Label>一般交易最低收費 (TWD)</Label>
-              <input type="number" value={localSettings.fee_min} onChange={e => handleSave({ fee_min: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+              <Label>最低手續費 (TWD)</Label>
+              <input type="number" value={localSettings.fee_min} onChange={e => setLocalSettings(p => ({ ...p, fee_min: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
             </div>
           </div>
-          
-          <div className="p-4 bg-gold/5 border border-gold/10 rounded-2xl">
-            <p className="text-[14px] md:text-[12px] text-gold/60 leading-relaxed font-medium">
-              💡 提示：台灣證券商規定的標準費率為 0.001425。若您的券商提供 2.8 折優惠，請在折數欄位輸入 0.285。
-            </p>
-          </div>
+
+          <button 
+            onClick={async () => {
+              setSaving(true)
+              try {
+                const res = await fetch('/api/settings', {
+                  method: 'POST',
+                  body: JSON.stringify(localSettings)
+                })
+                if (!res.ok) throw new Error()
+                setSaveStatus('✅ 已儲存')
+                setTimeout(() => setSaveStatus(null), 2000)
+                await onSave(localSettings)
+              } catch (e) {
+                setSaveStatus('❌ 儲存失敗')
+                setTimeout(() => setSaveStatus(null), 2000)
+              } finally {
+                setSaving(false)
+              }
+            }}
+            disabled={saving}
+            className="w-full py-4 rounded-2xl bg-gold text-[#080a0e] font-extrabold text-[15px] active:scale-[0.98] transition-all shadow-lg shadow-gold/10 disabled:opacity-50"
+          >
+            {saving ? '儲存中...' : (saveStatus || '儲存設定')}
+          </button>
         </div>
       )}
     </div>
