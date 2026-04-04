@@ -321,6 +321,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [view, setView] = useState<any>('CALENDAR')
   const [dayDetails, setDayDetails] = useState<any[] | null>(null)
+  const [isHoliday, setIsHoliday] = useState(false)
   const [loading, setLoading] = useState(false)
   const year = viewDate.getFullYear(), month = viewDate.getMonth() + 1
   useEffect(() => { onRefresh(year, month) }, [year, month, onRefresh])
@@ -329,23 +330,14 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
     const firstDayOfWeek = new Date(year, month - 1, 1).getDay()
     const daysInMonth = new Date(year, month, 0).getDate()
     const cells = []
-    
-    // 前面補空格
-    for (let i = 0; i < firstDayOfWeek; i++) {
-      cells.push(null)
-    }
-    
-    // 加入當月所有日期
-    for (let d = 1; d <= daysInMonth; d++) {
-      cells.push(d)
-    }
+    for (let i = 0; i < firstDayOfWeek; i++) cells.push(null)
+    for (let d = 1; d <= daysInMonth; d++) cells.push(d)
     return cells
   }, [year, month])
 
   const entryMap = useMemo(() => {
     const map: Record<number, any> = {}
-    entries.forEach((e: any) => {
-      // 安全解析日期，避免時區造成誤差
+    entries?.forEach((e: any) => {
       const day = parseInt(e.entry_date.split('-')[2], 10)
       map[day] = e
     })
@@ -354,7 +346,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
 
   const hasTxMap = useMemo(() => {
     const map: Record<number, boolean> = {}
-    transactions.forEach((t: Transaction) => {
+    transactions?.forEach((t: Transaction) => {
       const dParts = t.trade_date.split('-')
       if (parseInt(dParts[0]) === year && parseInt(dParts[1]) === month) {
         map[parseInt(dParts[2])] = true
@@ -365,9 +357,20 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
 
   const toggleDate = async (dateStr: string) => {
     try {
-      if (selectedDate === dateStr) { setSelectedDate(null); setDayDetails(null); return }
+      if (selectedDate === dateStr) { setSelectedDate(null); setDayDetails(null); setIsHoliday(false); return }
       setSelectedDate(dateStr)
       setLoading(true)
+      setIsHoliday(false)
+
+      const d = new Date(dateStr)
+      const isWeekend = d.getDay() === 0 || d.getDay() === 6
+      
+      if (isWeekend) {
+        setIsHoliday(true)
+        setDayDetails([])
+        setLoading(false)
+        return
+      }
 
       const inventory: Record<string, { shares: number; cost: number }[]> = {}
       const sortedTxs = [...(transactions || [])]
@@ -377,31 +380,19 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
       for (const tx of sortedTxs) {
         if (!tx.symbol) continue
         if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-        
         if (tx.action !== 'SELL') {
-          inventory[tx.symbol].push({ 
-            shares: Number(tx.shares) || 0, 
-            cost: (Number(tx.amount) || 0) + (Number(tx.fee) || 0) 
-          })
+          inventory[tx.symbol].push({ shares: Number(tx.shares) || 0, cost: (Number(tx.amount) || 0) + (Number(tx.fee) || 0) })
         } else {
           let rem = Number(tx.shares) || 0
           while (rem > 0 && inventory[tx.symbol].length) {
             const lot = inventory[tx.symbol][0]
-            if (lot.shares <= rem) {
-              rem -= lot.shares
-              inventory[tx.symbol].shift()
-            } else {
-              lot.shares -= rem
-              rem = 0
-            }
+            if (lot.shares <= rem) { rem -= lot.shares; inventory[tx.symbol].shift() }
+            else { lot.shares -= rem; rem = 0 }
           }
         }
       }
 
-      const held = Object.keys(inventory).filter(s => 
-        inventory[s].reduce((sum, l) => sum + l.shares, 0) > 0
-      )
-
+      const held = Object.keys(inventory).filter(s => inventory[s].reduce((sum, l) => sum + l.shares, 0) > 0)
       if (!held.length) {
         setDayDetails([])
         setLoading(false)
@@ -412,26 +403,20 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
       if (!res.ok) throw new Error('API fetch error')
       const quotesData = await res.json() || {}
 
+      if (Object.keys(quotesData).length === 0) {
+        setIsHoliday(true)
+        setDayDetails([])
+        return
+      }
+
       const details = held.map(sym => {
         const lots = inventory[sym] || []
         const totalShares = lots.reduce((s, l) => s + l.shares, 0)
-        const totalCost = lots.reduce((s, l) => s + (l.shares * (l.cost / (l.shares + (l.shares === 0 ? 1 : 0)))), 0)
-        // Correct FIFO cost: each lot already has its total cost.
-        // Let's re-calculate total cost more accurately based on remaining shares in each lot
-        const actualCost = lots.reduce((sum, lot) => {
-          // If the lot was partially sold, we need the original unit cost
-          // but our inventory logic above already handles remaining shares.
-          // We need to ensure we know the original unit cost.
-          // Re-doing the loop slightly to keep unit cost.
-          return sum + lot.cost
-        }, 0)
-
+        const actualCost = lots.reduce((sum, lot) => sum + lot.cost, 0)
         const q = quotesData[sym] || {}
         const price = Number(q.price) || 0
         const marketValue = Math.round(price * totalShares)
         const pnl = marketValue - actualCost
-        const pnlPct = actualCost > 0 ? (pnl / actualCost) * 100 : 0
-
         return {
           symbol: sym,
           name_zh: q.name_zh || getStockName(sym),
@@ -443,10 +428,9 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
           market_value: marketValue,
           total_cost: actualCost,
           pnl,
-          pnl_pct: pnlPct
+          pnl_pct: actualCost > 0 ? (pnl / actualCost) * 100 : 0
         }
       })
-
       setDayDetails(details.sort((a, b) => b.market_value - a.market_value))
     } catch (e) {
       console.error('toggleDate error:', e)
@@ -474,13 +458,19 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
             {['日','一','二','三','四','五','六'].map((d, i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-gold':'text-white/20'}`}>{d}</div>)}
             {days.map((d, i) => {
               if (d === null) return <div key={`empty-${i}`} style={{ minHeight: '58px' }} />
-              const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`, entry = entryMap[d], pnlPct = entry?.pnl_pct || 0
+              const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`, entry = entryMap[d]
+              const dObj = new Date(dateStr)
+              const isWeekend = dObj.getDay() === 0 || dObj.getDay() === 6
+              const pnlPct = entry?.pnl_pct || 0
               const isToday = new Date().toISOString().split('T')[0] === dateStr, isSel = selectedDate === dateStr
-              let bg = '#1e2535'
+              let bg = 'transparent'
               const hasPnl = entry && (entry.pnl !== 0 || (entry.realized_pnl !== 0 && entry.realized_pnl !== undefined))
               
-              if (pnlPct > 0) bg = `rgba(224, 80, 80, ${Math.min(0.85, 0.3 + (pnlPct/5)*0.55)})`
-              else if (pnlPct < 0) bg = `rgba(66, 176, 122, ${Math.min(0.85, 0.3 + (Math.abs(pnlPct)/5)*0.55)})`
+              if (!isWeekend) {
+                if (pnlPct > 0) bg = `rgba(224, 80, 80, ${Math.min(0.85, 0.3 + (pnlPct/5)*0.55)})`
+                else if (pnlPct < 0) bg = `rgba(66, 176, 122, ${Math.min(0.85, 0.3 + (Math.abs(pnlPct)/5)*0.55)})`
+                else if (hasPnl) bg = '#1e2535'
+              }
               
               return (
                 <div key={d} onClick={() => toggleDate(dateStr)} 
@@ -489,11 +479,11 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                   
                   <span className={`absolute top-1 left-1.5 leading-none ${
                     isToday ? 'text-[14px] font-[800] text-gold' : 
-                    hasPnl ? 'text-[14px] font-[800] text-white' : 
-                    'text-[13px] font-[600] text-white/40'
-                  } ${isSel ? 'text-bg-base' : ''}`}>{d}</span>
+                    isSel ? 'text-bg-base' : 
+                    !isWeekend && hasPnl ? 'text-white' : 'text-white/20'
+                  } ${!isWeekend && hasPnl ? 'text-[14px] font-[800]' : 'text-[13px] font-[600]'}`}>{d}</span>
 
-                  {entry && (
+                  {!isWeekend && entry && (
                     <div className="flex flex-col items-center justify-center mt-4 space-y-1">
                       <div className={`text-[12px] font-[700] leading-none ${isSel ? 'text-bg-base' : 'text-white'}`}>
                         {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
@@ -523,8 +513,8 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
           <div className="flex justify-between items-center border-b border-white/5 pb-3">
             <div className="flex flex-col">
               <h3 className="font-black text-base text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股損益細項</h3>
-              {(() => { 
-                const entry = entries.find((e: CalendarEntry) => e.entry_date === selectedDate); 
+              {!isHoliday && (() => { 
+                const entry = entries?.find((e: CalendarEntry) => e.entry_date === selectedDate); 
                 if (!entry) return null; 
                 return (
                   <div className="flex flex-col gap-0.5 mt-1">
@@ -543,44 +533,51 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
             {loading && <RefreshCw size={14} className="animate-spin text-gold" />}
           </div>
           
-          <div className="space-y-4">
-            {dayDetails?.map(det => (
-              <div key={det.symbol} className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-black text-white text-base">{det.name_zh} <span className="text-xs text-white/30 font-mono">{codeOnly(det.symbol)}</span></div>
-                    <div className="text-[11px] font-bold text-white/40 mt-1">
-                      {(det.shares ?? 0).toLocaleString()} 股 · 收盤 {det.price.toFixed(2)}
-                      {det.change !== undefined && (
-                        <span className={`ml-2 ${det.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                          {det.change >= 0 ? '▲' : '▼'} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
-                        </span>
-                      )}
+          {isHoliday ? (
+            <div className="py-8 flex flex-col items-center justify-center text-center space-y-2">
+              <div className="text-[16px] font-black text-white/40">未開盤</div>
+              <div className="text-[12px] font-bold text-white/20">當日無交易，損益為 0</div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {dayDetails?.map(det => (
+                <div key={det.symbol} className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="font-black text-white text-base">{det.name_zh} <span className="text-xs text-white/30 font-mono">{codeOnly(det.symbol)}</span></div>
+                      <div className="text-[11px] font-bold text-white/40 mt-1">
+                        {(det.shares ?? 0).toLocaleString()} 股 · 收盤 {det.price.toFixed(2)}
+                        {det.change !== undefined && (
+                          <span className={`ml-2 ${det.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                            {det.change >= 0 ? '▲' : '▼'} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
 
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
-                  <div>
-                    <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">持有成本 / 目前市值</div>
-                    <div className="text-sm font-bold text-white/80 font-mono">
-                      {fmtMoney(Math.round(det.total_cost))} / <span className="text-white">{fmtMoney(det.market_value)}</span>
+                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                    <div>
+                      <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">持有成本 / 目前市值</div>
+                      <div className="text-sm font-bold text-white/80 font-mono">
+                        {fmtMoney(Math.round(det.total_cost))} / <span className="text-white">{fmtMoney(det.market_value)}</span>
+                      </div>
                     </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">當日損益</div>
-                    <div className={`text-sm font-black font-mono ${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      {det.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(det.pnl))} ({det.pnl_pct.toFixed(2)}%)
+                    <div className="text-right">
+                      <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">當日損益</div>
+                      <div className={`text-sm font-black font-mono ${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                        {det.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(det.pnl))} ({det.pnl_pct.toFixed(2)}%)
+                      </div>
                     </div>
                   </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
 
           {(() => {
-            const dayTxs = transactions.filter((t: Transaction) => t.trade_date === selectedDate)
-            if (!dayTxs.length) return null
+            const dayTxs = transactions?.filter((t: Transaction) => t.trade_date === selectedDate)
+            if (!dayTxs?.length) return null
             return (
               <div className="pt-4 border-t border-white/5 space-y-4">
                 <h4 className="text-[11px] font-black text-white/30 uppercase tracking-widest flex items-center gap-2"><ClipboardList size={14}/> 當天交易</h4>
@@ -588,7 +585,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                   {dayTxs.map((tx: Transaction) => (
                     <div key={tx.id} className="flex justify-between items-center text-sm">
                       <div className="flex items-center gap-2"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='BUY'?'買入':'賣出'}</span><span className="font-black text-white truncate max-w-[100px]">{tx.name_zh}</span></div>
-                      <div className="text-right"><div className={`font-mono font-black ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-white/20 font-bold">{(tx.shares ?? 0).toLocaleString()}股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
+                      <div className="text-right"><div className={`font-mono font-black ${isHoliday ? 'text-white/20' : tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{isHoliday ? '—' : tx.net_amount >= 0 ? '+' : ''}{isHoliday ? '' : fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-white/20 font-bold">{(tx.shares ?? 0).toLocaleString()}股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
                     </div>
                   ))}
                 </div>
