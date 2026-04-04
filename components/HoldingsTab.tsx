@@ -333,7 +333,16 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
 
   const toggleDate = async (dateStr: string) => {
     if (selectedDate === dateStr) { setSelectedDate(null); setDayDetails(null); return }
-    setSelectedDate(dateStr); setLoading(true)
+    setSelectedDate(dateStr)
+    
+    // 優先使用 API 回傳的 details
+    const entry = entries.find((e: any) => e.entry_date === dateStr)
+    if (entry && entry.details) {
+      setDayDetails(entry.details)
+      return
+    }
+
+    setLoading(true)
     try {
       const inventory: any = {}
       const sorted = [...transactions].filter(t => t.trade_date <= dateStr).sort((a,b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
@@ -388,9 +397,18 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
                 <div key={d} onClick={() => toggleDate(dateStr)} className={`cal-day relative rounded-[10px] border transition-all flex flex-col items-center justify-center ${isSel ? 'border-gold bg-gold z-10 scale-105 shadow-gold/20' : isToday ? 'border-gold shadow-gold/10' : 'border-transparent'}`} style={{ background: isSel ? 'var(--gold)' : bg, height: '52px' }}>
                   <span className={`text-[14px] font-black absolute top-1 left-1.5 leading-none ${isSel ? 'text-bg-base' : (entry ? 'text-white' : 'text-white/30')}`}>{d}</span>
                   {entry && (
-                    <div className="flex flex-col items-center justify-center mt-2.5 space-y-0.5">
-                      <div className={`text-[11px] font-black leading-none ${isSel ? 'text-bg-base' : 'text-white'}`}>{entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}</div>
-                      <div className={`text-[10px] font-bold leading-none ${isSel ? 'text-bg-base/60' : 'text-white/70'}`}>{entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%</div>
+                    <div className="flex flex-col items-center justify-center mt-3 space-y-0.5">
+                      <div className={`text-[11px] font-black leading-none ${isSel ? 'text-bg-base' : 'text-white'}`}>
+                        {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
+                      </div>
+                      <div className={`text-[9px] font-bold leading-none ${isSel ? 'text-bg-base/60' : 'text-white/50'}`}>
+                        {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+                      </div>
+                      {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
+                        <div className={`text-[9px] font-black leading-none mt-0.5 ${isSel ? 'text-bg-base' : 'text-gold'}`}>
+                          {entry.realized_pnl > 0 ? '+' : ''}{shortMoney(entry.realized_pnl)}
+                        </div>
+                      )}
                     </div>
                   )}
                   {hasTxMap[d] && <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-gold shadow-sm border border-bg-base" />}
@@ -406,7 +424,25 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
       {selectedDate && (
         <div className="animate-slide-up card-base p-5 space-y-5 border-white/10 shadow-2xl">
           <div className="flex justify-between items-center border-b border-white/5 pb-3">
-            <div className="flex flex-col"><h3 className="font-black text-base text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項</h3>{(() => { const entry = entries.find((e: CalendarEntry) => e.entry_date === selectedDate); if (!entry) return null; return <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>當天總損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({entry.pnl_pct?.toFixed(2)}%)</span> })()}</div>
+            <div className="flex flex-col">
+              <h3 className="font-black text-base text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股損益細項</h3>
+              {(() => { 
+                const entry = entries.find((e: CalendarEntry) => e.entry_date === selectedDate); 
+                if (!entry) return null; 
+                return (
+                  <div className="flex flex-col gap-0.5 mt-1">
+                    <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      當日市值損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({entry.pnl_pct?.toFixed(2)}%)
+                    </span>
+                    {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
+                      <span className="text-[10px] font-black font-mono text-gold">
+                        當日已實現損益 {entry.realized_pnl > 0 ? '+' : ''}{fmtMoney(entry.realized_pnl)}
+                      </span>
+                    )}
+                  </div>
+                )
+              })()}
+            </div>
             {loading && <RefreshCw size={14} className="animate-spin text-gold" />}
           </div>
           {dayDetails?.map(det => (

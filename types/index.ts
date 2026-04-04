@@ -65,6 +65,7 @@ export interface CalendarEntry {
   entry_date: string
   pnl: number
   pnl_pct?: number
+  realized_pnl?: number
   note: string
   details?: {
     symbol: string
