@@ -318,7 +318,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
               </span>
             </div>
             <div className="text-[11px] mt-1 font-mono text-white/40">
-              均成 {h.avg_cost.toFixed(2)} · 持成 {fmtMoney(h.total_cost)}
+              平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}
             </div>
           </div>
           <div className="text-right shrink-0">

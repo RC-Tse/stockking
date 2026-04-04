@@ -149,10 +149,11 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
         alert('定期定額計畫已儲存')
         onClose()
       } else {
-        alert('儲存失敗')
+        const errData = await res.json().catch(() => ({}))
+        alert(`儲存失敗: ${errData.error || '未知錯誤'}`)
       }
     } catch (e) {
-      alert('系統錯誤')
+      alert('系統錯誤，請檢查網路連線')
     } finally {
       setSaving(false)
     }
@@ -319,7 +320,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                 </div>
                 <div className="grid grid-cols-7 gap-2">
                   {Array.from({length: 31}, (_, i) => i + 1).map(d => (
-                    <button key={d} onClick={() => toggleDcaDay(d)} className={`aspect-square rounded-xl flex items-center justify-center text-sm font-black transition-all border ${dcaDays.includes(d) ? 'bg-gold text-black border-gold' : 'bg-white/5 text-white/30 border-white/5'}`}>{d}</button>
+                    <button key={d} onClick={() => toggleDcaDay(d)} className={`aspect-square rounded-xl flex items-center justify-center text-sm font-black transition-all border ${dcaDays.includes(d) ? 'bg-[#c9a564] text-[#0d1018] border-[#c9a564]' : 'bg-white/5 text-white/30 border-white/5'}`}>{d}</button>
                   ))}
                 </div>
                 <p className="text-[10px] text-white/30 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
@@ -331,7 +332,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
               <div className="glass rounded-3xl p-5 space-y-3 border border-white/5">
                 <div className="flex items-center justify-between">
                   <span className="font-black text-white text-sm">股息再投資</span>
-                  <button onClick={() => setDivReinvest(!divReinvest)} className={`w-12 h-6 rounded-full relative transition-all ${divReinvest ? 'bg-gold' : 'bg-white/10'}`}>
+                  <button onClick={() => setDivReinvest(!divReinvest)} className={`w-12 h-6 rounded-full relative transition-all ${divReinvest ? 'bg-[#c9a564]' : 'bg-white/10'}`}>
                     <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${divReinvest ? 'left-7' : 'left-1'}`} />
                   </button>
                 </div>
