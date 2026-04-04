@@ -7,6 +7,12 @@ import {
   Transaction, Holding, CalendarEntry, UserSettings, Quote, DCAPlan,
   DEFAULT_SETTINGS, calcFee, calcTax, fmtMoney,
 } from '@/types'
+import { 
+  BarChart2, 
+  ClipboardList, 
+  Settings as SettingsIcon, 
+  Plus 
+} from 'lucide-react'
 import HoldingsTab      from './HoldingsTab'
 import ConceptsTab      from './ConceptsTab'
 import TransactionsTab  from './TransactionsTab'
@@ -17,10 +23,10 @@ export interface AppUser { id: string; email: string; name: string; avatar: stri
 
 type Tab = 'holdings' | 'transactions' | 'settings'
 
-const TABS: { id: Tab; icon: string; label: string }[] = [
-  { id: 'holdings',     icon: '📊', label: '持股'  },
-  { id: 'transactions', icon: '📋', label: '紀錄'  },
-  { id: 'settings',     icon: '⚙️', label: '設定'  },
+const TABS: { id: Tab; icon: any; label: string }[] = [
+  { id: 'holdings',     icon: BarChart2, label: '持股'  },
+  { id: 'transactions', icon: ClipboardList, label: '紀錄'  },
+  { id: 'settings',     icon: SettingsIcon, label: '設定'  },
 ]
 
 // ─── FIFO holdings computation ───────────────────────────────────────────────
@@ -98,6 +104,15 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const router = useRouter()
   const supabase = createClient()
 
+  // Apply theme
+  useEffect(() => {
+    if (settings.theme) {
+      document.documentElement.setAttribute('data-theme', settings.theme)
+    } else {
+      document.documentElement.setAttribute('data-theme', 'luxury')
+    }
+  }, [settings.theme])
+
   // ── fetch transactions + settings ─────────────────────────────
   const refresh = useCallback(async () => {
     const [txRes, setRes] = await Promise.all([
@@ -161,7 +176,6 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   }, [holdings, calEntries, refreshCal])
 
   // ── 統一損益計算邏輯 ──
-  // 總損益 = 所有賣出淨收入 + 目前持股市值 - 所有買入總成本
   const { totalPnl, totalCost } = useMemo(() => {
     let buyTotal = 0
     let sellTotal = 0
@@ -264,30 +278,31 @@ export default function DashboardClient({ user }: { user: AppUser }) {
             setEditingDcaPlan(null)
             setDrawerOpen(true)
           }}
-          className="fixed bottom-[82px] right-4 z-30 w-[50px] h-[50px] rounded-full flex items-center justify-center text-[24px] font-bold transition-all active:scale-90 border border-white/10"
+          className="fixed bottom-[82px] right-4 z-30 w-[50px] h-[50px] rounded-full flex items-center justify-center text-white transition-all active:scale-90 border border-white/10 shadow-2xl"
           style={{ 
-            background: 'linear-gradient(135deg, #c9a564, #e8c880)',
-            color: '#000',
-            width: '50px',
-            height: '50px'
+            background: 'var(--gold)',
+            color: 'var(--bg-base)'
           }}>
-          +
+          <Plus size={24} strokeWidth={3} />
         </button>
       )}
 
       {/* ══ BOTTOM NAV ══════════════════════════════════════════ */}
       <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#0d1018f5] backdrop-blur-2xl border-t border-white/10">
         <div className="flex h-16">
-          {TABS.map(t => (
-            <button key={t.id} onClick={() => setTab(t.id)}
-              className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${tab === t.id ? 'text-gold' : 'text-white/30'}`}>
-              <span className="text-[22px] leading-none" style={{ display: 'inline-block' }}>{t.icon}</span>
-              <span className="font-bold text-[10px] tracking-wide uppercase">
-                {t.label}
-              </span>
-              {tab === t.id && <div className="absolute bottom-1 inset-x-6 h-1 bg-gold rounded-full" />}
-            </button>
-          ))}
+          {TABS.map(t => {
+            const Icon = t.icon
+            return (
+              <button key={t.id} onClick={() => setTab(t.id)}
+                className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${tab === t.id ? 'text-gold' : 'text-white/30'}`}>
+                <Icon size={22} fill={tab === t.id ? "currentColor" : "none"} strokeWidth={tab === t.id ? 2.5 : 2} />
+                <span className="font-bold text-[10px] tracking-wide uppercase">
+                  {t.label}
+                </span>
+                {tab === t.id && <div className="absolute bottom-1 inset-x-6 h-1 bg-gold rounded-full" />}
+              </button>
+            )
+          })}
         </div>
       </nav>
 

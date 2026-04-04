@@ -90,6 +90,7 @@ export interface UserSettings {
   dca_fee_rate: number
   year_goal: number
   total_goal: number
+  theme: 'luxury' | 'minimal' | 'tech' | 'morandi'
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -106,6 +107,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   dca_fee_rate: 0.001425,
   year_goal: 0,
   total_goal: 0,
+  theme: 'luxury'
 }
 
 // ETF codes for tax calculation
