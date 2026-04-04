@@ -259,7 +259,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
         <div className="flex justify-between items-center">
           <div className="flex items-center gap-2 min-w-0">
             <span className="font-mono px-1.5 py-0.5 rounded-md text-[12px] bg-[#d4af3726] border border-[#d4af374d] text-gold">{codeOnly(h.symbol)}</span>
-            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/40">{h.shares.toLocaleString()} 股</span>
+            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/40">{(h.shares ?? 0).toLocaleString()} 股</span>
           </div>
           {q?.change !== undefined && (
             <div className={`flex items-center gap-1 text-[12px] font-black font-mono ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
@@ -499,7 +499,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
           </div>
           {dayDetails?.map(det => (
             <div key={det.symbol} className="flex justify-between items-center py-1">
-              <div className="flex flex-col"><span className="text-sm font-black text-white">{det.name_zh}</span><span className="text-[10px] font-bold text-white/20">{det.shares.toLocaleString()} 股 @ {det.price.toFixed(2)}</span></div>
+              <div className="flex flex-col"><span className="text-sm font-black text-white">{det.name_zh}</span><span className="text-[10px] font-bold text-white/20">{(det.shares ?? 0).toLocaleString()} 股 @ {(det.price ?? 0).toFixed(2)}</span></div>
               <div className="text-right"><div className="text-sm font-black text-white">{fmtMoney(det.market_value)}</div><div className={`text-[11px] font-bold ${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>{det.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(det.pnl))} ({det.pnl_pct.toFixed(2)}%)</div></div>
             </div>
           ))}
