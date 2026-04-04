@@ -15,57 +15,73 @@ interface Props {
 }
 
 export default function HoldingsTab({ holdings, quotes, settings, transactions, calEntries, onRefresh, onRefreshCal }: Props) {
-  const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0)
-  const totalMV   = holdings.reduce((s, h) => s + h.market_value, 0)
-  const totalPnl  = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
-  const pnlPct    = totalCost ? totalPnl / totalCost * 100 : 0
-
-  // ── Year PnL Calculation ──
   const currentYear = new Date().getFullYear().toString()
-  let ytdRealized = 0
-  let eoyCost = 0
 
-  const sortedTxs = [...transactions].sort((a, b) => a.trade_date.localeCompare(b.trade_date))
-  const map: Record<string, { shares: number, cost: number }> = {}
+  // ── Calculate Realized PnL & Year PnL ──
+  const { totalRealized, ytdPnl, eoyCost } = useMemo(() => {
+    let totalRealized = 0
+    let ytdRealized = 0
+    let eoyCost = 0
+    
+    // Tracking current inventory cost basis for realized PnL calculation
+    const map: Record<string, { shares: number, cost: number }> = {}
+    const sortedTxs = [...transactions].sort((a, b) => a.trade_date.localeCompare(b.trade_date))
 
-  sortedTxs.forEach(tx => {
-    if (tx.trade_date < `${currentYear}-01-01`) {
+    sortedTxs.forEach(tx => {
       if (!map[tx.symbol]) map[tx.symbol] = { shares: 0, cost: 0 }
       const h = map[tx.symbol]
+
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         h.shares += tx.shares
         h.cost += tx.amount + tx.fee
       } else if (tx.action === 'SELL') {
-        const avgCost = h.shares > 0 ? h.cost / h.shares : 0
+        const avgCostBefore = h.shares > 0 ? h.cost / h.shares : 0
+        const sellCostBasis = tx.shares * avgCostBefore
+        
+        const realized = tx.net_amount + sellCostBasis
+        totalRealized += realized
+        
+        if (tx.trade_date >= `${currentYear}-01-01`) {
+          ytdRealized += realized
+        }
+
         h.shares -= tx.shares
-        h.cost -= tx.shares * avgCost
+        h.cost -= sellCostBasis
       }
-    }
-  })
 
-  Object.values(map).forEach(h => {
-    if (h.shares > 0) eoyCost += h.cost
-  })
-
-  const mapYtd: Record<string, { shares: number, cost: number }> = {}
-  sortedTxs.forEach(tx => {
-    if (!mapYtd[tx.symbol]) mapYtd[tx.symbol] = { shares: 0, cost: 0 }
-    const h = mapYtd[tx.symbol]
-    if (tx.action === 'BUY' || tx.action === 'DCA') {
-      h.shares += tx.shares
-      h.cost += tx.amount + tx.fee
-    } else if (tx.action === 'SELL') {
-      const avgCost = h.shares > 0 ? h.cost / h.shares : 0
-      const costBasis = tx.shares * avgCost
-      h.shares -= tx.shares
-      h.cost -= costBasis
-      if (tx.trade_date >= `${currentYear}-01-01`) {
-        ytdRealized += (tx.net_amount + costBasis)
+      // Track cost basis at the end of last year
+      if (tx.trade_date < `${currentYear}-01-01`) {
+        // This is handled by the loop as it progresses
       }
-    }
-  })
+    });
 
-  const yearPnl = ytdRealized + totalPnl
+    // To get EOY cost, we'd need another pass or check date inside
+    const eoyMap: Record<string, { shares: number, cost: number }> = {}
+    sortedTxs.filter(t => t.trade_date < `${currentYear}-01-01`).forEach(tx => {
+      if (!eoyMap[tx.symbol]) eoyMap[tx.symbol] = { shares: 0, cost: 0 }
+      const h = eoyMap[tx.symbol]
+      if (tx.action === 'BUY' || tx.action === 'DCA') {
+        h.shares += tx.shares
+        h.cost += tx.amount + tx.fee
+      } else if (tx.action === 'SELL') {
+        const avg = h.shares > 0 ? h.cost / h.shares : 0
+        h.shares -= tx.shares
+        h.cost -= tx.shares * avg
+      }
+    })
+    Object.values(eoyMap).forEach(v => { if (v.shares > 0) eoyCost += v.cost })
+
+    return { totalRealized, ytdRealized, eoyCost }
+  }, [transactions, currentYear])
+
+  const totalCost = holdings.reduce((s, h) => s + h.total_cost, 0)
+  const totalMV   = holdings.reduce((s, h) => s + h.market_value, 0)
+  const totalUnrealized = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
+  
+  const totalPnl = totalRealized + totalUnrealized
+  const pnlPct = totalCost ? (totalPnl / totalCost) * 100 : 0
+
+  const yearPnl = (ytdPnl || 0) + totalUnrealized // YTD Realized + Current Unrealized
   const yearPnlPct = eoyCost > 0 ? (yearPnl / eoyCost) * 100 : 0
 
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -76,19 +92,19 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   return (
     <div className="p-3 md:p-4 space-y-4">
       {/* 1. 持股概覽卡片 */}
-      <div className="glass rounded-2xl p-3 md:p-4 relative overflow-hidden border border-white/10">
-        <div className="flex items-center justify-between mb-3">
-          <span className="text-xs font-semibold opacity-50">
-            持股概覽 · {holdings.length} 檔
+      <div className="glass rounded-2xl p-4 md:p-5 relative overflow-hidden border border-white/10">
+        <div className="flex items-center justify-between mb-4">
+          <span className="text-xs font-black opacity-30 uppercase tracking-widest">
+            Portfolio Overview · {holdings.length} Positions
           </span>
           <button onClick={onRefresh}
-            className="text-[10px] px-2 py-0.5 rounded-lg bg-gold-dim text-gold border border-white/10 active:opacity-60 font-bold">
-            重整
+            className="text-[10px] px-2 py-1 rounded-lg bg-white/5 text-white/40 border border-white/10 active:bg-white/10 font-bold transition-colors">
+            REFRESH
           </button>
         </div>
 
-        <div className="space-y-4 mb-4">
-          {/* 第一列 */}
+        <div className="space-y-5 mb-6">
+          {/* 第一列：投入成本、目前市值 */}
           <div className="flex items-center">
             <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/2 text-center px-1" />
             <StatBox 
@@ -98,8 +114,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               upDown={totalMV > totalCost ? 1 : totalMV < totalCost ? -1 : 0}
             />
           </div>
-          {/* 第二列 */}
-          <div className="flex items-center border-t border-white/5 pt-4">
+          {/* 第二列：總損益金額、總損益比 */}
+          <div className="flex items-center border-t border-white/5 pt-5">
             <StatBox 
               label="總損益金額" 
               value={`${totalPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(totalPnl))}`} 
@@ -113,38 +129,71 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               upDown={totalPnl}
             />
           </div>
+          {/* 第三列：已實現損益、今年損益 */}
+          <div className="flex items-center border-t border-white/5 pt-5">
+            <StatBox 
+              label="已實現損益" 
+              value={`${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}`} 
+              className="w-1/2 text-center px-1 border-r border-white/5"
+              upDown={totalRealized}
+            />
+            <StatBox
+              label="今年損益"
+              value={`${yearPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(yearPnl))}`}
+              className="w-1/2 text-center px-1"
+              upDown={yearPnl}
+            />
+          </div>
         </div>
 
-        {/* 年損益與目標 */}
-        <div className="pt-3 border-t border-white/5 space-y-2.5">
-          <div className="flex justify-between items-center text-xs">
-            <span className="opacity-50 font-bold">今年損益</span>
-            <span className={`font-mono font-bold ${yearPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {yearPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(yearPnl))} 
-              <span className="ml-1 text-[10px] opacity-60">({yearPnlPct >= 0 ? '+' : ''}{yearPnlPct.toFixed(2)}%)</span>
-            </span>
-          </div>
-          
-          <div className="flex justify-between items-center text-xs">
-            <span className="opacity-50 font-bold">年目標達成</span>
-            <span className="font-mono font-black text-gold">
-              {yearAchieved !== null ? (
-                <>{fmtMoney(settings.year_goal)} · {yearAchieved.toFixed(1)}% {yearAchieved >= 100 ? '🎉' : ''}</>
+        {/* 📋 目標追蹤區塊 */}
+        <div className="pt-5 border-t border-white/10 space-y-5">
+          {/* 年度目標 */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-end">
+              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">
+                📈 年度目標
+              </span>
+              {settings.year_goal > 0 ? (
+                <span className={`text-[11px] font-black font-mono ${yearPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {fmtMoney(Math.round(yearPnl))} / {yearAchieved?.toFixed(1)}%
+                </span>
               ) : (
-                <span className="opacity-30 italic font-normal">前往設定頁面</span>
+                <a href="#settings" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' })); }} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</a>
               )}
-            </span>
+            </div>
+            {settings.year_goal > 0 && (
+              <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-1000 ${yearPnl >= 0 ? 'bg-red-500' : 'bg-green-500'}`}
+                  style={{ width: `${Math.min(100, Math.max(0, yearAchieved || 0))}%` }}
+                />
+              </div>
+            )}
           </div>
 
-          <div className="flex justify-between items-center text-xs">
-            <span className="opacity-50 font-bold">總目標達成</span>
-            <span className="font-mono font-black text-gold">
-              {totalAchieved !== null ? (
-                <>{fmtMoney(settings.total_goal)} · {totalAchieved.toFixed(1)}% {totalAchieved >= 100 ? '🎉' : ''}</>
+          {/* 總目標 */}
+          <div className="space-y-2">
+            <div className="flex justify-between items-end">
+              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">
+                🏆 總目標
+              </span>
+              {settings.total_goal > 0 ? (
+                <span className="text-[11px] font-black font-mono text-gold">
+                  {fmtMoney(totalMV)} / {totalAchieved?.toFixed(1)}%
+                </span>
               ) : (
-                <span className="opacity-30 italic font-normal">未設定</span>
+                <a href="#settings" onClick={(e) => { e.preventDefault(); window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' })); }} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</a>
               )}
-            </span>
+            </div>
+            {settings.total_goal > 0 && (
+              <div className="h-1.5 w-full bg-white/5 rounded-full overflow-hidden">
+                <div 
+                  className={`h-full transition-all duration-1000 ${(totalAchieved || 0) >= 50 ? 'bg-gold' : 'bg-white/20'}`}
+                  style={{ width: `${Math.min(100, Math.max(0, totalAchieved || 0))}%` }}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -558,7 +607,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   const [date, setDate] = useState(t.trade_date)
   const [shares, setShares] = useState<number | ''>(t.shares)
   const [price, setPrice] = useState<number | ''>(t.price)
-  const [note, setNote] = useState(t.note || '')
+  const [monthNote, setMonthNote] = useState(t.note || '')
   const [tradeType, setTradeType] = useState(t.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
   const [lots, setLots]     = useState<number | ''>(Math.floor(t.shares / 1000) || 1)
   
@@ -571,7 +620,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   const net    = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
   // Validation
-  const hasChanged = date !== t.trade_date || actualShares !== t.shares || safePrice !== t.price || note !== (t.note || '')
+  const hasChanged = date !== t.trade_date || actualShares !== t.shares || safePrice !== t.price || monthNote !== (t.note || '')
   const isValid = actualShares > 0 && safePrice > 0 && hasChanged
 
   async function handleSave() {
@@ -580,7 +629,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
     await fetch('/api/transactions', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: t.id, trade_date: date, shares: actualShares, price: safePrice, note })
+      body: JSON.stringify({ id: t.id, trade_date: date, shares: actualShares, price: safePrice, note: monthNote })
     })
     setIsEditing(false)
     setLoading(false)
@@ -668,7 +717,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
 
         <div>
           <Label>備註</Label>
-          <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-3 px-4 text-sm bg-white/5 border-white/10" placeholder="點此輸入備註..." />
+          <input value={monthNote} onChange={e => setMonthNote(e.target.value)} className="w-full input-base py-3 px-4 text-sm bg-white/5 border-white/10" placeholder="點此輸入備註..." />
         </div>
 
         <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 text-xs font-bold">
