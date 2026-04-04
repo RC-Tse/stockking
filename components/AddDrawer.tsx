@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { UserSettings, calcFee, calcTax, fmtMoney, DCAPlan } from '@/types'
 
 interface Props {
@@ -18,6 +18,7 @@ interface Props {
 type Mode = 'SELECT' | 'ORDER' | 'DCA'
 type Action = 'BUY' | 'SELL'
 type TradeType = 'FULL' | 'FRACTIONAL'
+type DatePickerView = 'CALENDAR' | 'YEAR' | 'MONTH'
 
 export default function AddDrawer({ open, settings, onClose, initialPlan, onSave, onSavePlan }: Props) {
   const [mode, setMode] = useState<Mode>('SELECT')
@@ -52,12 +53,19 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
 
   // Custom Date Picker states
   const [showDatePicker, setShowDatePicker] = useState(false)
-  const [viewDate, setViewDate] = useState(new Date())
-  const [selectedDate, setSelectedDate] = useState(new Date())
+  const [datePickerView, setDatePickerView] = useState<DatePickerView>('CALENDAR')
+  const [viewDate, setViewDate] = useState(new Date()) // Current month being viewed
+  const [selectedDateStr, setSelectedDateStr] = useState('') // YYYY-MM-DD
 
   // Reset when opened
   useEffect(() => {
     if (open) {
+      const today = new Date()
+      const y = today.getFullYear()
+      const m = today.getMonth() + 1
+      const d = today.getDate()
+      const todayStr = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+
       if (initialPlan) {
         setMode('DCA')
         setSymbol(initialPlan.symbol)
@@ -80,10 +88,11 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
         setSmartSellEnabled(false); setSmartSellThreshold('>0%'); setSmartSellAmount('')
         setCurrentPrice(0); setMa60(0)
       }
-      const today = new Date()
-      setSelectedDate(today)
+      
+      setSelectedDateStr(todayStr)
       setViewDate(today)
       setSaving(false)
+      setDatePickerView('CALENDAR')
     }
   }, [open, initialPlan])
 
@@ -124,15 +133,13 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
   const tax    = safePrice > 0 && action === 'SELL' ? calcTax(amount, symbol, settings) : 0
   const net    = action === 'BUY' ? -(amount + fee) : (amount - fee - tax)
 
-  const tradeDateStr = selectedDate.toISOString().split('T')[0]
-
   async function submitOrder() {
     if (!symbol.trim() || safePrice <= 0 || finalShares <= 0) return
     setSaving(true)
     await onSave({
       symbol: symbol.trim().toUpperCase(),
       action,
-      trade_date: tradeDateStr,
+      trade_date: selectedDateStr,
       shares: finalShares,
       price: safePrice,
       trade_type: tradeType,
@@ -254,7 +261,7 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
                     <Label>交易方式</Label>
                     <div className="flex gap-2.5">
                       {(['FULL','FRACTIONAL'] as TradeType[]).map(t => (
-                        <button key={t} onClick={() => setTradeType(t)} className={`flex-1 py-3 rounded-2xl text-[11px] font-black tracking-wider transition-all border ${tradeType === t ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/30 border-transparent'}`}>
+                        <button key={t} onClick={() => setTradeType(t)} className={`flex-1 py-3 rounded-2xl text-[11px] font-black tracking-wider transition-all border ${tradeType === t ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/40 border-transparent'}`}>
                           {t === 'FULL' ? '整張 (1000股)' : '盤後零股'}
                         </button>
                       ))}
@@ -279,8 +286,8 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
                     <div className="space-y-2">
                       <Label>成交日期</Label>
                       <button onClick={() => setShowDatePicker(true)} className="input-base w-full text-left font-black font-mono text-lg py-4 bg-white/5 border-white/10 flex justify-between items-center">
-                        <span>{tradeDateStr}</span>
-                        <span className="text-gold">📅</span>
+                        <span>{selectedDateStr}</span>
+                        <span className="text-[10px] text-white/20 font-bold uppercase tracking-widest">Select Date</span>
                       </button>
                     </div>
                   </div>
@@ -452,28 +459,110 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
       {showDatePicker && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center px-6" style={{ background: 'rgba(0,0,0,0.8)' }}>
           <div className="w-full max-w-[320px] glass p-5 space-y-4" style={{ background: '#141820', border: '1px solid rgba(255,255,255,0.1)' }}>
+            
+            {/* Header: Year and Month clickable */}
             <div className="flex items-center justify-between">
-              <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} className="p-2 text-gold">◀</button>
+              <button 
+                onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()-1, 1))} 
+                className="p-2 text-gold disabled:opacity-20"
+                disabled={datePickerView !== 'CALENDAR'}
+              >◀</button>
+              
               <div className="flex gap-2 font-black text-white">
-                <span>{viewDate.getFullYear()}年</span>
-                <span>{viewDate.getMonth()+1}月</span>
+                <button 
+                  onClick={() => setDatePickerView(datePickerView === 'YEAR' ? 'CALENDAR' : 'YEAR')}
+                  className={`px-2 py-1 rounded transition-colors ${datePickerView === 'YEAR' ? 'bg-gold text-black' : 'hover:bg-white/5'}`}
+                >
+                  {viewDate.getFullYear()}年
+                </button>
+                <button 
+                  onClick={() => setDatePickerView(datePickerView === 'MONTH' ? 'CALENDAR' : 'MONTH')}
+                  className={`px-2 py-1 rounded transition-colors ${datePickerView === 'MONTH' ? 'bg-gold text-black' : 'hover:bg-white/5'}`}
+                >
+                  {viewDate.getMonth()+1}月
+                </button>
               </div>
-              <button onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} className="p-2 text-gold">▶</button>
+              
+              <button 
+                onClick={() => setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 1))} 
+                className="p-2 text-gold disabled:opacity-20"
+                disabled={datePickerView !== 'CALENDAR'}
+              >▶</button>
             </div>
-            <div className="grid grid-cols-7 gap-1 text-center">
-              {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-[10px] font-bold text-white/30">{d}</div>)}
-              {(() => {
-                const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay()
-                const days = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0).getDate()
-                const cells = []
-                for (let i=0; i<start; i++) cells.push(<div key={`e-${i}`} />)
-                for (let d=1; d<=days; d++) {
-                  const isSel = selectedDate.getFullYear() === viewDate.getFullYear() && selectedDate.getMonth() === viewDate.getMonth() && selectedDate.getDate() === d
-                  cells.push(<button key={d} onClick={() => { setSelectedDate(new Date(viewDate.getFullYear(), viewDate.getMonth(), d)); setShowDatePicker(false); }} className={`aspect-square flex items-center justify-center text-sm font-bold rounded-lg ${isSel ? 'bg-gold text-black' : 'text-white/80 hover:bg-white/5'}`}>{d}</button>)
-                }
-                return cells
-              })()}
-            </div>
+
+            {/* View: CALENDAR */}
+            {datePickerView === 'CALENDAR' && (
+              <div className="grid grid-cols-7 gap-1 text-center">
+                {['日','一','二','三','四','五','六'].map(d => <div key={d} className="text-[10px] font-bold text-white/30">{d}</div>)}
+                {(() => {
+                  const start = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1).getDay()
+                  const daysCount = new Date(viewDate.getFullYear(), viewDate.getMonth()+1, 0).getDate()
+                  const cells = []
+                  for (let i=0; i<start; i++) cells.push(<div key={`e-${i}`} />)
+                  for (let d=1; d<=daysCount; d++) {
+                    const currentStr = `${viewDate.getFullYear()}-${String(viewDate.getMonth()+1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+                    const isSel = selectedDateStr === currentStr
+                    cells.push(
+                      <button 
+                        key={d} 
+                        onClick={() => { 
+                          setSelectedDateStr(currentStr)
+                          setShowDatePicker(false)
+                        }} 
+                        className={`aspect-square flex items-center justify-center text-sm font-bold rounded-lg ${isSel ? 'bg-gold text-black' : 'text-white/80 hover:bg-white/5'}`}
+                      >
+                        {d}
+                      </button>
+                    )
+                  }
+                  return cells
+                })()}
+              </div>
+            )}
+
+            {/* View: YEAR */}
+            {datePickerView === 'YEAR' && (
+              <div className="grid grid-cols-3 gap-2 py-2">
+                {(() => {
+                  const currentYear = new Date().getFullYear()
+                  const years = []
+                  for (let y = currentYear - 5; y <= currentYear + 4; y++) {
+                    years.push(y)
+                  }
+                  return years.map(y => (
+                    <button 
+                      key={y}
+                      onClick={() => {
+                        setViewDate(new Date(y, viewDate.getMonth(), 1))
+                        setDatePickerView('CALENDAR')
+                      }}
+                      className={`py-3 rounded-xl text-sm font-black transition-all ${viewDate.getFullYear() === y ? 'bg-gold text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                    >
+                      {y}
+                    </button>
+                  ))
+                })()}
+              </div>
+            )}
+
+            {/* View: MONTH */}
+            {datePickerView === 'MONTH' && (
+              <div className="grid grid-cols-3 gap-2 py-2">
+                {Array.from({length: 12}, (_, i) => i + 1).map(m => (
+                  <button 
+                    key={m}
+                    onClick={() => {
+                      setViewDate(new Date(viewDate.getFullYear(), m - 1, 1))
+                      setDatePickerView('CALENDAR')
+                    }}
+                    className={`py-3 rounded-xl text-sm font-black transition-all ${viewDate.getMonth() + 1 === m ? 'bg-gold text-black' : 'bg-white/5 text-white/60 hover:bg-white/10'}`}
+                  >
+                    {m}月
+                  </button>
+                ))}
+              </div>
+            )}
+
             <button onClick={() => setShowDatePicker(false)} className="w-full py-2 text-xs font-bold text-white/40">取消</button>
           </div>
         </div>

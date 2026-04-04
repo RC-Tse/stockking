@@ -462,8 +462,8 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
         </div>
 
         <div className="flex gap-3 pt-1">
-          <button onClick={() => setIsEditing(false)} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 text-white/60 border border-white/10">取消</button>
-          <button onClick={handleSave} disabled={loading} className="flex-2 py-3 rounded-xl font-black text-sm bg-gold text-base active:scale-95 transition-transform">{loading ? '儲存中...' : '儲存修改'}</button>
+          <button onClick={() => setIsEditing(false)} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 text-white/60 border border-white/10 active:scale-95 transition-transform">取消</button>
+          <button onClick={handleSave} disabled={loading} className="flex-2 py-3 rounded-xl font-black text-sm bg-gold text-[#0d1018] active:scale-95 transition-transform">{loading ? '儲存中...' : '儲存修改'}</button>
         </div>
       </div>
     )
