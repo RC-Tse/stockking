@@ -201,7 +201,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 }
 
 function StatBox({ label, value, upDown, large, className }: any) {
-  const color = upDown === undefined ? 'text-white' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
+  const isHidden = value === "— — —"
+  const color = (upDown === undefined || isHidden) ? 'text-white' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
   return (
     <div className={`flex flex-col ${className}`}>
       <span className="text-[11px] font-black text-white/20 uppercase tracking-widest mb-1.5">{label}</span>
