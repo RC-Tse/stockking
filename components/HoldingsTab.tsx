@@ -32,7 +32,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     let yearBuyTotal = 0
     let yearSellTotal = 0
 
-    // FIFO tracking
     const inventory: Record<string, { shares: number, cost: number }[]> = {}
     const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
 
@@ -81,7 +80,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       }
     }
 
-    // Calculate cost basis of holdings as of Jan 1st
     let eoyHeldCost = 0
     const tempInv: Record<string, { shares: number, cost: number }[]> = {}
     sortedTxs.filter(t => t.trade_date < `${currentYear}-01-01`).forEach(tx => {
@@ -100,12 +98,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         }
       }
     })
-    // Now we have inventory at end of last year.
-    // BUT we only care about those still held TODAY.
     Object.keys(tempInv).forEach(sym => {
       const currentNetShares = inventory[sym]?.reduce((s, l) => s + l.shares, 0) || 0
       if (currentNetShares > 0) {
-        // How many of the start-of-year shares are still here?
         const startShares = tempInv[sym].reduce((s, l) => s + l.shares, 0)
         const stillHeld = Math.min(startShares, currentNetShares)
         if (stillHeld > 0) {
@@ -115,7 +110,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       }
     })
 
-    // Identify closed positions
     const closedHoldings = Object.entries(stockHistory)
       .filter(([sym]) => (inventory[sym]?.reduce((s, l) => s + l.shares, 0) || 0) === 0)
       .map(([sym, data]) => ({
@@ -131,6 +125,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   }, [transactions, currentYear])
 
   const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
+  const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
   
   // 總損益 = 賣出總收入 + 目前持股市值 - 買入總成本
   const totalPnl = allTimeSellTotal + currentMV - allTimeBuyTotal
@@ -162,17 +157,15 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         </div>
 
         <div className="space-y-5 mb-6">
-          {/* 第一列：投入成本、目前市值 */}
           <div className="flex items-center">
-            <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/2 text-center px-1" />
+            <StatBox label="投入總額" value={fmtMoney(totalCost)} className="w-1/2 text-center px-1" />
             <StatBox 
               label="目前市值" 
               value={fmtMoney(currentMV)} 
               className="w-1/2 text-center px-1" 
-              upDown={currentMV > totalCost ? 1 : currentMV < totalCost ? -1 : 0}
+              upDown={currentMV > currentCost ? 1 : currentMV < currentCost ? -1 : 0}
             />
           </div>
-          {/* 第二列：總損益金額、總損益比 */}
           <div className="flex items-center border-t border-white/5 pt-5">
             <StatBox 
               label="總損益金額" 
@@ -187,7 +180,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               upDown={totalPnl}
             />
           </div>
-          {/* 第三列：已實現損益、今年損益 */}
           <div className="flex items-center border-t border-white/5 pt-5">
             <StatBox 
               label="已實現損益" 
@@ -276,7 +268,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               className="w-full flex items-center justify-between p-4 glass rounded-2xl border border-white/5 active:bg-white/5 transition-all"
             >
               <div className="flex items-center gap-2">
-                <span className="text-lg">📁</span>
                 <span className="font-black text-sm text-white/60">已結算股票 ({closedHoldings.length}檔)</span>
               </div>
               <span className={`text-xs transition-transform duration-300 ${closedExpanded ? 'rotate-180' : ''}`}>▼</span>
@@ -285,42 +276,63 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             {closedExpanded && (
               <div className="space-y-3 mt-3 animate-in fade-in slide-in-from-top-2">
                 {closedHoldings.map(c => (
-                  <div key={c.symbol} className="glass rounded-xl overflow-hidden border border-white/5">
-                    <div className="p-4" onClick={() => setExpanded(expanded === `closed-${c.symbol}` ? null : `closed-${c.symbol}`)}>
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="font-black text-white">{getStockName(c.symbol)}</span>
-                            <span className="text-[10px] font-mono text-white/30">{codeOnly(c.symbol)}</span>
-                          </div>
-                          <div className="text-[10px] font-bold text-white/20 mt-0.5">
-                            成本 {fmtMoney(Math.round(c.buyCost))} · 收入 {fmtMoney(Math.round(c.sellRev))}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className={`font-black font-mono text-sm ${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                            {c.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(c.pnl))}
-                          </div>
-                          <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>
-                            {c.pnlPct >= 0 ? '+' : ''}{c.pnlPct.toFixed(2)}%
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {expanded === `closed-${c.symbol}` && (
-                      <div className="bg-white/[0.02] border-t border-white/5 p-3 space-y-2">
-                        {transactions.filter(t => t.symbol === c.symbol).map(t => (
-                          <TxRow key={t.id} t={t} settings={settings} onUpdated={onRefresh} />
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                  <ClosedHoldingItem 
+                    key={c.symbol} 
+                    c={c} 
+                    expanded={expanded === `closed-${c.symbol}`}
+                    onToggle={() => setExpanded(expanded === `closed-${c.symbol}` ? null : `closed-${c.symbol}`)}
+                    transactions={transactions.filter(t => t.symbol === c.symbol)}
+                    settings={settings}
+                    onRefresh={onRefresh}
+                  />
                 ))}
               </div>
             )}
           </div>
         )}
       </div>
+    </div>
+  )
+}
+
+function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRefresh }: any) {
+  const [name, setName] = useState(getStockName(c.symbol))
+
+  useEffect(() => {
+    fetch(`/api/stockname?symbol=${c.symbol}`).then(res => res.json()).then(data => {
+      if (data.name_zh) setName(data.name_zh)
+    }).catch(() => {})
+  }, [c.symbol])
+
+  return (
+    <div className="glass rounded-xl overflow-hidden border border-white/5">
+      <div className="p-4 cursor-pointer" onClick={onToggle}>
+        <div className="flex justify-between items-start mb-2">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="font-black text-white truncate">{name}（{codeOnly(c.symbol)}）</span>
+            </div>
+            <div className="text-[10px] font-bold text-white/20 mt-0.5">
+              成本 {fmtMoney(Math.round(c.buyCost))} · 收入 {fmtMoney(Math.round(c.sellRev))}
+            </div>
+          </div>
+          <div className="text-right">
+            <div className={`font-black font-mono text-sm ${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+              {c.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(c.pnl))}
+            </div>
+            <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>
+              {c.pnlPct >= 0 ? '+' : ''}{c.pnlPct.toFixed(2)}%
+            </div>
+          </div>
+        </div>
+      </div>
+      {expanded && (
+        <div className="bg-white/[0.02] border-t border-white/5 p-3 space-y-2">
+          {transactions.map((t: any) => (
+            <TxRow key={t.id} t={t} settings={settings} onUpdated={onRefresh} />
+          ))}
+        </div>
+      )}
     </div>
   )
 }

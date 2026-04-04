@@ -29,6 +29,7 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
   const [deleting, setDeleting] = useState<number | null>(null)
   const [dcaPlans, setDcaPlans] = useState<DCAPlan[]>([])
   const [showCancelled, setShowCancelled] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
   
   // States for accordion
   const now = new Date()
@@ -129,21 +130,29 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
 
   return (
     <div className="p-4 space-y-4 pb-32">
-      {/* Tabs */}
-      <div className="flex bg-white/[0.03] p-1 rounded-xl border border-white/5">
+      {/* Tabs + Export */}
+      <div className="flex items-center gap-2">
+        <div className="flex-1 flex bg-white/[0.03] p-1 rounded-xl border border-white/5">
+          <button 
+            onClick={() => setTab('SELF')}
+            className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'SELF' ? 'text-white bg-white/5' : 'text-white/30'}`}
+          >
+            自行交易
+            {tab === 'SELF' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
+          </button>
+          <button 
+            onClick={() => setTab('DCA')}
+            className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'DCA' ? 'text-white bg-white/5' : 'text-white/30'}`}
+          >
+            定期定額
+            {tab === 'DCA' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
+          </button>
+        </div>
         <button 
-          onClick={() => setTab('SELF')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'SELF' ? 'text-white bg-white/5' : 'text-white/30'}`}
+          onClick={() => setExportOpen(true)}
+          className="w-11 h-11 flex items-center justify-center glass rounded-xl border border-white/5 active:bg-white/10 text-xl"
         >
-          自行交易
-          {tab === 'SELF' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
-        </button>
-        <button 
-          onClick={() => setTab('DCA')}
-          className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'DCA' ? 'text-white bg-white/5' : 'text-white/30'}`}
-        >
-          定期定額
-          {tab === 'DCA' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
+          📥
         </button>
       </div>
 
@@ -341,6 +350,106 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
           </div>
         </div>
       )}
+
+      {/* Export Modal */}
+      {exportOpen && <ExportModal onClose={() => setExportOpen(false)} />}
+    </div>
+  )
+}
+
+function ExportModal({ onClose }: { onClose: () => void }) {
+  const [range, setRange] = useState<'month' | '3months' | 'year' | 'all' | 'custom'>('month')
+  const [start, setStart] = useState('')
+  const [end, setEnd] = useState('')
+  const [loading, setLoading] = useState(false)
+
+  async function handleExport() {
+    let s = start, e = end
+    const now = new Date()
+    const today = now.toISOString().split('T')[0]
+    
+    if (range === 'month') {
+      s = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0]
+      e = today
+    } else if (range === '3months') {
+      s = new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0]
+      e = today
+    } else if (range === 'year') {
+      s = `${now.getFullYear()}-01-01`
+      e = today
+    } else if (range === 'all') {
+      s = '2000-01-01'
+      e = today
+    }
+
+    if (!s || !e) return alert('請選擇日期區間')
+
+    setLoading(true)
+    try {
+      const res = await fetch(`/api/export?start_date=${s}&end_date=${e}`)
+      if (!res.ok) throw new Error('匯出失敗')
+      
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `存股王_交易紀錄_${s}_${e}.xlsx`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      alert('✅ 匯出成功')
+      onClose()
+    } catch (err) {
+      alert('匯出發生錯誤')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/80">
+      <div className="w-full max-w-[360px] glass p-6 rounded-3xl border border-white/10 space-y-6 animate-in zoom-in-95">
+        <div className="text-center">
+          <h3 className="font-black text-lg text-white">匯出交易紀錄</h3>
+          <p className="text-xs text-white/30 mt-1">產生成 Excel 報表下載</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { id: 'month', label: '本月' },
+            { id: '3months', label: '近 3 個月' },
+            { id: 'year', label: '今年' },
+            { id: 'all', label: '全部' },
+          ].map(opt => (
+            <button key={opt.id} onClick={() => setRange(opt.id as any)} className={`py-3 rounded-xl text-xs font-bold border transition-all ${range === opt.id ? 'bg-gold/10 text-gold border-gold/30' : 'bg-white/5 text-white/40 border-transparent'}`}>
+              {opt.label}
+            </button>
+          ))}
+          <button onClick={() => setRange('custom')} className={`col-span-2 py-3 rounded-xl text-xs font-bold border transition-all ${range === 'custom' ? 'bg-gold/10 text-gold border-gold/30' : 'bg-white/5 text-white/40 border-transparent'}`}>
+            自訂區間
+          </button>
+        </div>
+
+        {range === 'custom' && (
+          <div className="space-y-3 animate-in fade-in slide-in-from-top-2">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">開始日期</label>
+              <DatePicker value={start} onChange={setStart} />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-white/20 uppercase tracking-widest ml-1">結束日期</label>
+              <DatePicker value={end} onChange={setEnd} />
+            </div>
+          </div>
+        )}
+
+        <div className="flex gap-3 pt-2">
+          <button onClick={onClose} className="w-1/4 py-4 rounded-2xl font-bold text-sm bg-white/5 text-white/40 active:scale-95 transition-all">取消</button>
+          <button onClick={handleExport} disabled={loading} className="flex-1 py-4 rounded-2xl font-black text-sm bg-gold text-[#0d1018] active:scale-95 transition-all disabled:opacity-50">
+            {loading ? '產生中...' : '確認匯出'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -455,7 +564,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
   const amount = actualShares * safePrice
   const fee    = calcFee(amount, settings, tx.action === 'SELL')
   const tax    = tx.action === 'SELL' ? calcTax(amount, tx.symbol, settings) : 0
-  const net    = (tx.action === 'BUY' || tx.action === 'DCA') ? -(amount + fee) : (amount - fee - tax)
+  const net    = (tx.action === 'BUY' || tx.action === 'DCA') ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
   // Validation
   const hasChanged = date !== tx.trade_date || actualShares !== tx.shares || safePrice !== tx.price || note !== (tx.note || '')
@@ -490,26 +599,8 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
       <div className="space-y-2">
         <Label>交易方式</Label>
         <div className="flex gap-2">
-          <button 
-            onClick={() => setTradeType('FULL')} 
-            className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${
-              tradeType === 'FULL' 
-                ? 'bg-[#c9a56433] text-gold border-gold' 
-                : 'bg-transparent text-white/30 border-white/10'
-            }`}
-          >
-            整張 (1000股)
-          </button>
-          <button 
-            onClick={() => setTradeType('FRACTIONAL')} 
-            className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${
-              tradeType === 'FRACTIONAL' 
-                ? 'bg-[#c9a56433] text-gold border-gold' 
-                : 'bg-transparent text-white/30 border-white/10'
-            }`}
-          >
-            零股
-          </button>
+          <button onClick={() => setTradeType('FULL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${tradeType === 'FULL' ? 'bg-[#c9a56433] text-gold border-gold' : 'bg-transparent text-white/30 border-white/10'}`}>整張 (1000股)</button>
+          <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${tradeType === 'FRACTIONAL' ? 'bg-[#c9a56433] text-gold border-gold' : 'bg-transparent text-white/30 border-white/10'}`}>零股</button>
         </div>
       </div>
 
@@ -571,27 +662,10 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
       </div>
 
       <div className="flex gap-2 pt-1">
-        <button 
-          onClick={handleSave} 
-          disabled={!isValid || saving} 
-          className="w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95"
-          style={isValid ? { 
-            background: 'linear-gradient(135deg, #c9a564, #e8c880)', 
-            color: '#0d1018',
-            fontWeight: 800 
-          } : {
-            background: '#444',
-            color: '#888',
-            cursor: 'not-allowed',
-            opacity: 0.5
-          }}
-        >
+        <button onClick={handleSave} disabled={!isValid || saving} className="w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95" style={isValid ? { background: 'linear-gradient(135deg, #c9a564, #e8c880)', color: '#0d1018', fontWeight: 800 } : { background: '#444', color: '#888', cursor: 'not-allowed', opacity: 0.5 }}>
           {saving ? '儲存中...' : '儲存修改'}
         </button>
-        <button 
-          onClick={onCancel} 
-          className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all"
-        >
+        <button onClick={onCancel} className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all">
           取消
         </button>
       </div>
