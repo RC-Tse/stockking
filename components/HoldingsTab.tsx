@@ -125,22 +125,20 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   }, [transactions, currentYear])
 
   const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
-  const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
+  const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0) // 目前持有股票的買入成本
   
-  // 總損益 = 賣出總收入 + 目前持股市值 - 買入總成本
-  const totalPnl = allTimeSellTotal + currentMV - allTimeBuyTotal
-  const totalCost = allTimeBuyTotal
-  const pnlPct = totalCost ? (totalPnl / totalCost) * 100 : 0
+  const unrealizedPnl = currentMV - currentCost
+  const unrealizedPct = currentCost ? (unrealizedPnl / currentCost) * 100 : 0
 
-  // 年損益 = 今年賣出收入 - 今年買入成本 + (目前持股市值 - 年初持股成本)
+  const totalPnl = totalRealized + unrealizedPnl
+  const totalPnlPct = allTimeBuyTotal ? (totalPnl / allTimeBuyTotal) * 100 : 0
+
   const yearPnl = yearSellTotal - yearBuyTotal + (currentMV - eoyHeldCost)
-  const yearPnlPct = eoyHeldCost > 0 ? (yearPnl / eoyHeldCost) * 100 : 0
+  const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
+  const totalAchieved = settings.total_goal > 0 ? (currentMV / settings.total_goal) * 100 : null
 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [closedExpanded, setClosedExpanded] = useState(false)
-
-  const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
-  const totalAchieved = settings.total_goal > 0 ? (currentMV / settings.total_goal) * 100 : null
 
   return (
     <div className="p-3 md:p-4 space-y-4">
@@ -157,8 +155,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         </div>
 
         <div className="space-y-5 mb-6">
+          {/* 第一列：持有成本、目前市值 */}
           <div className="flex items-center">
-            <StatBox label="投入總額" value={fmtMoney(totalCost)} className="w-1/2 text-center px-1" />
+            <StatBox label="持有成本" value={fmtMoney(currentCost)} className="w-1/2 text-center px-1" />
             <StatBox 
               label="目前市值" 
               value={fmtMoney(currentMV)} 
@@ -166,20 +165,22 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               upDown={currentMV > currentCost ? 1 : currentMV < currentCost ? -1 : 0}
             />
           </div>
+          {/* 第二列：未實現損益、未實現損益比 */}
           <div className="flex items-center border-t border-white/5 pt-5">
             <StatBox 
-              label="總損益金額" 
-              value={`${totalPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(totalPnl))}`} 
+              label="未實現損益" 
+              value={`${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}`} 
               className="w-1/2 text-center px-1"
-              upDown={totalPnl}
+              upDown={unrealizedPnl}
             />
             <StatBox
-              label="總損益比"
-              value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
+              label="未實現損益比"
+              value={`${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%`}
               className="w-1/2 text-center px-1"
-              upDown={totalPnl}
+              upDown={unrealizedPnl}
             />
           </div>
+          {/* 第三列：已實現損益、總損益 */}
           <div className="flex items-center border-t border-white/5 pt-5">
             <StatBox 
               label="已實現損益" 
@@ -187,13 +188,20 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               className="w-1/2 text-center px-1 border-r border-white/5"
               upDown={totalRealized}
             />
-            <StatBox
-              label="今年損益"
-              value={`${yearPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(yearPnl))}`}
-              className="w-1/2 text-center px-1"
-              upDown={yearPnl}
-            />
+            <div className="w-1/2 flex flex-col items-center px-1">
+              <div className="text-[10px] mb-1 opacity-40 font-bold uppercase tracking-tighter">總損益</div>
+              <div className={`font-black font-mono text-xs md:text-sm leading-tight ${totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                {totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(totalPnl))}
+                <span className="ml-1 text-[10px] opacity-60">({totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)</span>
+              </div>
+            </div>
           </div>
+        </div>
+
+        <div className="text-center mb-4">
+          <p className="text-[9px] text-white/20 font-bold tracking-wider">
+            註：已實現 = 已賣出配對損益，未實現 = 目前持股浮動損益
+          </p>
         </div>
 
         {/* 📋 目標追蹤區塊 */}
