@@ -231,10 +231,17 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
   if (isEditing) return <div className="p-5 card-base border-gold/40 shadow-2xl animate-slide-up"><EditForm tx={tx} settings={settings} onCancel={()=>setIsEditing(false)} onSaved={()=>{setIsEditing(false);onUpdated()}}/></div>
   return (
     <div className="card-base overflow-hidden border-white/10 shadow-md">
-      <button onClick={()=>setOpen(!open)} className="w-full flex items-center gap-4 p-4 text-left active:bg-bg-hover transition-all">
-        <div className={`p-2.5 rounded-xl border ${isBuy?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{isBuy?<TrendingUp size={18}/>:<TrendingDown size={18}/>}</div>
-        <div className="flex-1 min-w-0"><div className="flex items-center gap-2"><span className="font-black text-white text-[16px] truncate">{tx.name_zh || getStockName(tx.symbol)}</span><span className="text-[10px] font-mono opacity-20">{codeOnly(tx.symbol)}</span></div><div className="text-[11px] font-bold text-white/20 mt-0.5">{tx.trade_date} · {tx.shares.toLocaleString()}股</div></div>
-        <div className={`text-right font-black font-mono text-[16px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>{tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}</div>
+      <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between p-4 text-left active:bg-bg-hover transition-all">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-baseline gap-1.5">
+            <span className="font-black text-white text-[16px] truncate">{tx.name_zh || getStockName(tx.symbol)}</span>
+            <span className="text-[10px] font-mono opacity-20">{codeOnly(tx.symbol)}</span>
+          </div>
+          <div className="text-[11px] font-bold text-white/20 mt-1">{tx.trade_date} · {tx.shares.toLocaleString()}股</div>
+        </div>
+        <div className={`text-right font-black font-mono text-[16px] shrink-0 ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
+          {tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}
+        </div>
       </button>
       {open && (
         <div className="bg-black/20 p-5 pt-0 border-t border-white/5 space-y-5 animate-slide-up">
