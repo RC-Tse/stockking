@@ -89,11 +89,11 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         <div className="space-y-4 mb-4">
           {/* 第一列 */}
           <div className="flex items-center">
-            <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/2 text-left px-1" />
+            <StatBox label="投入成本" value={fmtMoney(totalCost)} className="w-1/2 text-center px-1" />
             <StatBox 
               label="目前市值" 
               value={fmtMoney(totalMV)} 
-              className="w-1/2 text-right px-1" 
+              className="w-1/2 text-center px-1" 
               upDown={totalMV > totalCost ? 1 : totalMV < totalCost ? -1 : 0}
             />
           </div>
@@ -102,13 +102,13 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             <StatBox 
               label="總損益金額" 
               value={`${totalPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(totalPnl))}`} 
-              className="w-1/2 text-left px-1"
+              className="w-1/2 text-center px-1"
               upDown={totalPnl}
             />
             <StatBox
               label="總損益比"
               value={`${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%`}
-              className="w-1/2 text-right px-1"
+              className="w-1/2 text-center px-1"
               upDown={totalPnl}
             />
           </div>
