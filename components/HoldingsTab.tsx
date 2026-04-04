@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect } from 'react'
 import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax } from '@/types'
+import DatePicker from './DatePicker'
 
 interface Props {
   holdings: Holding[]
@@ -375,27 +376,34 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
 function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSettings; onUpdated: () => void }) {
   const [isEditing, setIsEditing] = useState(false)
   const [loading, setLoading] = useState(false)
+  
+  // Form states
   const [date, setDate] = useState(t.trade_date)
-  const [shares, setShares] = useState(t.shares)
-  const [price, setPrice] = useState(t.price)
+  const [shares, setShares] = useState<number | ''>(t.shares)
+  const [price, setPrice] = useState<number | ''>(t.price)
   const [note, setNote] = useState(t.note || '')
   const [tradeType, setTradeType] = useState(t.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
-  const [lots, setLots] = useState(Math.floor(t.shares / 1000) || 1)
+  const [lots, setLots]     = useState<number | ''>(Math.floor(t.shares / 1000) || 1)
   
   const isBuy = t.action === 'BUY' || t.action === 'DCA'
-  const actualShares = tradeType === 'FULL' ? lots * 1000 : shares
-  const amount = actualShares * price
+  const actualShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
+  const safePrice = Number(price) || 0
+  const amount = actualShares * safePrice
   const fee    = calcFee(amount, settings, t.action === 'SELL')
   const tax    = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
   const net    = isBuy ? -(amount + fee) : (amount - fee - tax)
 
+  // Validation
+  const hasChanged = date !== t.trade_date || actualShares !== t.shares || safePrice !== t.price || note !== (t.note || '')
+  const isValid = actualShares > 0 && safePrice > 0 && hasChanged
+
   async function handleSave() {
-    if (actualShares <= 0 || price <= 0) return
+    if (!isValid) return
     setLoading(true)
     await fetch('/api/transactions', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: t.id, trade_date: date, shares: actualShares, price, note })
+      body: JSON.stringify({ id: t.id, trade_date: date, shares: actualShares, price: safePrice, note })
     })
     setIsEditing(false)
     setLoading(false)
@@ -419,51 +427,77 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
       <div className="p-4 rounded-xl bg-black/60 border-2 border-gold/40 space-y-5 my-2 slide-up">
         <div className="flex flex-col items-center">
           <Label>交易日期</Label>
-          <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base text-center w-full py-2 text-sm" style={{ colorScheme: 'dark' }} />
+          <DatePicker value={date} onChange={setDate} />
         </div>
 
-        <div className="grid grid-cols-3 gap-2">
-          <div>
-            <Label>方式</Label>
-            <button onClick={() => setTradeType(prev => prev === 'FULL' ? 'FRACTIONAL' : 'FULL')} className={`w-full h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FULL' ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>{tradeType === 'FULL' ? '整張' : '零股'}</button>
+        <div className="space-y-2">
+          <Label>交易方式</Label>
+          <div className="flex gap-2">
+            <button onClick={() => setTradeType('FULL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FULL' ? 'bg-gold text-[#0d1018] border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>整張 (1000股)</button>
+            <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FRACTIONAL' ? 'bg-gold text-[#0d1018] border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>零股</button>
           </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
           <div>
             <Label>{tradeType === 'FULL' ? '張數' : '股數'}</Label>
-            <input type="number" inputMode="numeric" pattern="[0-9]*" value={tradeType === 'FULL' ? lots : shares} onChange={e => { const v = Math.max(1, parseInt(e.target.value) || 0); tradeType === 'FULL' ? setLots(v) : setShares(v) }} className="w-full input-base text-center h-10 font-mono text-sm" />
+            <input 
+              type="number" inputMode="numeric" 
+              value={tradeType === 'FULL' ? lots : shares} 
+              onFocus={(e) => {
+                if (tradeType === 'FULL') setLots('')
+                else setShares('')
+              }}
+              onChange={e => { 
+                const v = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
+                if (tradeType === 'FULL') setLots(v)
+                else setShares(v)
+              }} 
+              className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" 
+            />
+            {tradeType === 'FULL' && lots !== '' && (
+              <div className="text-[10px] text-center mt-1 text-white/30 font-bold">= {(Number(lots)*1000).toLocaleString()} 股</div>
+            )}
           </div>
           <div>
             <Label>成交價</Label>
-            <input type="number" inputMode="decimal" pattern="[0-9.]*" step="0.01" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full input-base text-center h-10 font-mono text-sm" />
+            <input 
+              type="number" inputMode="decimal" step="0.01" 
+              value={price} 
+              onFocus={() => setPrice('')}
+              onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} 
+              className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" 
+            />
           </div>
         </div>
 
         <div>
           <Label>備註</Label>
-          <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-2.5 px-3 text-sm" placeholder="點此輸入備註..." />
+          <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-3 px-4 text-sm bg-white/5 border-white/10" placeholder="點此輸入備註..." />
         </div>
 
-        <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10">
-          <div className="flex justify-between text-xs">
+        <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 text-xs font-bold">
+          <div className="flex justify-between">
             <span className="opacity-40">手續費</span>
-            <span className="font-mono font-bold text-white">{fmtMoney(Math.round(fee))}</span>
+            <span className="font-mono text-white">{fmtMoney(Math.round(fee))}</span>
           </div>
-          {tax > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="opacity-40">交易稅</span>
-              <span className="font-mono font-bold text-white">{fmtMoney(Math.round(tax))}</span>
-            </div>
-          )}
           <div className="flex justify-between items-center pt-2 border-t border-white/5">
-            <span className="text-xs font-black opacity-60">預估淨收支</span>
+            <span className="opacity-60 uppercase text-[10px]">預估淨收支</span>
             <span className={`text-lg font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
               {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
             </span>
           </div>
         </div>
 
-        <div className="flex gap-3 pt-1">
-          <button onClick={() => setIsEditing(false)} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 text-white/60 border border-white/10 active:scale-95 transition-transform">取消</button>
-          <button onClick={handleSave} disabled={loading} className="flex-2 py-3 rounded-xl font-black text-sm bg-gold text-[#0d1018] active:scale-95 transition-transform">{loading ? '儲存中...' : '儲存修改'}</button>
+        <div className="flex gap-2 pt-1">
+          <button onClick={() => setIsEditing(false)} className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all">取消</button>
+          <button 
+            onClick={handleSave} 
+            disabled={!isValid || loading} 
+            className={`w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95 ${isValid ? 'bg-gold text-[#0d1018]' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}
+          >
+            {loading ? '儲存中...' : '儲存修改'}
+          </button>
         </div>
       </div>
     )

@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax, DCAPlan } from '@/types'
+import DatePicker from './DatePicker'
 
 interface Props {
   txs: Transaction[]
@@ -442,26 +443,31 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
   tx: Transaction; settings: UserSettings; onCancel: () => void; onSaved: () => void 
 }) {
   const [date, setDate]     = useState(tx.trade_date)
-  const [shares, setShares] = useState(tx.shares)
-  const [price, setPrice]   = useState(tx.price)
+  const [shares, setShares] = useState<number | ''>(tx.shares)
+  const [price, setPrice]   = useState<number | ''>(tx.price)
   const [note, setNote]     = useState(tx.note || '')
   const [saving, setSaving] = useState(false)
   const [tradeType, setTradeType] = useState(tx.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
-  const [lots, setLots]     = useState(Math.floor(tx.shares / 1000) || 1)
+  const [lots, setLots]     = useState<number | ''>(Math.floor(tx.shares / 1000) || 1)
 
-  const actualShares = tradeType === 'FULL' ? lots * 1000 : shares
-  const amount = actualShares * price
+  const actualShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
+  const safePrice = Number(price) || 0
+  const amount = actualShares * safePrice
   const fee    = calcFee(amount, settings, tx.action === 'SELL')
   const tax    = tx.action === 'SELL' ? calcTax(amount, tx.symbol, settings) : 0
   const net    = (tx.action === 'BUY' || tx.action === 'DCA') ? -(amount + fee) : (amount - fee - tax)
 
+  // Validation
+  const hasChanged = date !== tx.trade_date || actualShares !== tx.shares || safePrice !== tx.price || note !== (tx.note || '')
+  const isValid = actualShares > 0 && safePrice > 0 && hasChanged
+
   async function handleSave() {
-    if (actualShares <= 0 || price <= 0) return
+    if (!isValid) return
     setSaving(true)
     const r = await fetch('/api/transactions', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: tx.id, trade_date: date, shares: actualShares, price, note })
+      body: JSON.stringify({ id: tx.id, trade_date: date, shares: actualShares, price: safePrice, note })
     })
     if (r.ok) onSaved()
     setSaving(false)
@@ -478,51 +484,83 @@ function EditForm({ tx, settings, onCancel, onSaved }: {
 
       <div className="flex flex-col items-center">
         <Label>交易日期</Label>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} className="input-base text-center w-full py-2 text-sm" style={{ colorScheme: 'dark', width: '100%', maxWidth: '100%' }} />
+        <DatePicker value={date} onChange={setDate} />
       </div>
 
-      <div className="grid grid-cols-3 gap-2">
-        <div>
-          <Label>方式</Label>
-          <button onClick={() => setTradeType(prev => prev === 'FULL' ? 'FRACTIONAL' : 'FULL')} className={`w-full h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FULL' ? 'bg-gold-dim text-gold border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>{tradeType === 'FULL' ? '整張' : '零股'}</button>
+      <div className="space-y-2">
+        <Label>交易方式</Label>
+        <div className="flex gap-2">
+          <button onClick={() => setTradeType('FULL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FULL' ? 'bg-gold text-[#0d1018] border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>整張 (1000股)</button>
+          <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FRACTIONAL' ? 'bg-gold text-[#0d1018] border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>零股</button>
         </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
         <div>
           <Label>{tradeType === 'FULL' ? '張數' : '股數'}</Label>
-          <input type="number" inputMode="numeric" pattern="[0-9]*" value={tradeType === 'FULL' ? lots : shares} onChange={e => { const v = Math.max(1, parseInt(e.target.value) || 0); tradeType === 'FULL' ? setLots(v) : setShares(v) }} className="w-full input-base text-center h-10 font-mono text-sm" />
+          <input 
+            type="number" inputMode="numeric" 
+            value={tradeType === 'FULL' ? lots : shares} 
+            onFocus={() => {
+              if (tradeType === 'FULL') setLots('')
+              else setShares('')
+            }}
+            onChange={e => { 
+              const v = e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0)
+              if (tradeType === 'FULL') setLots(v)
+              else setShares(v)
+            }} 
+            className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" 
+          />
+          {tradeType === 'FULL' && lots !== '' && (
+            <div className="text-[10px] text-center mt-1 text-white/30 font-bold">= {(Number(lots)*1000).toLocaleString()} 股</div>
+          )}
         </div>
         <div>
           <Label>成交價</Label>
-          <input type="number" inputMode="decimal" pattern="[0-9.]*" step="0.01" value={price} onChange={e => setPrice(Number(e.target.value))} className="w-full input-base text-center h-10 font-mono text-sm" />
+          <input 
+            type="number" inputMode="decimal" step="0.01" 
+            value={price} 
+            onFocus={() => setPrice('')}
+            onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} 
+            className="w-full input-base text-center h-12 font-black font-mono text-lg bg-white/5 border-white/10" 
+          />
         </div>
       </div>
 
       <div>
         <Label>備註</Label>
-        <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-2.5 px-3 text-sm" placeholder="點此輸入備註..." />
+        <input value={note} onChange={e => setNote(e.target.value)} className="w-full input-base py-3 px-4 text-sm bg-white/5 border-white/10" placeholder="點此輸入備註..." />
       </div>
 
-      <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10">
-        <div className="flex justify-between text-xs">
+      <div className="rounded-xl p-3 space-y-2 bg-white/5 border border-white/10 text-xs font-bold">
+        <div className="flex justify-between">
           <span className="opacity-40">手續費</span>
-          <span className="font-mono font-bold text-white">{fmtMoney(Math.round(fee))}</span>
+          <span className="font-mono text-white">{fmtMoney(Math.round(fee))}</span>
         </div>
         {tax > 0 && (
-          <div className="flex justify-between text-xs">
+          <div className="flex justify-between">
             <span className="opacity-40">交易稅</span>
-            <span className="font-mono font-bold text-white">{fmtMoney(Math.round(tax))}</span>
+            <span className="font-mono text-white">{fmtMoney(Math.round(tax))}</span>
           </div>
         )}
         <div className="flex justify-between items-center pt-2 border-t border-white/5">
-          <span className="text-xs font-black opacity-60">預估淨收支</span>
+          <span className="opacity-60 uppercase text-[10px]">預估淨收支</span>
           <span className={`text-lg font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
             {net >= 0 ? '+' : ''}{fmtMoney(Math.round(net))}
           </span>
         </div>
       </div>
 
-      <div className="flex gap-3 pt-1">
-        <button onClick={onCancel} className="flex-1 py-3 rounded-xl font-bold text-sm bg-white/5 text-white/60 border border-white/10 active:scale-95 transition-transform">取消</button>
-        <button onClick={handleSave} disabled={saving} className="flex-2 py-3 rounded-xl font-black text-sm bg-gold text-[#0d1018] active:scale-95 transition-transform">{saving ? '儲存中...' : '儲存修改'}</button>
+      <div className="flex gap-2 pt-1">
+        <button onClick={onCancel} className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all">取消</button>
+        <button 
+          onClick={handleSave} 
+          disabled={!isValid || saving} 
+          className={`w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95 ${isValid ? 'bg-gold text-[#0d1018]' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}
+        >
+          {saving ? '儲存中...' : '儲存修改'}
+        </button>
       </div>
     </div>
   )
