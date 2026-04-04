@@ -9,202 +9,148 @@ interface Props {
   onSave: (s: UserSettings) => Promise<void>
 }
 
-type View = 'MAIN' | 'FEES' | 'GOALS' | 'UI'
+type View = 'MAIN' | 'CALC'
 
 export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
   const [view, setView] = useState<View>('MAIN')
-  const [form, setForm] = useState<UserSettings>({ ...settings })
+  const [localSettings, setLocalSettings] = useState(settings)
   const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
 
-  function set<K extends keyof UserSettings>(key: K, val: UserSettings[K]) {
-    setForm(prev => ({ ...prev, [key]: val }))
-    setSaved(false)
-  }
-
-  async function submit() {
+  const handleSave = async (updates: Partial<UserSettings>) => {
+    const next = { ...localSettings, ...updates }
+    setLocalSettings(next)
     setSaving(true)
-    try {
-      await onSave(form)
-      setSaved(true)
-      setTimeout(() => {
-        setSaved(false)
-        setView('MAIN')
-      }, 1000)
-    } catch (err) {
-      alert('儲存失敗，請檢查網路連線')
-    } finally {
-      setSaving(false)
-    }
+    await onSave(next)
+    setSaving(false)
   }
 
-  async function handleSignOut() {
-    if (confirm('確定要登出嗎？')) {
-      await onSignOut()
-    }
-  }
-
-  if (view === 'FEES') {
-    const effBuy  = form.buy_fee_rate  * form.buy_discount
-    const effSell = form.sell_fee_rate * form.sell_discount
-    return (
-      <div className="p-4 space-y-6 slide-in">
-        <button onClick={() => setView('MAIN')} className="text-xs text-gold flex items-center gap-1 font-black bg-gold/10 px-3 py-1.5 rounded-full active:scale-95 transition-all">
-          ‹ 返回設定
-        </button>
-        <h2 className="text-2xl font-black text-white px-1">手續費設定</h2>
-        
-        <div className="space-y-4">
-          <Section title="🏦 券商設定">
-            <Field label="券商名稱">
-              <input value={form.broker_name} onChange={e => set('broker_name', e.target.value)} className="input-base font-bold" />
-            </Field>
-            <Field label="最低手續費（元）">
-              <input type="number" inputMode="numeric" pattern="[0-9]*" value={form.fee_min} min={1} onChange={e => set('fee_min', Number(e.target.value))} className="input-base font-black font-mono" />
-            </Field>
-          </Section>
-
-          <Section title="📈 買入手續費">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="基礎費率">
-                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.buy_fee_rate} step="0.000001" onChange={e => set('buy_fee_rate', Number(e.target.value))} className="input-base font-black font-mono" />
-              </Field>
-              <Field label="折扣">
-                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.buy_discount} step="0.01" min="0.01" max="1" onChange={e => set('buy_discount', Number(e.target.value))} className="input-base font-black font-mono" />
-              </Field>
-            </div>
-            <Rate label="實際買入費率" value={effBuy} />
-          </Section>
-
-          <Section title="📉 賣出手續費">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="基礎費率">
-                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.sell_fee_rate} step="0.000001" onChange={e => set('sell_fee_rate', Number(e.target.value))} className="input-base font-black font-mono" />
-              </Field>
-              <Field label="折扣">
-                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.sell_discount} step="0.01" min="0.01" max="1" onChange={e => set('sell_discount', Number(e.target.value))} className="input-base font-black font-mono" />
-              </Field>
-            </div>
-            <Rate label="實際賣出費率" value={effSell} />
-          </Section>
-
-          <Section title="💰 交易稅">
-            <div className="grid grid-cols-2 gap-3">
-              <Field label="股票交易稅">
-                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.tax_stock} step="0.0001" onChange={e => set('tax_stock', Number(e.target.value))} className="input-base font-black font-mono" />
-              </Field>
-              <Field label="ETF 交易稅">
-                <input type="number" inputMode="decimal" pattern="[0-9.]*" value={form.tax_etf} step="0.0001" onChange={e => set('tax_etf', Number(e.target.value))} className="input-base font-black font-mono" />
-              </Field>
-            </div>
-          </Section>
-        </div>
-
-        <button onClick={submit} disabled={saving} className="btn-primary w-full py-4 rounded-2xl font-black text-lg active:scale-95 transition-all">
-          {saving ? '處理中…' : saved ? '✅ 設定已更新' : '💾 儲存費率設定'}
-        </button>
-      </div>
-    )
-  }
-
-  if (view === 'GOALS') {
-    return (
-      <div className="p-4 space-y-6 slide-in">
-        <button onClick={() => setView('MAIN')} className="text-xs text-gold flex items-center gap-1 font-black bg-gold/10 px-3 py-1.5 rounded-full active:scale-95 transition-all">
-          ‹ 返回設定
-        </button>
-        <h2 className="text-2xl font-black text-white px-1">目標設定</h2>
-        
-        <div className="space-y-4">
-          <Section title="🎯 年度與總投資目標">
-            <Field label="年獲利目標（元）">
-              <input type="number" inputMode="numeric" pattern="[0-9]*" value={form.year_goal || ''} onChange={e => set('year_goal', Number(e.target.value))} className="input-base font-black font-mono text-xl py-4" placeholder="例如：100000" />
-              <p className="text-[10px] mt-2 text-white/20 font-bold tracking-wider">用於計算持股頁面的「今年損益達成率」</p>
-            </Field>
-            <Field label="總市值目標（元）">
-              <input type="number" inputMode="numeric" pattern="[0-9]*" value={form.total_goal || ''} onChange={e => set('total_goal', Number(e.target.value))} className="input-base font-black font-mono text-xl py-4" placeholder="例如：10000000" />
-              <p className="text-[10px] mt-2 text-white/20 font-bold tracking-wider">用於計算持股頁面的「資產總目標達成率」</p>
-            </Field>
-          </Section>
-        </div>
-
-        <button onClick={submit} disabled={saving} className="btn-primary w-full py-4 rounded-2xl font-black text-lg active:scale-95 transition-all">
-          {saving ? '處理中…' : saved ? '✅ 目標已更新' : '💾 儲存目標設定'}
-        </button>
-      </div>
-    )
-  }
-
-  // MAIN VIEW
   return (
-    <div className="p-4 space-y-4 pb-32">
-      <h2 className="text-3xl font-black text-white px-1 mb-8">設定</h2>
-      
-      <div className="space-y-3">
-        <ListItem icon="💰" title="手續費設定" subtitle="券商費率、折扣與交易稅" onClick={() => setView('FEES')} />
-        <ListItem icon="🎯" title="目標設定" subtitle="自訂年度獲利與總市值目標" onClick={() => setView('GOALS')} />
-        <ListItem icon="🎨" title="介面設定" subtitle="自訂應用程式視覺效果" onClick={() => setView('UI')} />
-      </div>
-      
-      <div className="pt-8">
-        <button onClick={handleSignOut} className="w-full flex items-center justify-between p-5 glass rounded-2xl border border-red-400/10 active:scale-95 transition-all text-left bg-red-400/[0.02]">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl bg-red-400/10">👋</div>
-            <div>
-              <div className="font-black text-red-400 text-lg">登出帳號</div>
-              <div className="text-red-400/40 text-[10px] font-bold tracking-widest uppercase">Sign out of account</div>
+    <div className="p-4 space-y-6 pb-32">
+      {view === 'MAIN' && (
+        <>
+          <section className="space-y-4">
+            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em] px-1">目標設定</h3>
+            <div className="glass p-5 space-y-6 border border-white/5">
+              <div className="space-y-2">
+                <Label>年度損益目標 (TWD)</Label>
+                <input 
+                  type="number" inputMode="numeric"
+                  value={localSettings.year_goal || ''} 
+                  onChange={e => handleSave({ year_goal: Number(e.target.value) })}
+                  className="input-base text-lg md:text-sm font-black font-mono"
+                  placeholder="例如: 100000"
+                />
+                <p className="text-[14px] md:text-[12px] text-white/20 font-medium leading-relaxed">
+                  設定您今年的投資獲利目標，包含已實現與未實現損益。
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label>總資產市值目標 (TWD)</Label>
+                <input 
+                  type="number" inputMode="numeric"
+                  value={localSettings.total_goal || ''} 
+                  onChange={e => handleSave({ total_goal: Number(e.target.value) })}
+                  className="input-base text-lg md:text-sm font-black font-mono"
+                  placeholder="例如: 1000000"
+                />
+                <p className="text-[14px] md:text-[12px] text-white/20 font-medium leading-relaxed">
+                  設定您長期的總資產市值目標。
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <section className="space-y-4">
+            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em] px-1">交易手續費</h3>
+            <div className="glass p-5 border border-white/5 space-y-4">
+              <button 
+                onClick={() => setView('CALC')}
+                className="w-full flex items-center justify-between group py-1"
+              >
+                <div className="text-left">
+                  <div className="text-[15px] md:text-[13px] font-black text-white group-active:text-gold transition-colors">調整計算參數</div>
+                  <div className="text-[14px] md:text-[12px] text-white/20 mt-1">目前折數: {(localSettings.buy_discount * 10).toFixed(1)} 折 / {(localSettings.sell_discount * 10).toFixed(1)} 折</div>
+                </div>
+                <span className="text-gold opacity-40 group-active:opacity-100 transition-opacity">❯</span>
+              </button>
+            </div>
+          </section>
+
+          <section className="pt-4">
+            <button 
+              onClick={onSignOut}
+              className="w-full py-4 rounded-2xl font-black text-[15px] text-red-400 bg-red-400/5 border border-red-400/10 active:bg-red-400/10 active:scale-[0.98] transition-all"
+            >
+              登出帳號
+            </button>
+            <p className="text-center text-[13px] md:text-[11px] text-white/10 mt-6 font-mono tracking-tighter">
+              STOCK KING v0.1.0 · PWA READY
+            </p>
+          </section>
+        </>
+      )}
+
+      {view === 'CALC' && (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center gap-4 px-1">
+            <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-gold active:bg-white/10 transition-colors">❮</button>
+            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em]">計算參數詳情</h3>
+          </div>
+
+          <div className="glass p-5 space-y-8 border border-white/5">
+            <div className="space-y-6">
+              <h4 className="text-[11px] font-black text-gold/50 uppercase tracking-widest border-b border-gold/10 pb-2">買入手續費</h4>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>費率</Label>
+                  <input type="number" step="0.000001" value={localSettings.buy_fee_rate} onChange={e => handleSave({ buy_fee_rate: Number(e.target.value) })} className="input-base font-mono text-lg md:text-sm" />
+                </div>
+                <div className="space-y-2">
+                  <Label>折數 (0.1 = 1折)</Label>
+                  <input type="number" step="0.05" value={localSettings.buy_discount} onChange={e => handleSave({ buy_discount: Number(e.target.value) })} className="input-base font-mono text-lg md:text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-6">
+              <h4 className="text-[11px] font-black text-gold/50 uppercase tracking-widest border-b border-gold/10 pb-2">賣出手續費 & 稅</h4>
+              <div className="grid grid-cols-2 gap-6">
+                <div className="space-y-2">
+                  <Label>費率</Label>
+                  <input type="number" step="0.000001" value={localSettings.sell_fee_rate} onChange={e => handleSave({ sell_fee_rate: Number(e.target.value) })} className="input-base font-mono text-lg md:text-sm" />
+                </div>
+                <div className="space-y-2">
+                  <Label>折數</Label>
+                  <input type="number" step="0.05" value={localSettings.sell_discount} onChange={e => handleSave({ sell_discount: Number(e.target.value) })} className="input-base font-mono text-lg md:text-sm" />
+                </div>
+                <div className="space-y-2">
+                  <Label>股票交易稅</Label>
+                  <input type="number" step="0.001" value={localSettings.tax_stock} onChange={e => handleSave({ tax_stock: Number(e.target.value) })} className="input-base font-mono text-lg md:text-sm" />
+                </div>
+                <div className="space-y-2">
+                  <Label>ETF 交易稅</Label>
+                  <input type="number" step="0.001" value={localSettings.tax_etf} onChange={e => handleSave({ tax_etf: Number(e.target.value) })} className="input-base font-mono text-lg md:text-sm" />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-2 pt-2">
+              <Label>最低收費 (TWD)</Label>
+              <input type="number" value={localSettings.fee_min} onChange={e => handleSave({ fee_min: Number(e.target.value) })} className="input-base font-mono text-lg md:text-sm" />
             </div>
           </div>
-          <div className="text-red-400/20 text-xl">›</div>
-        </button>
-      </div>
-    </div>
-  )
-}
-
-function ListItem({ icon, title, subtitle, onClick }: { icon: string; title: string; subtitle: string; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="w-full flex items-center justify-between p-5 glass rounded-2xl border border-white/5 active:scale-95 transition-all text-left group hover:border-white/10">
-      <div className="flex items-center gap-4">
-        <div className="w-12 h-12 rounded-2xl flex items-center justify-center text-2xl bg-white/5 group-hover:bg-white/10 transition-colors">
-          {icon}
+          
+          <div className="p-4 bg-gold/5 border border-gold/10 rounded-2xl">
+            <p className="text-[14px] md:text-[12px] text-gold/60 leading-relaxed font-medium">
+              💡 提示：台灣證券商規定的標準費率為 0.001425。若您的券商提供 2.8 折優惠，請在折數欄位輸入 0.285。
+            </p>
+          </div>
         </div>
-        <div>
-          <div className="font-black text-white text-lg tracking-tight">{title}</div>
-          <div className="text-white/30 text-[10px] font-bold tracking-wide">{subtitle}</div>
-        </div>
-      </div>
-      <div className="text-white/10 group-hover:text-gold/40 text-xl transition-colors">›</div>
-    </button>
-  )
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <div className="glass rounded-[2rem] p-6 space-y-5 border border-white/5 bg-white/[0.02]">
-      <h3 className="font-black text-xs text-gold uppercase tracking-[0.3em] ml-1 opacity-80">{title}</h3>
-      <div className="space-y-4">{children}</div>
+      )}
     </div>
   )
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="space-y-1.5">
-      <label className="text-[10px] font-black text-white/30 uppercase tracking-[0.15em] ml-1">{label}</label>
-      {children}
-    </div>
-  )
-}
-
-function Rate({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="text-[10px] px-4 py-3 rounded-xl font-black bg-white/5 border border-white/5 flex justify-between items-center">
-      <span className="text-white/30 uppercase tracking-widest">{label}</span>
-      <div className="flex items-center gap-2">
-        <span className="text-gold">{(value * 100).toFixed(5)}%</span>
-        <span className="text-white/10 text-[8px] font-bold">({(1 / 0.001425 * value).toFixed(2)} 折)</span>
-      </div>
-    </div>
-  )
+function Label({ children }: { children: React.ReactNode }) {
+  return <label className="text-[15px] md:text-[13px] mb-1.5 block font-black text-white/40 uppercase tracking-wider ml-1">{children}</label>
 }

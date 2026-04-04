@@ -135,14 +135,14 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
         <div className="flex-1 flex bg-white/[0.03] p-1 rounded-xl border border-white/5">
           <button 
             onClick={() => setTab('SELF')}
-            className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'SELF' ? 'text-white bg-white/5' : 'text-white/30'}`}
+            className={`flex-1 py-2.5 text-base md:text-xs font-black rounded-lg transition-all relative ${tab === 'SELF' ? 'text-white bg-white/5' : 'text-white/30'}`}
           >
             自行交易
             {tab === 'SELF' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
           </button>
           <button 
             onClick={() => setTab('DCA')}
-            className={`flex-1 py-2.5 text-xs font-black rounded-lg transition-all relative ${tab === 'DCA' ? 'text-white bg-white/5' : 'text-white/30'}`}
+            className={`flex-1 py-2.5 text-base md:text-xs font-black rounded-lg transition-all relative ${tab === 'DCA' ? 'text-white bg-white/5' : 'text-white/30'}`}
           >
             定期定額
             {tab === 'DCA' && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-white rounded-full" />}
@@ -163,7 +163,7 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
             value={filter}
             onChange={e => setFilter(e.target.value)}
             placeholder="搜尋代號、名稱或備註…"
-            className="input-base"
+            className="input-base text-base md:text-sm"
           />
 
           {sortedYears.length === 0 ? (
@@ -183,7 +183,7 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
                     className="w-full flex items-center gap-2 px-1 py-2 group"
                   >
                     <span className={`text-xs transition-transform duration-200 ${expandedYears[year] ? 'rotate-90' : ''}`} style={{ color: 'var(--gold)' }}>▶</span>
-                    <span className="font-black text-lg text-white group-active:opacity-60">{year}年</span>
+                    <span className="font-black text-xl md:text-lg text-white group-active:opacity-60">{year}年</span>
                     <div className="h-[1px] flex-1 bg-white/5" />
                   </button>
 
@@ -203,11 +203,11 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
                                 className="w-full flex items-center justify-between p-3 rounded-xl bg-white/5 border border-white/5 active:bg-white/10 transition-colors"
                               >
                                 <div className="flex items-center gap-2">
-                                  <span className="font-bold text-sm text-white/80">{month}月</span>
+                                  <span className="font-bold text-lg md:text-sm text-white/80">{month}月</span>
                                   <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-white/5 text-white/40">{data.txs.length}筆</span>
                                 </div>
                                 <div className="flex items-center gap-3">
-                                  <span className={`font-mono text-xs font-bold ${data.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                  <span className={`font-mono text-base md:text-xs font-bold ${data.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                                     {data.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(data.pnl))}
                                   </span>
                                   <span className={`text-[10px] transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} style={{ color: 'var(--t3)' }}>▼</span>
@@ -257,10 +257,10 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
                   <div key={plan.id} className="glass p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-4">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-black text-white">{getStockName(plan.symbol, plan.name_zh)}</span>
+                        <span className="font-black text-lg md:text-base text-white">{getStockName(plan.symbol, plan.name_zh)}</span>
                         <span className="text-[10px] font-mono text-white/30">{codeOnly(plan.symbol)}</span>
                       </div>
-                      <div className="text-[11px] font-bold text-white/40">
+                      <div className="text-sm md:text-[11px] font-bold text-white/40">
                         每次 {fmtMoney(plan.amount)} 元 · 每月 {plan.days_of_month.join('、')} 日
                       </div>
                     </div>
@@ -287,7 +287,7 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
                   <div key={year} className="space-y-2">
                     <button onClick={() => toggleYear(year)} className="w-full flex items-center gap-2 px-1 py-1 group">
                       <span className={`text-[10px] transition-transform ${expandedYears[year] ? 'rotate-90' : ''}`} style={{ color: 'var(--gold)' }}>▶</span>
-                      <span className="font-black text-sm text-white/60">{year}年</span>
+                      <span className="font-black text-base text-white/60">{year}年</span>
                       <div className="h-[1px] flex-1 bg-white/5" />
                     </button>
                     {expandedYears[year] && (
@@ -298,7 +298,7 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
                           return (
                             <div key={month} className="space-y-2">
                               <button onClick={() => toggleMonth(year, month)} className="w-full flex items-center justify-between p-3 rounded-xl bg-white/[0.02] border border-white/5">
-                                <span className="font-bold text-xs text-white/40">{month}月 ({data.txs.length}筆)</span>
+                                <span className="font-bold text-sm md:text-xs text-white/40">{month}月 ({data.txs.length}筆)</span>
                                 <span className={`text-[10px] transition-transform ${isExpanded ? 'rotate-180' : ''}`} style={{ color: 'var(--t3)' }}>▼</span>
                               </button>
                               {isExpanded && (
@@ -334,10 +334,10 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
                     <div key={plan.id} className="glass p-4 rounded-2xl border border-white/5 flex items-center justify-between gap-4 opacity-50">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <span className="font-black text-white">{getStockName(plan.symbol, plan.name_zh)}</span>
+                          <span className="font-black text-lg md:text-base text-white">{getStockName(plan.symbol, plan.name_zh)}</span>
                           <span className="text-[10px] font-mono text-white/30">{codeOnly(plan.symbol)}</span>
                         </div>
-                        <div className="text-[11px] font-bold text-white/40">
+                        <div className="text-sm md:text-[11px] font-bold text-white/40">
                           每次 {fmtMoney(plan.amount)} 元 · 每月 {plan.days_of_month.join('、')} 日
                         </div>
                       </div>
@@ -502,10 +502,10 @@ function TxRow({ tx, settings, deleting, onDelete, onUpdated }: {
         </div>
 
         {/* Date */}
-        <span className="text-[11px] flex-1 ml-1 text-white/30">{tx.trade_date.split('-').slice(1).join('/')}</span>
+        <span className="text-sm md:text-[11px] flex-1 ml-1 text-white/30">{tx.trade_date.split('-').slice(1).join('/')}</span>
 
         {/* Net amount */}
-        <span className={`font-bold font-mono text-sm shrink-0 ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+        <span className={`font-bold font-mono text-lg md:text-sm shrink-0 ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
           {tx.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(tx.net_amount))}
         </span>
 

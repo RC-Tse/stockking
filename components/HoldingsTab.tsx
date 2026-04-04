@@ -30,18 +30,16 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     let allTimeBuyTotal = 0
     let allTimeSellTotal = 0
     
-    // Map to store realized PnL attributed to buy years: { "2025": 100, "2026": -50 }
     const realizedByBuyYear: Record<string, number> = {}
-    // Map to store current inventory buy years: symbol -> Array<{ shares, unitCost, buyYear }>
     const inventory: Record<string, { shares: number, unitCost: number, buyYear: string }[]> = {}
     const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
 
-    const sortedTxs = [...transactions].sort((a, b) => {
+    const sorted = [...transactions].sort((a, b) => {
       if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
       return a.id - b.id
     })
 
-    for (const tx of sortedTxs) {
+    for (const tx of sorted) {
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
       if (!stockHistory[tx.symbol]) stockHistory[tx.symbol] = { buyCost: 0, sellRev: 0 }
       
@@ -63,14 +61,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         while (sellRemaining > 0 && inventory[tx.symbol].length > 0) {
           const lot = inventory[tx.symbol][0]
           const sharesFromLot = Math.min(lot.shares, sellRemaining)
-          
-          // Profit from this portion = (Sell Net Unit Price - Buy Unit Cost) * Shares
           const portionProfit = (sellUnitNet - lot.unitCost) * sharesFromLot
-          
-          // Attribute profit to the YEAR THIS LOT WAS BOUGHT
           realizedByBuyYear[lot.buyYear] = (realizedByBuyYear[lot.buyYear] || 0) + portionProfit
           totalRealized += portionProfit
-
           sellRemaining -= sharesFromLot
           lot.shares -= sharesFromLot
           if (lot.shares <= 0) inventory[tx.symbol].shift()
@@ -78,9 +71,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       }
     }
 
-    // Now calculate Unrealized PnL for currently held lots and attribute to buy years
     const unrealizedByBuyYear: Record<string, number> = {}
-    const buyYearCostBasis: Record<string, number> = {} // For calculating achievement %
+    const buyYearCostBasis: Record<string, number> = {}
 
     Object.keys(inventory).forEach(sym => {
       const currentPrice = quotes[sym]?.price || 0
@@ -91,7 +83,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       })
     })
 
-    // Closed positions logic (unchanged)
     const closedHoldings = Object.entries(stockHistory)
       .filter(([sym]) => (inventory[sym]?.length || 0) === 0)
       .map(([sym, data]) => ({
@@ -103,7 +94,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       }))
       .sort((a, b) => b.pnl - a.pnl)
 
-    // Year PnL = (Realized where BuyYear=ThisYear) + (Unrealized where BuyYear=ThisYear)
     const yearPnl = (realizedByBuyYear[currentYear] || 0) + (unrealizedByBuyYear[currentYear] || 0)
 
     return { 
@@ -117,7 +107,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   }, [transactions, currentYear, quotes])
 
   const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
-  const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0) // 目前持有股票的買入成本
+  const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
   
   const unrealizedPnl = currentMV - currentCost
   const unrealizedPct = currentCost ? (unrealizedPnl / currentCost) * 100 : 0
@@ -136,7 +126,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       {/* 1. 持股概覽卡片 */}
       <div className="glass rounded-2xl p-4 md:p-5 relative overflow-hidden border border-white/10">
         <div className="flex items-center justify-between mb-4">
-          <span className="text-xs font-black opacity-30 uppercase tracking-widest">
+          <span className="text-base md:text-sm font-black opacity-30 uppercase tracking-widest">
             持股概覽 · {holdings.length} 檔
           </span>
           <button onClick={() => window.location.reload()}
@@ -148,12 +138,13 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         <div className="space-y-5 mb-6">
           {/* 第一列：持有成本、目前市值 */}
           <div className="flex items-center">
-            <StatBox label="持有成本" value={fmtMoney(currentCost)} className="w-1/2 text-center px-1" />
+            <StatBox label="持有成本" value={fmtMoney(currentCost)} className="w-1/2 text-center px-1" isMain={true} />
             <StatBox 
               label="目前市值" 
               value={fmtMoney(currentMV)} 
               className="w-1/2 text-center px-1" 
               upDown={currentMV > currentCost ? 1 : currentMV < currentCost ? -1 : 0}
+              isMain={true}
             />
           </div>
           {/* 第二列：未實現損益、未實現損益比 */}
@@ -163,12 +154,14 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               value={`${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}`} 
               className="w-1/2 text-center px-1"
               upDown={unrealizedPnl}
+              isRow2={true}
             />
             <StatBox
               label="未實現損益比"
               value={`${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%`}
               className="w-1/2 text-center px-1"
               upDown={unrealizedPnl}
+              isRow2={true}
             />
           </div>
           {/* 第三列：已實現損益、總損益 */}
@@ -178,19 +171,20 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               value={`${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}`} 
               className="w-1/2 text-center px-1 border-r border-white/5"
               upDown={totalRealized}
+              isRow2={true}
             />
             <div className="w-1/2 flex flex-col items-center px-1">
-              <div className="text-[10px] mb-1 opacity-40 font-bold uppercase tracking-tighter">總損益</div>
-              <div className={`font-black font-mono text-xs md:text-sm leading-tight ${totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+              <div className="text-sm md:text-[10px] mb-1 opacity-40 font-bold uppercase tracking-tighter">總損益</div>
+              <div className={`font-black font-mono text-xl md:text-sm leading-tight ${totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(totalPnl))}
-                <span className="ml-1 text-[10px] opacity-60">({totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)</span>
+                <span className="ml-1 text-[13px] md:text-[10px] opacity-60">({totalPnlPct >= 0 ? '+' : ''}{totalPnlPct.toFixed(2)}%)</span>
               </div>
             </div>
           </div>
         </div>
 
         <div className="text-center mb-4">
-          <p className="text-[9px] text-white/20 font-bold tracking-wider">
+          <p className="text-[13px] md:text-[9px] text-white/20 font-bold tracking-wider">
             註：已實現 = 已賣出配對損益，未實現 = 目前持股浮動損益
           </p>
         </div>
@@ -199,13 +193,13 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         <div className="pt-5 border-t border-white/10 space-y-5">
           <div className="space-y-2">
             <div className="flex justify-between items-end">
-              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">📈 年度目標</span>
+              <span className="text-[15px] md:text-[11px] font-black text-white/40 flex items-center gap-1.5">📈 年度目標</span>
               {settings.year_goal > 0 ? (
-                <span className={`text-[11px] font-black font-mono ${yearPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                <span className={`text-[15px] md:text-[11px] font-black font-mono ${yearPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {fmtMoney(Math.round(yearPnl))} / {yearAchieved?.toFixed(1)}%
                 </span>
               ) : (
-                <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</button>
+                <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[13px] md:text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</button>
               )}
             </div>
             {settings.year_goal > 0 && (
@@ -217,13 +211,13 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
           <div className="space-y-2">
             <div className="flex justify-between items-end">
-              <span className="text-[11px] font-black text-white/40 flex items-center gap-1.5">🏆 總目標</span>
+              <span className="text-[15px] md:text-[11px] font-black text-white/40 flex items-center gap-1.5">🏆 總目標</span>
               {settings.total_goal > 0 ? (
-                <span className="text-[11px] font-black font-mono text-gold">
+                <span className="text-[15px] md:text-[11px] font-black font-mono text-gold">
                   {fmtMoney(currentMV)} / {totalAchieved?.toFixed(1)}%
                 </span>
               ) : (
-                <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</button>
+                <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[13px] md:text-[10px] font-bold text-gold active:opacity-50">點此設定目標 →</button>
               )}
             </div>
             {settings.total_goal > 0 && (
@@ -259,7 +253,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             ))
         )}
 
-        {/* 📁 已結算股票 */}
+        {/* 已結算股票 */}
         {closedHoldings.length > 0 && (
           <div className="pt-4 mt-4 border-t border-white/5">
             <button 
@@ -267,7 +261,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               className="w-full flex items-center justify-between p-4 glass rounded-2xl border border-white/5 active:bg-white/5 transition-all"
             >
               <div className="flex items-center gap-2">
-                <span className="font-black text-sm text-white/60">已結算股票 ({closedHoldings.length}檔)</span>
+                <span className="font-black text-base md:text-sm text-white/60">已結算股票 ({closedHoldings.length}檔)</span>
               </div>
               <span className={`text-xs transition-transform duration-300 ${closedExpanded ? 'rotate-180' : ''}`}>▼</span>
             </button>
@@ -309,17 +303,17 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
         <div className="flex justify-between items-start mb-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-black text-white truncate">{name}（{codeOnly(c.symbol)}）</span>
+              <span className="font-black text-lg md:text-base text-white truncate">{name}（{codeOnly(c.symbol)}）</span>
             </div>
-            <div className="text-[10px] font-bold text-white/20 mt-0.5">
+            <div className="text-sm md:text-[10px] font-bold text-white/20 mt-0.5">
               成本 {fmtMoney(Math.round(c.buyCost))} · 收入 {fmtMoney(Math.round(c.sellRev))}
             </div>
           </div>
           <div className="text-right">
-            <div className={`font-black font-mono text-sm ${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+            <div className={`font-black font-mono text-lg md:text-sm ${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
               {c.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(c.pnl))}
             </div>
-            <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>
+            <div className={`text-sm md:text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>
               {c.pnlPct >= 0 ? '+' : ''}{c.pnlPct.toFixed(2)}%
             </div>
           </div>
@@ -484,13 +478,13 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
                 onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')}
                 className={`px-2 py-1 rounded transition-colors ${view === 'YEAR' ? 'bg-[#c9a564] text-[#0d1018]' : 'hover:bg-white/5'}`}
               >
-                {year}年
+                <span className="text-xl md:text-lg">{year}年</span>
               </button>
               <button 
                 onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')}
                 className={`px-2 py-1 rounded transition-colors ${view === 'MONTH' ? 'bg-[#c9a564] text-[#0d1018]' : 'hover:bg-white/5'}`}
               >
-                {month}月
+                <span className="text-xl md:text-lg">{month}月</span>
               </button>
             </div>
             <button 
@@ -503,14 +497,14 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
           {view === 'CALENDAR' && (
             <div className="grid grid-cols-2 gap-4 text-center">
               <div>
-                <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">本月總損益</div>
-                <div className={`text-sm font-black font-mono ${stats.totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                <div className="text-[13px] md:text-[10px] font-bold text-white/30 uppercase tracking-tighter">本月總損益</div>
+                <div className={`text-2xl md:text-sm font-black font-mono ${stats.totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
                 </div>
               </div>
               <div>
-                <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">損益百分比</div>
-                <div className={`text-sm font-black font-mono ${stats.totalPnlPct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                <div className="text-[13px] md:text-[10px] font-bold text-white/30 uppercase tracking-tighter">損益百分比</div>
+                <div className={`text-xl md:text-sm font-black font-mono ${stats.totalPnlPct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {stats.totalPnlPct >= 0 ? '+' : ''}{stats.totalPnlPct.toFixed(2)}%
                 </div>
               </div>
@@ -543,13 +537,13 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
                   onClick={() => toggleDate(dateStr)}
                   className={`aspect-[1/1] rounded flex flex-col items-center justify-between p-1 cursor-pointer transition-all border ${isSelected ? 'border-white ring-1 ring-white' : 'border-white/5'}`}
                   style={{ background: bgColor }}>
-                  <span className="text-[11px] font-black text-white/80 self-start leading-none">{d}</span>
+                  <span className="text-sm md:text-[11px] font-black text-white/80 self-start leading-none">{d}</span>
                   {entry && (
                     <div className="w-full text-center flex flex-col justify-end flex-1 space-y-0.5 pb-0.5">
-                      <div className="text-[8px] font-black text-white leading-none scale-90">
+                      <div className="text-[12px] md:text-[8px] font-black text-white leading-none scale-90">
                         {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
                       </div>
-                      <div className="text-[8px] font-bold text-white/60 leading-none scale-90">
+                      <div className="text-[12px] md:text-[8px] font-bold text-white/60 leading-none scale-90">
                         {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                       </div>
                     </div>
@@ -688,22 +682,22 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated }: {
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-black text-base text-white leading-tight">{q?.name_zh || h.symbol}</span>
-              <span className="font-mono px-1.5 py-0.5 rounded-md text-[10px] bg-white/5 text-white/40">{codeOnly(h.symbol)}</span>
-              <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-gold-dim text-gold">{h.shares >= 1000 ? `${(h.shares/1000).toFixed(h.shares%1000===0?0:2)}張` : `${h.shares}股`}</span>
+              <span className="font-black text-lg md:text-base text-white leading-tight">{q?.name_zh || h.symbol}</span>
+              <span className="font-mono px-1.5 py-0.5 rounded-md text-sm md:text-[10px] bg-white/5 text-white/40">{codeOnly(h.symbol)}</span>
+              <span className="text-sm md:text-[10px] font-mono px-2 py-0.5 rounded-full bg-gold-dim text-gold">{h.shares >= 1000 ? `${(h.shares/1000).toFixed(h.shares%1000===0?0:2)}張` : `${h.shares}股`}</span>
             </div>
-            <div className="text-[11px] mt-1 font-mono text-white/40">平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}</div>
+            <div className="text-sm md:text-[11px] mt-1 font-mono text-white/40">平均成本 {h.avg_cost.toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}</div>
           </div>
           <div className="text-right shrink-0">
-            <div className="font-black text-lg font-mono text-white leading-tight">{h.current_price > 0 ? h.current_price.toFixed(2) : '—'}</div>
+            <div className="font-black text-2xl md:text-lg font-mono text-white leading-tight">{h.current_price > 0 ? h.current_price.toFixed(2) : '—'}</div>
             {q && q.change !== undefined && (
-              <div className={`text-[11px] font-mono ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>{q.change >= 0 ? '+' : ''}{q.change.toFixed(2)} ({q.change_pct >= 0 ? '+' : ''}{q.change_pct.toFixed(2)}%)</div>
+              <div className={`text-sm md:text-[11px] font-mono ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>{q.change >= 0 ? '+' : ''}{q.change.toFixed(2)} ({q.change_pct >= 0 ? '+' : ''}{q.change_pct.toFixed(2)}%)</div>
             )}
           </div>
         </div>
         <div className="mt-2.5 flex items-center justify-between">
-          <span className={`font-bold font-mono text-sm ${color}`}>{isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)} 元</span>
-          <span className={`text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${dimBg} ${color}`}>{arrow} {Math.abs(h.pnl_pct).toFixed(2)}%</span>
+          <span className={`font-bold font-mono text-lg md:text-sm ${color}`}>{isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)} 元</span>
+          <span className={`text-sm md:text-[10px] font-mono px-2 py-0.5 rounded-full font-bold ${dimBg} ${color}`}>{arrow} {Math.abs(h.pnl_pct).toFixed(2)}%</span>
         </div>
       </div>
       {isExpanded && (
@@ -829,14 +823,17 @@ function shortMoney(v: number): string {
   return `${sign}${abs.toFixed(0)}`
 }
 
-function StatBox({ label, value, upDown, className = '', baseColor = false }: { 
-  label: string; value: string; upDown?: number; className?: string; baseColor?: boolean 
+function StatBox({ label, value, upDown, className = '', isMain = false, isRow2 = false }: { 
+  label: string; value: string; upDown?: number; className?: string; isMain?: boolean; isRow2?: boolean 
 }) {
   const col = upDown === undefined ? 'text-white' : upDown > 0 ? 'text-red-400' : upDown < 0 ? 'text-green-400' : 'text-white'
+  const labelSize = isMain || isRow2 ? 'text-sm md:text-[10px]' : 'text-[10px]'
+  const valueSize = isMain ? 'text-[22px] md:text-sm' : isRow2 ? 'text-xl md:text-sm' : 'text-xs md:text-sm'
+  
   return (
     <div className={`flex flex-col ${className}`}>
-      <div className="text-[10px] mb-1 opacity-40 font-bold uppercase tracking-tighter">{label}</div>
-      <div className={`font-black font-mono text-xs md:text-sm leading-tight ${col}`}>{value}</div>
+      <div className={`${labelSize} mb-1 opacity-40 font-bold uppercase tracking-tighter`}>{label}</div>
+      <div className={`font-black font-mono ${valueSize} leading-tight ${col}`}>{value}</div>
     </div>
   )
 }
