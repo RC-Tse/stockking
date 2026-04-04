@@ -95,11 +95,11 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       <div className="glass rounded-2xl p-4 md:p-5 relative overflow-hidden border border-white/10">
         <div className="flex items-center justify-between mb-4">
           <span className="text-xs font-black opacity-30 uppercase tracking-widest">
-            Portfolio Overview · {holdings.length} Positions
+            持股概覽 · {holdings.length} 檔
           </span>
-          <button onClick={onRefresh}
+          <button onClick={() => window.location.reload()}
             className="text-[10px] px-2 py-1 rounded-lg bg-white/5 text-white/40 border border-white/10 active:bg-white/10 font-bold transition-colors">
-            REFRESH
+            重整
           </button>
         </div>
 
@@ -500,15 +500,26 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
         <div className="animate-in fade-in slide-in-from-top-2">
           <div className="glass rounded-2xl p-4 border border-white/10 space-y-4">
             <div className="flex items-center justify-between border-b border-white/5 pb-2">
-              <h3 className="font-black text-sm text-white">
-                {selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項
-              </h3>
+              <div className="flex flex-col">
+                <h3 className="font-black text-sm text-white">
+                  {selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項
+                </h3>
+                {(() => {
+                  const entry = entries.find(e => e.entry_date === selectedDate)
+                  if (!entry) return null
+                  return (
+                    <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                      當天總損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({entry.pnl_pct && entry.pnl_pct >= 0 ? '+' : ''}{entry.pnl_pct?.toFixed(2)}%)
+                    </span>
+                  )
+                })()}
+              </div>
               {loadingDetails && <div className="text-[10px] text-gold animate-pulse font-bold">載入中...</div>}
             </div>
 
             {dayDetails ? (
               dayDetails.length === 0 ? (
-                <div className="text-center py-4 text-xs text-white/20 italic">當天無持股</div>
+                <div className="text-center py-4 text-xs text-white/20 italic border-b border-white/5 pb-4">當天無持股數據</div>
               ) : (
                 <div className="space-y-3">
                   {dayDetails.map(det => (
@@ -533,6 +544,53 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: {
                 </div>
               )
             ) : null}
+
+            {/* 當天交易紀錄 */}
+            {(() => {
+              const dayTxs = transactions.filter(t => t.trade_date === selectedDate)
+              if (dayTxs.length === 0) return null
+              return (
+                <>
+                  <div className="border-t border-white/5 pt-4">
+                    <h4 className="text-[11px] font-black text-white/30 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                      <span>📋 當天交易</span>
+                      <span className="h-[1px] flex-1 bg-white/5" />
+                    </h4>
+                    <div className="space-y-3">
+                      {dayTxs.map(tx => {
+                        const isBuy = tx.action === 'BUY' || tx.action === 'DCA'
+                        const label = tx.trade_type === 'DCA' ? '定期定額' : (tx.action === 'BUY' ? '買入' : '賣出')
+                        const labelCol = tx.trade_type === 'DCA' ? 'text-gold bg-gold/10 border-gold/20' : (isBuy ? 'text-red-400 bg-red-400/10 border-red-400/20' : 'text-green-400 bg-green-400/10 border-green-400/20')
+                        
+                        return (
+                          <div key={tx.id} className="flex items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border leading-none ${labelCol}`}>
+                                  {label}
+                                </span>
+                                <span className="text-xs font-black text-white truncate">
+                                  {tx.name_zh || getStockName(tx.symbol)}
+                                </span>
+                                <span className="text-[9px] font-mono text-white/20">{codeOnly(tx.symbol)}</span>
+                              </div>
+                              <div className="text-[10px] font-bold text-white/40">
+                                {tx.shares.toLocaleString()} 股 @ {Number(tx.price).toFixed(2)}
+                                <span className="mx-1.5 opacity-30">·</span>
+                                費+稅 {fmtMoney(tx.fee + tx.tax)}
+                              </div>
+                            </div>
+                            <div className={`text-xs font-black font-mono ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                              {tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                </>
+              )
+            })()}
           </div>
         </div>
       )}
