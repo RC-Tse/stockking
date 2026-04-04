@@ -17,22 +17,23 @@ interface Props {
 export default function HoldingsTab({ holdings, quotes, settings, transactions, calEntries, onRefresh, onRefreshCal }: Props) {
   const currentYear = new Date().getFullYear().toString()
 
-  // ── Calculate Unified PnL Metrics ──
+  // ── Calculate Unified PnL Metrics via FIFO with Buy-Year Attribution ──
   const { 
-    totalRealized, ytdRealized, eoyHeldCost, 
-    allTimeBuyTotal, allTimeSellTotal,
-    yearBuyTotal, yearSellTotal,
-    closedHoldings
+    totalRealized,
+    allTimeBuyTotal,
+    allTimeSellTotal,
+    closedHoldings,
+    yearPnl,
+    yearBuyCostBasis
   } = useMemo(() => {
     let totalRealized = 0
-    let ytdRealized = 0
-    
     let allTimeBuyTotal = 0
     let allTimeSellTotal = 0
-    let yearBuyTotal = 0
-    let yearSellTotal = 0
-
-    const inventory: Record<string, { shares: number, cost: number }[]> = {}
+    
+    // Map to store realized PnL attributed to buy years: { "2025": 100, "2026": -50 }
+    const realizedByBuyYear: Record<string, number> = {}
+    // Map to store current inventory buy years: symbol -> Array<{ shares, unitCost, buyYear }>
+    const inventory: Record<string, { shares: number, unitCost: number, buyYear: string }[]> = {}
     const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
 
     const sortedTxs = [...transactions].sort((a, b) => {
@@ -44,74 +45,55 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
       if (!stockHistory[tx.symbol]) stockHistory[tx.symbol] = { buyCost: 0, sellRev: 0 }
       
-      const lots = inventory[tx.symbol]
-      const isThisYear = tx.trade_date >= `${currentYear}-01-01`
+      const buyYear = tx.trade_date.split('-')[0]
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         const cost = tx.amount + tx.fee
-        lots.push({ shares: tx.shares, cost })
+        const unitCost = cost / tx.shares
+        inventory[tx.symbol].push({ shares: tx.shares, unitCost, buyYear })
         allTimeBuyTotal += cost
         stockHistory[tx.symbol].buyCost += cost
-        if (isThisYear) yearBuyTotal += cost
       } else if (tx.action === 'SELL') {
         allTimeSellTotal += tx.net_amount
         stockHistory[tx.symbol].sellRev += tx.net_amount
-        if (isThisYear) yearSellTotal += tx.net_amount
 
         let sellRemaining = tx.shares
-        let totalSellCostBasis = 0
-        while (sellRemaining > 0 && lots.length > 0) {
-          if (lots[0].shares <= sellRemaining) {
-            totalSellCostBasis += lots[0].cost
-            sellRemaining -= lots[0].shares
-            lots.shift()
-          } else {
-            const unit = lots[0].cost / lots[0].shares
-            const partial = sellRemaining * unit
-            totalSellCostBasis += partial
-            lots[0].shares -= sellRemaining
-            lots[0].cost -= partial
-            sellRemaining = 0
-          }
+        const sellUnitNet = tx.net_amount / tx.shares
+
+        while (sellRemaining > 0 && inventory[tx.symbol].length > 0) {
+          const lot = inventory[tx.symbol][0]
+          const sharesFromLot = Math.min(lot.shares, sellRemaining)
+          
+          // Profit from this portion = (Sell Net Unit Price - Buy Unit Cost) * Shares
+          const portionProfit = (sellUnitNet - lot.unitCost) * sharesFromLot
+          
+          // Attribute profit to the YEAR THIS LOT WAS BOUGHT
+          realizedByBuyYear[lot.buyYear] = (realizedByBuyYear[lot.buyYear] || 0) + portionProfit
+          totalRealized += portionProfit
+
+          sellRemaining -= sharesFromLot
+          lot.shares -= sharesFromLot
+          if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
-        const profit = tx.net_amount - totalSellCostBasis
-        totalRealized += profit
-        if (isThisYear) ytdRealized += profit
       }
     }
 
-    let eoyHeldCost = 0
-    const tempInv: Record<string, { shares: number, cost: number }[]> = {}
-    sortedTxs.filter(t => t.trade_date < `${currentYear}-01-01`).forEach(tx => {
-      if (!tempInv[tx.symbol]) tempInv[tx.symbol] = []
-      const lots = tempInv[tx.symbol]
-      if (tx.action === 'BUY' || tx.action === 'DCA') {
-        lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
-      } else if (tx.action === 'SELL') {
-        let rem = tx.shares
-        while (rem > 0 && lots.length > 0) {
-          if (lots[0].shares <= rem) { rem -= lots[0].shares; lots.shift() }
-          else { 
-            const u = lots[0].cost / lots[0].shares
-            lots[0].shares -= rem; lots[0].cost -= rem * u; rem = 0 
-          }
-        }
-      }
-    })
-    Object.keys(tempInv).forEach(sym => {
-      const currentNetShares = inventory[sym]?.reduce((s, l) => s + l.shares, 0) || 0
-      if (currentNetShares > 0) {
-        const startShares = tempInv[sym].reduce((s, l) => s + l.shares, 0)
-        const stillHeld = Math.min(startShares, currentNetShares)
-        if (stillHeld > 0) {
-          const avgAtStart = tempInv[sym].reduce((s, l) => s + l.cost, 0) / startShares
-          eoyHeldCost += stillHeld * avgAtStart
-        }
-      }
+    // Now calculate Unrealized PnL for currently held lots and attribute to buy years
+    const unrealizedByBuyYear: Record<string, number> = {}
+    const buyYearCostBasis: Record<string, number> = {} // For calculating achievement %
+
+    Object.keys(inventory).forEach(sym => {
+      const currentPrice = quotes[sym]?.price || 0
+      inventory[sym].forEach(lot => {
+        const uPnL = (currentPrice - lot.unitCost) * lot.shares
+        unrealizedByBuyYear[lot.buyYear] = (unrealizedByBuyYear[lot.buyYear] || 0) + uPnL
+        buyYearCostBasis[lot.buyYear] = (buyYearCostBasis[lot.buyYear] || 0) + (lot.unitCost * lot.shares)
+      })
     })
 
+    // Closed positions logic (unchanged)
     const closedHoldings = Object.entries(stockHistory)
-      .filter(([sym]) => (inventory[sym]?.reduce((s, l) => s + l.shares, 0) || 0) === 0)
+      .filter(([sym]) => (inventory[sym]?.length || 0) === 0)
       .map(([sym, data]) => ({
         symbol: sym,
         buyCost: data.buyCost,
@@ -121,8 +103,18 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       }))
       .sort((a, b) => b.pnl - a.pnl)
 
-    return { totalRealized, ytdRealized, eoyHeldCost, allTimeBuyTotal, allTimeSellTotal, yearBuyTotal, yearSellTotal, closedHoldings }
-  }, [transactions, currentYear])
+    // Year PnL = (Realized where BuyYear=ThisYear) + (Unrealized where BuyYear=ThisYear)
+    const yearPnl = (realizedByBuyYear[currentYear] || 0) + (unrealizedByBuyYear[currentYear] || 0)
+
+    return { 
+      totalRealized, 
+      allTimeBuyTotal, 
+      allTimeSellTotal, 
+      closedHoldings, 
+      yearPnl,
+      yearBuyCostBasis: buyYearCostBasis[currentYear] || 0
+    }
+  }, [transactions, currentYear, quotes])
 
   const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
   const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0) // 目前持有股票的買入成本
@@ -133,12 +125,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const totalPnl = totalRealized + unrealizedPnl
   const totalPnlPct = allTimeBuyTotal ? (totalPnl / allTimeBuyTotal) * 100 : 0
 
-  const yearPnl = yearSellTotal - yearBuyTotal + (currentMV - eoyHeldCost)
   const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
   const totalAchieved = settings.total_goal > 0 ? (currentMV / settings.total_goal) * 100 : null
-
-  const [expanded, setExpanded] = useState<string | null>(null)
-  const [closedExpanded, setClosedExpanded] = useState(false)
 
   return (
     <div className="p-3 md:p-4 space-y-4">
