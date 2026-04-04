@@ -46,6 +46,50 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
   }
 }
 
+async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: string) {
+  try {
+    // date: YYYY-MM-DD
+    const targetDate = new Date(date)
+    const start = Math.floor(targetDate.getTime() / 1000)
+    const end = start + 86400 * 3 // Fetch 3 days to ensure we get a trading day if target is holiday
+
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${start}&period2=${end}&interval=1d`,
+      { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
+    const result = data.chart?.result?.[0]
+    if (!result || !result.indicators?.quote?.[0]?.close) return null
+
+    const closes = result.indicators.quote[0].close
+    const timestamps = result.timestamp || []
+    
+    // Find the timestamp closest to our target date (within target date)
+    // or just take the first available close in the range
+    let price = closes[0]
+    for (let i = 0; i < timestamps.length; i++) {
+      const d = new Date(timestamps[i] * 1000)
+      const dStr = d.toISOString().split('T')[0]
+      if (dStr === date && closes[i] !== null) {
+        price = closes[i]
+        break
+      }
+    }
+
+    if (price === null || price === undefined) return null
+
+    return {
+      symbol,
+      name_zh: nameZh,
+      price: Math.round(price * 100) / 100,
+    }
+  } catch (err) {
+    console.error(`Error fetching historical ${symbol} for ${date}:`, err)
+    return null
+  }
+}
+
 async function getOrFetchNames(supabase: any, syms: string[]) {
   const { data: cached } = await supabase
     .from('stock_names')
@@ -99,12 +143,19 @@ export async function GET(req: NextRequest) {
     .map(s => s.trim().toUpperCase())
     .filter(Boolean)
 
+  const date = req.nextUrl.searchParams.get('date')
+
   if (!syms.length) return NextResponse.json({}, { status: 400 })
 
   const supabase = await createClient()
   const nameMap = await getOrFetchNames(supabase, syms)
 
-  const results = await Promise.all(syms.map(s => fetchYahooQuote(s, nameMap[s])))
+  const results = await Promise.all(
+    syms.map(s => date 
+      ? fetchYahooHistoricalQuote(s, date, nameMap[s]) 
+      : fetchYahooQuote(s, nameMap[s])
+    )
+  )
   const data: Record<string, any> = {}
 
   results.forEach(q => {

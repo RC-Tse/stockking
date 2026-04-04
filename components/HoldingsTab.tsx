@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
-import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax } from '@/types'
+import { useState, useMemo, useEffect, useCallback } from 'react'
+import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax, getStockName } from '@/types'
 import DatePicker from './DatePicker'
 
 interface Props {
@@ -151,7 +151,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
       {/* 2. 損益月曆區塊 */}
       <div className="px-0.5">
-        <IntegratedCalendar entries={calEntries} onRefresh={onRefreshCal} />
+        <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} />
       </div>
 
       {/* 3. 各持股明細列表 */}
@@ -179,10 +179,19 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   )
 }
 
-function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], onRefresh: (y: number, m: number) => void }) {
+type CalendarView = 'CALENDAR' | 'YEAR' | 'MONTH'
+
+function IntegratedCalendar({ entries, transactions, onRefresh }: { 
+  entries: CalendarEntry[], 
+  transactions: Transaction[],
+  onRefresh: (y: number, m: number) => void 
+}) {
   const now = new Date()
   const [viewDate, setViewDate] = useState(new Date(now.getFullYear(), now.getMonth(), 1))
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
+  const [view, setView] = useState<CalendarView>('CALENDAR')
+  const [dayDetails, setDayDetails] = useState<any[] | null>(null)
+  const [loadingDetails, setLoadingDetails] = useState(false)
   
   const year = viewDate.getFullYear()
   const month = viewDate.getMonth() + 1
@@ -218,98 +227,266 @@ function IntegratedCalendar({ entries, onRefresh }: { entries: CalendarEntry[], 
   function moveMonth(delta: number) {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1))
     setSelectedDate(null)
+    setDayDetails(null)
   }
 
-  function handleMonthChange(e: React.ChangeEvent<HTMLInputElement>) {
-    if (!e.target.value) return
-    const [y, m] = e.target.value.split('-').map(Number)
-    setViewDate(new Date(y, m - 1, 1))
-    setSelectedDate(null)
-  }
+  const fetchDayDetails = useCallback(async (dateStr: string) => {
+    setLoadingDetails(true)
+    try {
+      // 1. Calculate holdings up to this date
+      const map: Record<string, { shares: number, cost: number }> = {}
+      transactions.filter(t => t.trade_date <= dateStr).forEach(tx => {
+        if (!map[tx.symbol]) map[tx.symbol] = { shares: 0, cost: 0 }
+        const h = map[tx.symbol]
+        if (tx.action === 'BUY' || tx.action === 'DCA') {
+          h.shares += tx.shares
+          h.cost += tx.amount + tx.fee
+        } else if (tx.action === 'SELL') {
+          const avgCost = h.shares > 0 ? h.cost / h.shares : 0
+          h.shares -= tx.shares
+          h.cost -= tx.shares * avgCost
+        }
+      })
+
+      const heldSymbols = Object.entries(map)
+        .filter(([, v]) => v.shares > 0)
+        .map(([s]) => s)
+
+      if (heldSymbols.length === 0) {
+        setDayDetails([])
+        return
+      }
+
+      // 2. Fetch historical quotes for these symbols on that date
+      const res = await fetch(`/api/stocks?symbols=${heldSymbols.join(',')}&date=${dateStr}`)
+      if (!res.ok) throw new Error('Failed to fetch historical quotes')
+      const quotes: Record<string, Quote> = await res.json()
+
+      // 3. Compute final details
+      const details = heldSymbols.map(sym => {
+        const h = map[sym]
+        const q = quotes[sym]
+        const price = q?.price || 0
+        const mv = Math.round(price * h.shares)
+        const pnl = mv - h.cost
+        const pnl_pct = h.cost > 0 ? (pnl / h.cost) * 100 : 0
+        return {
+          symbol: sym,
+          name_zh: q?.name_zh || getStockName(sym),
+          shares: h.shares,
+          price,
+          market_value: mv,
+          pnl,
+          pnl_pct
+        }
+      })
+
+      setDayDetails(details.sort((a,b) => b.market_value - a.market_value))
+    } catch (err) {
+      console.error(err)
+      setDayDetails([])
+    } finally {
+      setLoadingDetails(false)
+    }
+  }, [transactions])
 
   function toggleDate(dateStr: string) {
-    setSelectedDate(prev => prev === dateStr ? null : dateStr)
+    if (selectedDate === dateStr) {
+      setSelectedDate(null)
+      setDayDetails(null)
+    } else {
+      setSelectedDate(dateStr)
+      fetchDayDetails(dateStr)
+    }
   }
 
   return (
     <div className="space-y-4">
       <div className="glass rounded-2xl p-4 border border-white/5 space-y-4 bg-black/20">
         <div className="flex flex-col gap-3">
+          {/* Header styled like DatePicker */}
           <div className="flex items-center justify-between">
-            <button onClick={() => moveMonth(-1)} className="p-2 text-white/40 active:text-gold transition-colors">‹</button>
-            <div className="relative">
-              <h2 className="font-black text-base flex items-center gap-1 text-white">
-                {year}年 {month}月 ▾
-              </h2>
-              <input 
-                type="month" 
-                className="absolute inset-0 opacity-0 cursor-pointer"
-                onChange={handleMonthChange}
-                value={`${year}-${String(month).padStart(2, '0')}`}
-              />
-            </div>
-            <button onClick={() => moveMonth(1)} className="p-2 text-white/40 active:text-gold transition-colors">›</button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 text-center">
-            <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">本月總損益</div>
-              <div className={`text-sm font-black font-mono ${stats.totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
-              </div>
-            </div>
-            <div>
-              <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">損益百分比</div>
-              <div className={`text-sm font-black font-mono ${stats.totalPnlPct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {stats.totalPnlPct >= 0 ? '+' : ''}{stats.totalPnlPct.toFixed(2)}%
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-7 gap-1">
-          {['日','一','二','三','四','五','六'].map(d => (
-            <div key={d} className="text-center text-[10px] font-bold py-1 opacity-20">{d}</div>
-          ))}
-          {days.map((d, i) => {
-            if (d === null) return <div key={`empty-${i}`} className="aspect-[1.2/1]" />
-            const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-            const entry = entryMap[d]
-            const pnlPct = entry?.pnl_pct || 0
-            const isSelected = selectedDate === dateStr
+            <button 
+              onClick={() => moveMonth(-1)} 
+              className="p-2 text-gold disabled:opacity-20 transition-colors"
+              disabled={view !== 'CALENDAR'}
+            >◀</button>
             
-            let bgColor = 'transparent'
-            if (pnlPct > 0) {
-              const intensity = Math.min(100, (pnlPct / 10) * 100)
-              bgColor = `rgba(248, 113, 113, ${0.1 + (intensity / 100) * 0.6})`
-            } else if (pnlPct < 0) {
-              const intensity = Math.min(100, (Math.abs(pnlPct) / 10) * 100)
-              bgColor = `rgba(74, 222, 128, ${0.1 + (intensity / 100) * 0.6})`
-            } else if (entry) {
-              bgColor = 'rgba(255, 255, 255, 0.05)'
-            }
+            <div className="flex gap-2 font-black text-white">
+              <button 
+                onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')}
+                className={`px-2 py-1 rounded transition-colors ${view === 'YEAR' ? 'bg-[#c9a564] text-[#0d1018]' : 'hover:bg-white/5'}`}
+              >
+                {year}年
+              </button>
+              <button 
+                onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')}
+                className={`px-2 py-1 rounded transition-colors ${view === 'MONTH' ? 'bg-[#c9a564] text-[#0d1018]' : 'hover:bg-white/5'}`}
+              >
+                {month}月
+              </button>
+            </div>
+            
+            <button 
+              onClick={() => moveMonth(1)} 
+              className="p-2 text-gold disabled:opacity-20 transition-colors"
+              disabled={view !== 'CALENDAR'}
+            >▶</button>
+          </div>
 
-            return (
-              <div key={d} 
-                onClick={() => toggleDate(dateStr)}
-                className={`aspect-[1/1] rounded flex flex-col items-center justify-between p-1 cursor-pointer transition-all border ${isSelected ? 'border-white ring-1 ring-white' : 'border-white/5'}`}
-                style={{ background: bgColor }}>
-                <span className="text-[11px] font-black text-white/80 self-start leading-none">{d}</span>
-                {entry && (
-                  <div className="w-full text-center flex flex-col justify-end flex-1 space-y-0.5 pb-0.5">
-                    <div className="text-[8px] font-black text-white leading-none scale-90">
-                      {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
-                    </div>
-                    <div className="text-[8px] font-bold text-white/60 leading-none scale-90">
-                      {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
-                    </div>
-                  </div>
-                )}
+          {view === 'CALENDAR' && (
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div>
+                <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">本月總損益</div>
+                <div className={`text-sm font-black font-mono ${stats.totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
+                </div>
               </div>
-            )
-          })}
+              <div>
+                <div className="text-[10px] font-bold text-white/30 uppercase tracking-tighter">損益百分比</div>
+                <div className={`text-sm font-black font-mono ${stats.totalPnlPct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {stats.totalPnlPct >= 0 ? '+' : ''}{stats.totalPnlPct.toFixed(2)}%
+                </div>
+              </div>
+            </div>
+          )}
         </div>
+
+        {/* View: CALENDAR */}
+        {view === 'CALENDAR' && (
+          <div className="grid grid-cols-7 gap-1">
+            {['日','一','二','三','四','五','六'].map(d => (
+              <div key={d} className="text-center text-[10px] font-bold py-1 opacity-20">{d}</div>
+            ))}
+            {days.map((d, i) => {
+              if (d === null) return <div key={`empty-${i}`} className="aspect-[1/1]" />
+              const dateStr = `${year}-${String(month).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+              const entry = entryMap[d]
+              const pnlPct = entry?.pnl_pct || 0
+              const isSelected = selectedDate === dateStr
+              
+              let bgColor = 'transparent'
+              if (pnlPct > 0) {
+                const intensity = Math.min(100, (pnlPct / 10) * 100)
+                bgColor = `rgba(248, 113, 113, ${0.1 + (intensity / 100) * 0.6})`
+              } else if (pnlPct < 0) {
+                const intensity = Math.min(100, (Math.abs(pnlPct) / 10) * 100)
+                bgColor = `rgba(74, 222, 128, ${0.1 + (intensity / 100) * 0.6})`
+              } else if (entry) {
+                bgColor = 'rgba(255, 255, 255, 0.05)'
+              }
+
+              return (
+                <div key={d} 
+                  onClick={() => toggleDate(dateStr)}
+                  className={`aspect-[1/1] rounded flex flex-col items-center justify-between p-1 cursor-pointer transition-all border ${isSelected ? 'border-white ring-1 ring-white' : 'border-white/5'}`}
+                  style={{ background: bgColor }}>
+                  <span className="text-[11px] font-black text-white/80 self-start leading-none">{d}</span>
+                  {entry && (
+                    <div className="w-full text-center flex flex-col justify-end flex-1 space-y-0.5 pb-0.5">
+                      <div className="text-[8px] font-black text-white leading-none scale-90">
+                        {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
+                      </div>
+                      <div className="text-[8px] font-bold text-white/60 leading-none scale-90">
+                        {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        )}
+
+        {/* View: YEAR Grid */}
+        {view === 'YEAR' && (
+          <div className="grid grid-cols-3 gap-2 py-2">
+            {(() => {
+              const thisYear = new Date().getFullYear()
+              const years = []
+              for (let y = thisYear - 7; y <= thisYear + 2; y++) {
+                years.push(y)
+              }
+              return years.map(y => (
+                <button
+                  key={y}
+                  onClick={() => {
+                    setViewDate(new Date(y, viewDate.getMonth(), 1))
+                    setView('CALENDAR')
+                  }}
+                  className={`py-3 rounded-xl text-sm font-black transition-all ${
+                    year === y ? 'bg-[#c9a564] text-[#0d1018]' : 'bg-white/5 text-white/60 hover:bg-white/10'
+                  }`}
+                >
+                  {y}
+                </button>
+              ))
+            })()}
+          </div>
+        )}
+
+        {/* View: MONTH Grid */}
+        {view === 'MONTH' && (
+          <div className="grid grid-cols-3 gap-2 py-2">
+            {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
+              <button
+                key={m}
+                onClick={() => {
+                  setViewDate(new Date(year, m - 1, 1))
+                  setView('CALENDAR')
+                }}
+                className={`py-3 rounded-xl text-sm font-black transition-all ${
+                  month === m ? 'bg-[#c9a564] text-[#0d1018]' : 'bg-white/5 text-white/60 hover:bg-white/10'
+                }`}
+              >
+                {m}月
+              </button>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* Date Detail View Card */}
+      {selectedDate && (
+        <div className="animate-in fade-in slide-in-from-top-2">
+          <div className="glass rounded-2xl p-4 border border-white/10 space-y-4">
+            <div className="flex items-center justify-between border-b border-white/5 pb-2">
+              <h3 className="font-black text-sm text-white">
+                {selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股細項
+              </h3>
+              {loadingDetails && <div className="text-[10px] text-gold animate-pulse font-bold">載入中...</div>}
+            </div>
+
+            {dayDetails ? (
+              dayDetails.length === 0 ? (
+                <div className="text-center py-4 text-xs text-white/20 italic">當天無持股</div>
+              ) : (
+                <div className="space-y-3">
+                  {dayDetails.map(det => (
+                    <div key={det.symbol} className="flex items-center justify-between gap-4 py-1">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-black text-xs text-white truncate">{det.name_zh}</span>
+                          <span className="text-[9px] font-mono text-white/30">{codeOnly(det.symbol)}</span>
+                        </div>
+                        <div className="text-[10px] font-bold text-white/40">
+                          {det.shares.toLocaleString()} 股 @ {det.price.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <div className="text-xs font-black text-white">{fmtMoney(det.market_value)}</div>
+                        <div className={`text-[10px] font-mono font-bold ${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                          {det.pnl >= 0 ? '+' : ''}{fmtMoney(det.pnl)} ({det.pnl >= 0 ? '+' : ''}{det.pnl_pct.toFixed(2)}%)
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            ) : null}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -391,7 +568,7 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
   const amount = actualShares * safePrice
   const fee    = calcFee(amount, settings, t.action === 'SELL')
   const tax    = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
-  const net    = isBuy ? -(amount + fee) : (amount - fee - tax)
+  const net    = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
   // Validation
   const hasChanged = date !== t.trade_date || actualShares !== t.shares || safePrice !== t.price || note !== (t.note || '')
