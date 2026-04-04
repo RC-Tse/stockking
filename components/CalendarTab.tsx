@@ -40,7 +40,7 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
     const map: Record<number, CalendarEntry> = {}
     entries.forEach(e => {
       // 安全解析日期，避免時區造成誤差
-      const day = parseInt(e.entry_date.split(\'-\')[2], 10)
+      const day = parseInt(e.entry_date.split('-')[2], 10)
       map[day] = e
     })
     return map
