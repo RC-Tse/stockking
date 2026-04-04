@@ -433,8 +433,26 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
         <div className="space-y-2">
           <Label>交易方式</Label>
           <div className="flex gap-2">
-            <button onClick={() => setTradeType('FULL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FULL' ? 'bg-gold text-[#0d1018] border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>整張 (1000股)</button>
-            <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-colors border ${tradeType === 'FRACTIONAL' ? 'bg-gold text-[#0d1018] border-gold' : 'bg-white/5 text-white/40 border-white/10'}`}>零股</button>
+            <button 
+              onClick={() => setTradeType('FULL')} 
+              className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${
+                tradeType === 'FULL' 
+                  ? 'bg-[#c9a56433] text-gold border-gold' 
+                  : 'bg-transparent text-white/30 border-white/10'
+              }`}
+            >
+              整張 (1000股)
+            </button>
+            <button 
+              onClick={() => setTradeType('FRACTIONAL')} 
+              className={`flex-1 h-10 rounded-lg text-[10px] font-black transition-all border ${
+                tradeType === 'FRACTIONAL' 
+                  ? 'bg-[#c9a56433] text-gold border-gold' 
+                  : 'bg-transparent text-white/30 border-white/10'
+              }`}
+            >
+              零股
+            </button>
           </div>
         </div>
 
@@ -490,13 +508,28 @@ function TxRow({ t, settings, onUpdated }: { t: Transaction; settings: UserSetti
         </div>
 
         <div className="flex gap-2 pt-1">
-          <button onClick={() => setIsEditing(false)} className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all">取消</button>
           <button 
             onClick={handleSave} 
             disabled={!isValid || loading} 
-            className={`w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95 ${isValid ? 'bg-gold text-[#0d1018]' : 'bg-white/5 text-white/10 cursor-not-allowed'}`}
+            className="w-3/4 py-4 rounded-xl font-black text-sm transition-all active:scale-95"
+            style={isValid ? { 
+              background: 'linear-gradient(135deg, #c9a564, #e8c880)', 
+              color: '#0d1018',
+              fontWeight: 800 
+            } : {
+              background: '#444',
+              color: '#888',
+              cursor: 'not-allowed',
+              opacity: 0.5
+            }}
           >
             {loading ? '儲存中...' : '儲存修改'}
+          </button>
+          <button 
+            onClick={() => setIsEditing(false)} 
+            className="w-1/4 py-4 rounded-xl font-bold text-sm bg-white/10 text-white/60 active:scale-95 transition-all"
+          >
+            取消
           </button>
         </div>
       </div>
