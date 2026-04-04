@@ -38,7 +38,11 @@ export async function POST(req: NextRequest) {
   const amount = Number(shares) * Number(price)
   const fee = calcFee(amount, s, action === 'SELL')
   const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
-  const net_amount = (action === 'BUY' || action === 'DCA') ? -(amount + fee) : (amount - fee - tax)
+  
+  // 台股規則：金額、手續費、稅金皆先無條件捨去再相加減
+  const net_amount = (action === 'BUY' || action === 'DCA') 
+    ? -(Math.floor(amount) + Math.floor(fee)) 
+    : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
   const { data, error } = await supabase.from('transactions')
     .insert({ user_id: user.id, symbol: sym, action, trade_date, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, trade_type, note })
     .select().single()
@@ -83,7 +87,11 @@ export async function PUT(req: NextRequest) {
   const amount = Number(shares) * Number(price)
   const fee = calcFee(amount, s, action === 'SELL')
   const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
-  const net_amount = (action === 'BUY' || action === 'DCA') ? -(amount + fee) : (amount - fee - tax)
+  
+  // 台股規則：金額、手續費、稅金皆先無條件捨去再相加減
+  const net_amount = (action === 'BUY' || action === 'DCA') 
+    ? -(Math.floor(amount) + Math.floor(fee)) 
+    : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
   const { data, error } = await supabase.from('transactions').update({
     trade_date, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, note

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { getStockName } from '@/types'
 
 export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get('symbol')?.toUpperCase()
@@ -29,11 +30,14 @@ export async function GET(req: NextRequest) {
       ? last60.reduce((s: number, c: number) => s + c, 0) / last60.length 
       : price
 
+    const yahooName = result.meta.longName || result.meta.shortName || result.meta.symbol
+    const name = getStockName(symbol, yahooName)
+
     return NextResponse.json({
       symbol: result.meta.symbol,
       price: Math.round(price * 100) / 100,
       ma60: Math.round(ma60 * 100) / 100,
-      name: result.meta.longName || result.meta.shortName || result.meta.symbol,
+      name: name,
     })
   } catch (err) {
     console.error('Error fetching stock info:', err)

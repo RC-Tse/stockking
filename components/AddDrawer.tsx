@@ -126,7 +126,11 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
   const amount = finalShares * safePrice
   const fee    = safePrice > 0 ? calcFee(amount, settings, action === 'SELL') : 0
   const tax    = safePrice > 0 && action === 'SELL' ? calcTax(amount, symbol, settings) : 0
-  const net    = action === 'BUY' ? -(amount + fee) : (amount - fee - tax)
+  
+  // 台股規則：金額、手續費、稅金皆先無條件捨去再相加減
+  const net = action === 'BUY' 
+    ? -(Math.floor(amount) + Math.floor(fee)) 
+    : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
   async function submitOrder() {
     if (!symbol.trim() || safePrice <= 0 || finalShares <= 0) return
