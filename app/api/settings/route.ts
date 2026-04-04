@@ -17,6 +17,10 @@ export async function POST(req: NextRequest) {
   const body = await req.json()
   const { data, error } = await supabase.from('settings')
     .upsert({ ...body, user_id: user.id, updated_at: new Date().toISOString() }).select().single()
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  
+  if (error) {
+    console.error('Settings save error:', error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
   return NextResponse.json(data)
 }
