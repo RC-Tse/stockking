@@ -17,7 +17,7 @@ interface Props {
   onSave: (s: UserSettings) => Promise<void>
 }
 
-type View = 'MAIN' | 'CALC' | 'UI'
+type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL'
 
 const THEMES = [
   { id: 'luxury', name: '深色奢華', colors: ['#080a0e', '#161c28', '#d4af37'] },
@@ -47,70 +47,49 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
     <div className="p-4 space-y-6 pb-32">
       {view === 'MAIN' && (
         <>
-          <section className="space-y-4">
-            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em] px-1">目標設定</h3>
-            <div className="glass p-5 space-y-6 border border-white/5">
-              <div className="space-y-2">
-                <Label>年度損益目標 (TWD)</Label>
-                <input 
-                  type="number" inputMode="numeric"
-                  value={localSettings.year_goal || ''} 
-                  onChange={e => handleSave({ year_goal: Number(e.target.value) })}
-                  className="input-base text-[16px] md:text-sm font-black font-mono"
-                  placeholder="例如: 100000"
-                />
-                <p className="text-[14px] md:text-[12px] text-white/20 font-medium leading-relaxed">
-                  設定您今年的投資獲利目標，包含已實現與未實現損益。
-                </p>
-              </div>
-              <div className="space-y-2">
-                <Label>總資產市值目標 (TWD)</Label>
-                <input 
-                  type="number" inputMode="numeric"
-                  value={localSettings.total_goal || ''} 
-                  onChange={e => handleSave({ total_goal: Number(e.target.value) })}
-                  className="input-base text-[16px] md:text-sm font-black font-mono"
-                  placeholder="例如: 1000000"
-                />
-                <p className="text-[14px] md:text-[12px] text-white/20 font-medium leading-relaxed">
-                  設定您長期的總資產市值目標。
-                </p>
-              </div>
-            </div>
-          </section>
-
-          <section className="space-y-4">
-            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em] px-1">偏好設定</h3>
-            <div className="glass overflow-hidden border border-white/5">
-              <button 
-                onClick={() => setView('UI')}
-                className="w-full flex items-center justify-between group p-5 border-b border-white/5 active:bg-white/5 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Palette size={18} className="text-gold" />
-                  <div className="text-left">
-                    <div className="text-[15px] md:text-[13px] font-black text-white">介面主題</div>
-                    <div className="text-[14px] md:text-[12px] text-white/20 mt-0.5">目前: {THEMES.find(t => t.id === localSettings.theme)?.name || '預設'}</div>
-                  </div>
+          <div className="glass overflow-hidden border border-white/5">
+            <button 
+              onClick={() => setView('GOAL')}
+              className="w-full flex items-center justify-between group p-5 border-b border-white/5 active:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <SettingsIcon size={18} className="text-gold" />
+                <div className="text-left">
+                  <div className="text-[15px] md:text-[13px] font-black text-white">目標設定</div>
+                  <div className="text-[14px] md:text-[12px] text-white/20 mt-0.5">設定年度與資產目標</div>
                 </div>
-                <ChevronRight size={18} className="text-white/20 group-active:text-gold transition-colors" />
-              </button>
+              </div>
+              <ChevronRight size={18} className="text-white/20 group-active:text-gold transition-colors" />
+            </button>
 
-              <button 
-                onClick={() => setView('CALC')}
-                className="w-full flex items-center justify-between group p-5 active:bg-white/5 transition-colors"
-              >
-                <div className="flex items-center gap-3">
-                  <Layout size={18} className="text-gold" />
-                  <div className="text-left">
-                    <div className="text-[15px] md:text-[13px] font-black text-white">交易計算參數</div>
-                    <div className="text-[14px] md:text-[12px] text-white/20 mt-0.5">調整手續費與稅率</div>
-                  </div>
+            <button 
+              onClick={() => setView('UI')}
+              className="w-full flex items-center justify-between group p-5 border-b border-white/5 active:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Palette size={18} className="text-gold" />
+                <div className="text-left">
+                  <div className="text-[15px] md:text-[13px] font-black text-white">介面主題</div>
+                  <div className="text-[14px] md:text-[12px] text-white/20 mt-0.5">目前: {THEMES.find(t => t.id === localSettings.theme)?.name || '預設'}</div>
                 </div>
-                <ChevronRight size={18} className="text-white/20 group-active:text-gold transition-colors" />
-              </button>
-            </div>
-          </section>
+              </div>
+              <ChevronRight size={18} className="text-white/20 group-active:text-gold transition-colors" />
+            </button>
+
+            <button 
+              onClick={() => setView('CALC')}
+              className="w-full flex items-center justify-between group p-5 active:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Layout size={18} className="text-gold" />
+                <div className="text-left">
+                  <div className="text-[15px] md:text-[13px] font-black text-white">交易計算參數</div>
+                  <div className="text-[14px] md:text-[12px] text-white/20 mt-0.5">調整手續費與稅率</div>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-white/20 group-active:text-gold transition-colors" />
+            </button>
+          </div>
 
           <section className="pt-4">
             <button 
@@ -125,6 +104,46 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
             </p>
           </section>
         </>
+      )}
+
+      {view === 'GOAL' && (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center gap-4 px-1">
+            <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-gold active:bg-white/10 transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <h3 className="text-[15px] md:text-[13px] font-black text-white/30 uppercase tracking-[0.2em]">投資目標設定</h3>
+          </div>
+
+          <div className="glass p-5 space-y-6 border border-white/5">
+            <div className="space-y-2">
+              <Label>年度損益目標 (TWD)</Label>
+              <input 
+                type="number" inputMode="numeric"
+                value={localSettings.year_goal || ''} 
+                onChange={e => handleSave({ year_goal: Number(e.target.value) })}
+                className="input-base text-[16px] md:text-sm font-black font-mono"
+                placeholder="例如: 100000"
+              />
+              <p className="text-[14px] md:text-[12px] text-white/20 font-medium leading-relaxed">
+                設定您今年的投資獲利目標，包含已實現與未實現損益。
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>總資產市值目標 (TWD)</Label>
+              <input 
+                type="number" inputMode="numeric"
+                value={localSettings.total_goal || ''} 
+                onChange={e => handleSave({ total_goal: Number(e.target.value) })}
+                className="input-base text-[16px] md:text-sm font-black font-mono"
+                placeholder="例如: 1000000"
+              />
+              <p className="text-[14px] md:text-[12px] text-white/20 font-medium leading-relaxed">
+                設定您長期的總資產市值目標。
+              </p>
+            </div>
+          </div>
+        </div>
       )}
 
       {view === 'UI' && (
