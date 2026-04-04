@@ -245,37 +245,48 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
 function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onDelete }: any) {
   const isUp = h.unrealized_pnl >= 0
   const color = isUp ? 'text-red-400' : 'text-green-400'
-  const dimBg = isUp ? 'bg-red-400/10' : 'bg-green-400/10'
-  const arrow = isUp ? '▲' : '▼'
+  const nameZh = q?.name_zh || h.symbol
 
   return (
     <div className={`card-base overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-gold shadow-lg shadow-gold/5' : 'border-white/10 shadow-xl'}`}>
-      <div className="p-4 cursor-pointer active:bg-bg-hover flex flex-col gap-3" onClick={onToggle}>
+      <div className="p-4 cursor-pointer active:bg-bg-hover space-y-3" onClick={onToggle}>
+        {/* Row 1: Name + Symbol */}
         <div className="flex justify-between items-center">
-          <span className="text-[16px] font-black text-white truncate mr-2">{q?.name_zh || h.symbol}</span>
-          <span className="text-[18px] font-black text-white font-mono shrink-0">{h.current_price > 0 ? h.current_price.toFixed(2) : '—'}</span>
+          <div className="font-black text-white text-base">
+            {nameZh} <span className="text-xs text-white/30 font-mono ml-1">{codeOnly(h.symbol)}</span>
+          </div>
         </div>
         
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="font-mono px-1.5 py-0.5 rounded-md text-[12px] bg-[#d4af3726] border border-[#d4af374d] text-gold">{codeOnly(h.symbol)}</span>
-            <span className="text-[12px] font-bold px-2 py-0.5 rounded-md bg-white/5 text-white/40">{(h.shares ?? 0).toLocaleString()} 股</span>
-          </div>
+        {/* Row 2: Shares, Price, Change */}
+        <div className="text-[11px] font-bold text-white/40">
+          {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
           {q?.change !== undefined && (
-            <div className={`flex items-center gap-1 text-[12px] font-black font-mono ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {q.change >= 0 ? <TrendingUp size={12}/> : <TrendingDown size={12}/>}
-              {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
-            </div>
+            <span className={`ml-2 ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+              {q.change >= 0 ? '▲' : '▼'} {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
+            </span>
           )}
         </div>
 
-        <div className="text-[12px] font-medium text-white/30 whitespace-nowrap overflow-hidden text-ellipsis">平均成本 {(h.avg_cost ?? 0).toFixed(2)} · 持有成本 {fmtMoney(h.total_cost)}</div>
+        {/* Divider */}
+        <div className="h-px bg-white/5" />
 
-        <div className="flex justify-between items-center">
-          <span className={`text-[16px] font-black font-mono ${color}`}>{isUp ? '+' : ''}{fmtMoney(h.unrealized_pnl)}</span>
-          <div className={`px-2.5 py-0.5 rounded-full text-[12px] font-black ${isUp ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>{isUp ? '+' : ''}{(h.pnl_pct ?? 0).toFixed(2)}%</div>
+        {/* Row 3 & 4: Cost/MV and PnL */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">持有成本 / 目前市值</div>
+            <div className="text-sm font-bold text-white/80 font-mono">
+              {fmtMoney(Math.round(h.total_cost))} / <span className="text-white">{fmtMoney(Math.round(h.market_value))}</span>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">未實現損益</div>
+            <div className={`text-sm font-black font-mono ${color}`}>
+              {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} ({(h.pnl_pct ?? 0).toFixed(2)}%)
+            </div>
+          </div>
         </div>
       </div>
+
       {isExpanded && (
         <div className="bg-black/20 border-t border-white/5 p-3 space-y-2">
           {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
