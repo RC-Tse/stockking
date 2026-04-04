@@ -22,7 +22,12 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const body = await req.json()
-  const { symbol, amount, days_of_month } = body
+  const { 
+    symbol, amount, days_of_month, 
+    dividend_reinvest, 
+    smart_buy_enabled, smart_buy_threshold, smart_buy_amount,
+    smart_sell_enabled, smart_sell_threshold, smart_sell_amount 
+  } = body
 
   const { data, error } = await supabase
     .from('dca_plans')
@@ -31,6 +36,13 @@ export async function POST(req: NextRequest) {
       symbol,
       amount: Number(amount),
       days_of_month,
+      dividend_reinvest: !!dividend_reinvest,
+      smart_buy_enabled: !!smart_buy_enabled,
+      smart_buy_threshold: smart_buy_threshold || '>0',
+      smart_buy_amount: Number(smart_buy_amount || 0),
+      smart_sell_enabled: !!smart_sell_enabled,
+      smart_sell_threshold: smart_sell_threshold || '>0',
+      smart_sell_amount: Number(smart_sell_amount || 0),
       is_active: true
     })
     .select()

@@ -1,7 +1,7 @@
 'use client'
 
-import { useState, useEffect, useMemo, useRef } from 'react'
-import { UserSettings, calcFee, calcTax, fmtMoney, codeOnly } from '@/types'
+import { useState, useEffect } from 'react'
+import { UserSettings, calcFee, calcTax, fmtMoney } from '@/types'
 
 interface Props {
   open: boolean
@@ -35,6 +35,18 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
   // DCA states
   const [dcaAmount, setDcaAmount] = useState<number | ''>('')
   const [dcaDays,   setDcaDays]   = useState<number[]>([])
+  const [divReinvest, setDivReinvest] = useState(false)
+  
+  const [smartBuyEnabled, setSmartBuyEnabled] = useState(false)
+  const [smartBuyThreshold, setSmartBuyThreshold] = useState('>0%')
+  const [smartBuyAmount, setSmartBuyAmount] = useState<number | ''>('')
+  
+  const [smartSellEnabled, setSmartSellEnabled] = useState(false)
+  const [smartSellThreshold, setSmartSellThreshold] = useState('>0%')
+  const [smartSellAmount, setSmartSellAmount] = useState<number | ''>('')
+
+  const [currentPrice, setCurrentPrice] = useState<number>(0)
+  const [ma60, setMa60] = useState<number>(0)
 
   // Custom Date Picker states
   const [showDatePicker, setShowDatePicker] = useState(false)
@@ -47,7 +59,10 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
       setMode('SELECT')
       setAction('BUY'); setTradeType('FULL'); setSymbol(''); setStockName('')
       setLots(''); setShares(''); setPrice(''); setNote('')
-      setDcaAmount(''); setDcaDays([])
+      setDcaAmount(''); setDcaDays([]); setDivReinvest(false)
+      setSmartBuyEnabled(false); setSmartBuyThreshold('>0%'); setSmartBuyAmount('')
+      setSmartSellEnabled(false); setSmartSellThreshold('>0%'); setSmartSellAmount('')
+      setCurrentPrice(0); setMa60(0)
       const today = new Date()
       setSelectedDate(today)
       setViewDate(today)
@@ -55,7 +70,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     }
   }, [open])
 
-  async function fetchStockName(s: string) {
+  async function fetchStockInfo(s: string) {
     let sym = s.trim().toUpperCase()
     if (!sym) return
     if (/^\d+$/.test(sym)) {
@@ -64,10 +79,20 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
     }
     setFetchingName(true)
     try {
-      const res = await fetch(`/api/stocks?symbols=${sym}`)
+      const res = await fetch(`/api/stocks/info?symbol=${sym}`)
       if (res.ok) {
         const data = await res.json()
-        setStockName(data[sym]?.name_zh || '')
+        setStockName(data.name || '')
+        setCurrentPrice(data.price || 0)
+        setMa60(data.ma60 || 0)
+      } else {
+        // Try general search if info fails
+        const res2 = await fetch(`/api/stocks?symbols=${sym}`)
+        if (res2.ok) {
+          const data2 = await res2.json()
+          setStockName(data2[sym]?.name_zh || '')
+          setCurrentPrice(data2[sym]?.price || 0)
+        }
       }
     } catch (err) {
       setStockName('')
@@ -107,7 +132,18 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
       const res = await fetch('/api/dca', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ symbol: symbol.trim().toUpperCase(), amount: dcaAmount, days_of_month: dcaDays })
+        body: JSON.stringify({ 
+          symbol: symbol.trim().toUpperCase(), 
+          amount: dcaAmount, 
+          days_of_month: dcaDays,
+          dividend_reinvest: divReinvest,
+          smart_buy_enabled: smartBuyEnabled,
+          smart_buy_threshold: smartBuyThreshold.replace('%', ''),
+          smart_buy_amount: smartBuyAmount || 0,
+          smart_sell_enabled: smartSellEnabled,
+          smart_sell_threshold: smartSellThreshold.replace('%', ''),
+          smart_sell_amount: smartSellAmount || 0,
+        })
       })
       if (res.ok) {
         alert('定期定額計畫已儲存')
@@ -184,7 +220,7 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
                   <Label>股票代號</Label>
                   {fetchingName ? <span className="text-[10px] animate-pulse text-gold font-bold">搜尋中…</span> : stockName ? <span className="text-[11px] font-black text-gold uppercase bg-gold/10 px-2 py-0.5 rounded-md border border-gold/20">{stockName}</span> : null}
                 </div>
-                <input value={symbol} onChange={e => setSymbol(e.target.value)} onBlur={e => fetchStockName(e.target.value)} placeholder="輸入代號，如 2330" className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10" autoCapitalize="characters" />
+                <input value={symbol} onChange={e => setSymbol(e.target.value)} onBlur={e => fetchStockInfo(e.target.value)} placeholder="輸入代號，如 2330" className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10" autoCapitalize="characters" />
               </div>
 
               <div className="space-y-2">
@@ -248,39 +284,144 @@ export default function AddDrawer({ open, settings, onClose, onSave }: Props) {
           )}
 
           {mode === 'DCA' && (
-            <div className="space-y-6">
+            <div className="space-y-6 pb-4">
               <div className="flex items-center justify-between">
                 <button onClick={() => setMode('SELECT')} className="flex items-center gap-1 text-xs text-gold font-black px-3 py-1.5 bg-gold/10 rounded-full active:bg-gold/20">
                   <span>‹</span> 返回
                 </button>
-                <h2 className="font-black text-base text-white tracking-widest uppercase">設定定期定額</h2>
+                <h2 className="font-black text-base text-white tracking-widest uppercase">定期定額計畫</h2>
                 <div className="w-14" />
               </div>
 
+              {/* 1. 股票代號 */}
               <div className="space-y-2">
                 <div className="flex justify-between items-end px-1">
                   <Label>股票代號</Label>
                   {fetchingName ? <span className="text-[10px] animate-pulse text-gold font-bold">搜尋中…</span> : stockName ? <span className="text-[11px] font-black text-gold uppercase bg-gold/10 px-2 py-0.5 rounded-md border border-gold/20">{stockName}</span> : null}
                 </div>
-                <input value={symbol} onChange={e => setSymbol(e.target.value)} onBlur={e => fetchStockName(e.target.value)} placeholder="輸入代號，如 0050" className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10" autoCapitalize="characters" />
+                <input value={symbol} onChange={e => setSymbol(e.target.value)} onBlur={e => fetchStockInfo(e.target.value)} placeholder="輸入代號，如 0050" className="input-base uppercase font-black font-mono w-full text-lg py-4 px-5 rounded-2xl bg-white/5 border-white/10" autoCapitalize="characters" />
               </div>
 
+              {/* 2. 每次申購金額 */}
               <div className="space-y-2">
                 <Label>每次申購金額</Label>
-                <input type="number" inputMode="numeric" pattern="[0-9]*" value={dcaAmount} onChange={e => setDcaAmount(e.target.value===''?'':Number(e.target.value))} placeholder="例如：5000" className="input-base font-black font-mono text-xl w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl" />
+                <div className="relative">
+                  <input type="number" inputMode="numeric" pattern="[0-9]*" value={dcaAmount} onChange={e => setDcaAmount(e.target.value===''?'':Number(e.target.value))} placeholder="例如：5000" className="input-base font-black font-mono text-xl w-full text-white bg-white/5 border-white/10 py-4 px-5 rounded-2xl pr-12" />
+                  <span className="absolute right-5 top-1/2 -translate-y-1/2 text-white/30 font-bold">元</span>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>每月交易日 (可複選)</Label>
+              {/* 3. 每月交易日 */}
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <Label>每月交易日</Label>
+                  <span className="text-[10px] text-white/20 font-bold">可複選</span>
+                </div>
                 <div className="grid grid-cols-7 gap-2">
-                  {Array.from({length: 28}, (_, i) => i + 1).map(d => (
+                  {Array.from({length: 31}, (_, i) => i + 1).map(d => (
                     <button key={d} onClick={() => toggleDcaDay(d)} className={`aspect-square rounded-xl flex items-center justify-center text-sm font-black transition-all border ${dcaDays.includes(d) ? 'bg-gold text-black border-gold' : 'bg-white/5 text-white/30 border-white/5'}`}>{d}</button>
                   ))}
+                </div>
+                <p className="text-[10px] text-white/30 leading-relaxed bg-white/5 p-3 rounded-xl border border-white/5">
+                  💡 備註：若遇未開盤日，改由下一個交易日買入
+                </p>
+              </div>
+
+              {/* 4. 股息再投資 */}
+              <div className="glass rounded-3xl p-5 space-y-3 border border-white/5">
+                <div className="flex items-center justify-between">
+                  <span className="font-black text-white text-sm">股息再投資</span>
+                  <button onClick={() => setDivReinvest(!divReinvest)} className={`w-12 h-6 rounded-full relative transition-all ${divReinvest ? 'bg-gold' : 'bg-white/10'}`}>
+                    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${divReinvest ? 'left-7' : 'left-1'}`} />
+                  </button>
+                </div>
+                <p className="text-[11px] text-white/40 leading-relaxed">
+                  依除息基準日庫存試算現金股息，於股息發放後次二營業日自動買進相同標的
+                </p>
+              </div>
+
+              {/* 5. 智慧加減碼 */}
+              <div className="space-y-4">
+                <Label>智慧加減碼策略</Label>
+                
+                {stockName && currentPrice > 0 && (
+                  <div className="flex gap-4 px-1 mb-2">
+                    <div className="flex-1 bg-white/5 rounded-2xl p-3 border border-white/5">
+                      <div className="text-[10px] text-white/30 font-bold mb-1">當前股價</div>
+                      <div className="text-lg font-black font-mono text-white">{currentPrice}</div>
+                    </div>
+                    <div className="flex-1 bg-white/5 rounded-2xl p-3 border border-white/5">
+                      <div className="text-[10px] text-white/30 font-bold mb-1">季均價 (MA60)</div>
+                      <div className="text-lg font-black font-mono text-gold">{ma60.toFixed(2)}</div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 逢低加碼 */}
+                <div className={`rounded-3xl p-5 border transition-all ${smartBuyEnabled ? 'bg-red-400/5 border-red-400/30' : 'bg-white/5 border-white/5'}`}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <input type="checkbox" checked={smartBuyEnabled} onChange={e => setSmartBuyEnabled(e.target.checked)} className="w-5 h-5 rounded border-white/20 bg-white/10 text-gold focus:ring-gold" />
+                    <span className="font-black text-white">逢低調整</span>
+                  </div>
+                  
+                  {smartBuyEnabled && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-white/40 font-bold">當收盤價低於季均價幅度：</div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {['>0%', '≥5%', '≥10%', '≥15%'].map(t => (
+                            <button key={t} onClick={() => setSmartBuyThreshold(t)} className={`py-2 rounded-xl text-[10px] font-black border transition-all ${smartBuyThreshold === t ? 'bg-red-400/20 text-red-400 border-red-400' : 'bg-white/5 text-white/30 border-transparent'}`}>
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-white/40 font-bold">將申購金額調整為：</div>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setSmartBuyAmount(a => Math.max(0, Number(a||0)-100))} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 text-white/60 font-black border border-white/10">-</button>
+                          <input type="number" inputMode="numeric" value={smartBuyAmount} onChange={e => setSmartBuyAmount(e.target.value===''?'':Number(e.target.value))} className="flex-1 bg-white/10 border-white/10 rounded-xl py-2 text-center font-black font-mono text-white" placeholder="金額" />
+                          <button onClick={() => setSmartBuyAmount(a => Number(a||0)+100)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 text-white/60 font-black border border-white/10">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 逢高減碼 */}
+                <div className={`rounded-3xl p-5 border transition-all ${smartSellEnabled ? 'bg-green-400/5 border-green-400/30' : 'bg-white/5 border-white/5'}`}>
+                  <div className="flex items-center gap-3 mb-4">
+                    <input type="checkbox" checked={smartSellEnabled} onChange={e => setSmartSellEnabled(e.target.checked)} className="w-5 h-5 rounded border-white/20 bg-white/10 text-gold focus:ring-gold" />
+                    <span className="font-black text-white">逢高調整</span>
+                  </div>
+                  
+                  {smartSellEnabled && (
+                    <div className="space-y-4 animate-in fade-in slide-in-from-top-2">
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-white/40 font-bold">當收盤價高於季均價幅度：</div>
+                        <div className="grid grid-cols-4 gap-2">
+                          {['>0%', '≥5%', '≥10%', '≥15%'].map(t => (
+                            <button key={t} onClick={() => setSmartSellThreshold(t)} className={`py-2 rounded-xl text-[10px] font-black border transition-all ${smartSellThreshold === t ? 'bg-green-400/20 text-green-400 border-green-400' : 'bg-white/5 text-white/30 border-transparent'}`}>
+                              {t}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <div className="text-[11px] text-white/40 font-bold">將申購金額調整為：</div>
+                        <div className="flex items-center gap-3">
+                          <button onClick={() => setSmartSellAmount(a => Math.max(0, Number(a||0)-100))} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 text-white/60 font-black border border-white/10">-</button>
+                          <input type="number" inputMode="numeric" value={smartSellAmount} onChange={e => setSmartSellAmount(e.target.value===''?'':Number(e.target.value))} className="flex-1 bg-white/10 border-white/10 rounded-xl py-2 text-center font-black font-mono text-white" placeholder="金額" />
+                          <button onClick={() => setSmartSellAmount(a => Number(a||0)+100)} className="w-10 h-10 flex items-center justify-center rounded-xl bg-white/5 text-white/60 font-black border border-white/10">+</button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
 
               <button onClick={submitDCA} disabled={saving || !canSubmitDca} className={`w-full py-5 text-lg font-black rounded-xl transition-all mt-4 ${canSubmitDca ? 'active:scale-95' : 'bg-white/5 text-white/10 cursor-not-allowed border border-white/5'}`} style={{ background: canSubmitDca ? 'linear-gradient(135deg, #c9a564, #e8c880)' : undefined, color: canSubmitDca ? '#000' : undefined }}>
-                {saving ? '處理中…' : '💾 儲存定期定額計畫'}
+                {saving ? '處理中…' : '儲存定期定額計畫'}
               </button>
             </div>
           )}
