@@ -15,7 +15,9 @@ import {
   TrendingDown,
   ClipboardList,
   Pencil,
-  Trash2
+  Trash2,
+  Eye,
+  EyeOff
 } from 'lucide-react'
 import DatePicker from './DatePicker'
 import ConfirmModal from './ConfirmModal'
@@ -33,6 +35,7 @@ interface Props {
 export default function HoldingsTab({ holdings, quotes, settings, transactions, calEntries, onRefresh, onRefreshCal }: Props) {
   const currentYear = new Date().getFullYear().toString()
   const [deletingId, setDeletingId] = useState<number | null>(null)
+  const [showData, setShowData] = useState(true)
 
   // ── Calculate FIFO Metrics ──
   const { 
@@ -128,31 +131,39 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       <div className="glass p-5 relative overflow-hidden animate-slide-up border border-white/10 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
           <span className="text-base font-black text-white/30 uppercase tracking-[0.2em]">持股概覽 · {holdings.length} 檔</span>
-          <button onClick={() => window.location.reload()} className="p-2 rounded-full bg-white/5 text-gold border border-white/10 active:scale-95 transition-all">
-            <RefreshCw size={14} />
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => setShowData(!showData)} 
+              className="p-2 rounded-full bg-white/5 text-gold border border-white/10 active:scale-95 transition-all"
+            >
+              {showData ? <Eye size={14} /> : <EyeOff size={14} />}
+            </button>
+            <button onClick={() => window.location.reload()} className="p-2 rounded-full bg-white/5 text-gold border border-white/10 active:scale-95 transition-all">
+              <RefreshCw size={14} />
+            </button>
+          </div>
         </div>
 
         <div className="space-y-6">
           {/* 第一列 */}
           <div className="flex items-center">
-            <StatBox label="持有成本" value={fmtMoney(currentCost)} className="w-1/2 text-center" large />
-            <StatBox label="目前市值" value={fmtMoney(currentMV)} className="w-1/2 text-center border-l border-white/5" large upDown={currentMV > currentCost ? 1 : -1} />
+            <StatBox label="持有成本" value={showData ? fmtMoney(currentCost) : "— — —"} className="w-1/2 text-center" large />
+            <StatBox label="目前市值" value={showData ? fmtMoney(currentMV) : "— — —"} className="w-1/2 text-center border-l border-white/5" large upDown={currentMV > currentCost ? 1 : -1} />
           </div>
           {/* 第二列 */}
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="未實現損益" value={`${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}`} className="w-1/2 text-center" upDown={unrealizedPnl} />
-            <StatBox label="未實現損益比" value={`${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%`} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
+            <StatBox label="未實現損益" value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}` : "— — —"} className="w-1/2 text-center" upDown={unrealizedPnl} />
+            <StatBox label="未實現損益比" value={showData ? `${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%` : "— — —"} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
           </div>
           {/* 第三列 */}
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="已實現損益" value={`${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}`} className="w-1/2 text-center" upDown={totalRealized} />
-            <StatBox label="已實現損益比" value={`${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%`} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
+            <StatBox label="已實現損益" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "— — —"} className="w-1/2 text-center" upDown={totalRealized} />
+            <StatBox label="已實現損益比" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "— — —"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
           </div>
           {/* 第四列 & 第五列 */}
           <div className="pt-6 border-t border-white/5 space-y-5">
-            <ProgressBar label="年度目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} />
-            <ProgressBar label="總目標" icon={Trophy} current={currentMV} goal={settings.total_goal} achieved={totalAchieved} />
+            <ProgressBar label="年度目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
+            <ProgressBar label="總目標" icon={Trophy} current={currentMV} goal={settings.total_goal} achieved={totalAchieved} showData={showData} />
           </div>
         </div>
       </div>
@@ -199,7 +210,7 @@ function StatBox({ label, value, upDown, large, className }: any) {
   )
 }
 
-function ProgressBar({ label, icon: Icon, goal, achieved }: any) {
+function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: any) {
   return (
     <div className="space-y-2.5">
       <div className="flex justify-between items-end">
@@ -207,7 +218,10 @@ function ProgressBar({ label, icon: Icon, goal, achieved }: any) {
           <Icon size={14} className="text-gold" /> {label}
         </span>
         {goal > 0 ? (
-          <span className="text-[13px] font-black font-mono text-gold">{achieved.toFixed(1)}%</span>
+          <div className="flex flex-col items-end">
+            <span className="text-[13px] font-black font-mono text-gold">{showData ? `${achieved.toFixed(1)}%` : "— — —"}</span>
+            <span className="text-[10px] font-bold text-white/20">{showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "— — —"}</span>
+          </div>
         ) : (
           <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[11px] font-bold text-gold/50">點此設定目標 →</button>
         )}
@@ -387,21 +401,32 @@ function IntegratedCalendar({ entries, transactions, onRefresh }: any) {
           <div className="grid grid-cols-7 gap-2">
             {['日','一','二','三','四','五','六'].map((d, i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-gold':'text-white/20'}`}>{d}</div>)}
             {days.map((d, i) => {
-              if (d === null) return <div key={`empty-${i}`} style={{ height: '52px' }} />
+              if (d === null) return <div key={`empty-${i}`} style={{ minHeight: '58px' }} />
               const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`, entry = entryMap[d], pnlPct = entry?.pnl_pct || 0
               const isToday = new Date().toISOString().split('T')[0] === dateStr, isSel = selectedDate === dateStr
               let bg = '#1e2535'
+              const hasPnl = entry && (entry.pnl !== 0 || (entry.realized_pnl !== 0 && entry.realized_pnl !== undefined))
+              
               if (pnlPct > 0) bg = `rgba(224, 80, 80, ${Math.min(0.85, 0.3 + (pnlPct/5)*0.55)})`
               else if (pnlPct < 0) bg = `rgba(66, 176, 122, ${Math.min(0.85, 0.3 + (Math.abs(pnlPct)/5)*0.55)})`
+              
               return (
-                <div key={d} onClick={() => toggleDate(dateStr)} className={`cal-day relative rounded-[10px] border transition-all flex flex-col items-center justify-center ${isSel ? 'border-gold bg-gold z-10 scale-105 shadow-gold/20' : isToday ? 'border-gold shadow-gold/10' : 'border-transparent'}`} style={{ background: isSel ? 'var(--gold)' : bg, height: '52px' }}>
-                  <span className={`text-[14px] font-black absolute top-1 left-1.5 leading-none ${isSel ? 'text-bg-base' : (entry ? 'text-white' : 'text-white/30')}`}>{d}</span>
+                <div key={d} onClick={() => toggleDate(dateStr)} 
+                  className={`cal-day relative rounded-[10px] border transition-all flex flex-col items-center justify-center ${isSel ? 'border-gold bg-gold z-10 scale-105 shadow-gold/20' : isToday ? 'border-gold shadow-gold/10' : 'border-transparent'}`} 
+                  style={{ background: isSel ? 'var(--gold)' : bg, minHeight: '58px' }}>
+                  
+                  <span className={`absolute top-1 left-1.5 leading-none ${
+                    isToday ? 'text-[14px] font-[800] text-gold' : 
+                    hasPnl ? 'text-[14px] font-[800] text-white' : 
+                    'text-[13px] font-[600] text-white/40'
+                  } ${isSel ? 'text-bg-base' : ''}`}>{d}</span>
+
                   {entry && (
-                    <div className="flex flex-col items-center justify-center mt-3 space-y-0.5">
-                      <div className={`text-[11px] font-black leading-none ${isSel ? 'text-bg-base' : 'text-white'}`}>
+                    <div className="flex flex-col items-center justify-center mt-4 space-y-1">
+                      <div className={`text-[12px] font-[700] leading-none ${isSel ? 'text-bg-base' : 'text-white'}`}>
                         {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
                       </div>
-                      <div className={`text-[9px] font-bold leading-none ${isSel ? 'text-bg-base/60' : 'text-white/50'}`}>
+                      <div className={`text-[11px] font-[600] leading-none ${isSel ? 'text-bg-base/60' : 'text-white/85'}`}>
                         {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                       </div>
                       {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
