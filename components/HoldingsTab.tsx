@@ -18,7 +18,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const currentYear = new Date().getFullYear().toString()
 
   // ── Calculate Realized PnL & Year PnL ──
-  const { totalRealized, ytdPnl, eoyCost } = useMemo(() => {
+  const { totalRealized, ytdRealized, eoyCost } = useMemo(() => {
     let totalRealized = 0
     let ytdRealized = 0
     let eoyCost = 0
@@ -81,7 +81,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const totalPnl = totalRealized + totalUnrealized
   const pnlPct = totalCost ? (totalPnl / totalCost) * 100 : 0
 
-  const yearPnl = (ytdPnl || 0) + totalUnrealized // YTD Realized + Current Unrealized
+  const yearPnl = (ytdRealized || 0) + totalUnrealized // YTD Realized + Current Unrealized
   const yearPnlPct = eoyCost > 0 ? (yearPnl / eoyCost) * 100 : 0
 
   const [expanded, setExpanded] = useState<string | null>(null)
