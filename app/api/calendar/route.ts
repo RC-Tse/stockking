@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   // 獲取該用戶所有交易紀錄，以便計算持股與 FIFO
   const { data: txs } = await supabase.from('transactions')
-    .select('*').eq('user_id', user.id).order('trade_date', { ascending: true }, { foreignTable: '', ascending: true })
+    .select('*').eq('user_id', user.id).order('trade_date', { ascending: true })
   
   if (!txs || txs.length === 0) return NextResponse.json([])
 
