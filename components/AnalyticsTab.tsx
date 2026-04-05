@@ -302,7 +302,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
   const finalTotalPnl = totalGoalData.filter(d => d.actual !== null).pop()?.actual || 0
 
   return (
-    <div className="p-4 space-y-8 pb-20 animate-slide-up">
+    <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden">
       {/* ── 1. 各股分析 ── */}
       <section className="space-y-4">
         <div className="flex items-center justify-between px-1">
@@ -403,17 +403,35 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
 
       {/* ── 3. 總損益目標分析 ── */}
       <section className="space-y-4 pt-4 border-t border-white/5">
-        <div className="flex items-center justify-between px-1">
-          <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">
-            <Trophy size={16} className="text-accent" /> 總損益累積進度
+        <div className="flex flex-col space-y-3 px-1">
+          {/* 第一行：🏆 圖示 + 時間快捷鍵（1M 3M 6M） */}
+          <div className="flex items-center justify-between">
+            <Trophy size={16} className="text-accent" />
+            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+              {(['1M', '3M', '6M'] as GoalRange[]).map(r => (
+                <button 
+                  key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === r && !showCustomTotal ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+          
+          {/* 第二行：「總損益累積進度」標題（置中或靠左） */}
+          <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap text-left">
+            總損益累積進度
           </h3>
-          <div className="flex items-center gap-1.5 flex-wrap justify-end">
-            {(['1M', '3M', '6M', '1Y', 'ALL'] as GoalRange[]).map(r => (
+
+          {/* 第三行：剩餘時間快捷鍵（1Y 全部）+ 自訂按鈕 */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            {(['1Y', 'ALL'] as GoalRange[]).map(r => (
               <button 
                 key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
                 className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === r && !showCustomTotal ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
               >
-                {r}
+                {r === 'ALL' ? '全部' : r}
               </button>
             ))}
             <button 
