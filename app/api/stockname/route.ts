@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { refreshAllNames } from './refresh/route'
+import { refreshAllNames } from '@/lib/stockname-sync'
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)

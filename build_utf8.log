@@ -1,0 +1,32 @@
+﻿
+> stockking@0.1.0 build
+> next build
+
+node.exe : C:\Users\User\Desktop\撠僑摮?files\node_modules\next\dist\bu
+ild\output\log.js:57
+位於 線路:1 字元:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo 
+...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\User\D...utput\lo 
+   g.js:57:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+    wait: (0, _picocolors.white)((0, _picocolors.bold)("??)),
+                                                       ^^^^^^
+
+SyntaxError: Invalid or unexpected token
+    at wrapSafe (node:internal/modules/cjs/loader:1743:18)
+    at Module._compile (node:internal/modules/cjs/loader:1786:20)
+    at Object..js (node:internal/modules/cjs/loader:1943:10)
+    at Module.load (node:internal/modules/cjs/loader:1533:32)
+    at Module._load (node:internal/modules/cjs/loader:1335:12)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:255:19)
+    at Module.<anonymous> (node:internal/modules/cjs/loader:1556:12)
+    at mod.require (C:\Users\User\Desktop\撠僑摮?files\node_modules\nex
+t\dist\server\require-hook.js:65:28)
+    at require (node:internal/modules/helpers:152:16)
+    at Object.<anonymous> (C:\Users\User\Desktop\撠僑摮?files\node_modu
+les\next\dist\bin\next:8:14)
+
+Node.js v24.14.1
