@@ -373,6 +373,15 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
   const finalYearPnl = yearGoalData.filter(d => d.actual !== null).pop()?.actual || 0
   const finalTotalPnl = totalGoalData.filter(d => d.actual !== null).pop()?.actual || 0
 
+  const getDynamicYMin = (val: number) => {
+    if (val >= 0) return 0
+    const abs = Math.abs(val)
+    if (abs <= 1000) return -1000
+    if (abs <= 10000) return -Math.ceil(abs / 1000) * 1000
+    if (abs <= 100000) return -Math.ceil(abs / 10000) * 10000
+    return -Math.ceil(abs / 10000) * 10000
+  }
+
   return (
     <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
       {/* ── 1. 各股分析 ── */}
@@ -432,7 +441,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             <LineChart data={enrichedStockHistory}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={stockTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--t3)'}} axisLine={false} tickLine={false} mirror={true} />
+              <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--t3)'}} axisLine={false} tickLine={false} width={45} />
               <Tooltip content={<StockTooltip />} />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
               <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" />
@@ -514,7 +523,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={yearTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={['auto', 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} mirror={true} />
+              <YAxis domain={[getDynamicYMin, 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} width={45} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
                 labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
@@ -570,7 +579,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             <LineChart data={totalGoalData}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={totalTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={['auto', 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} mirror={true} />
+              <YAxis domain={[getDynamicYMin, 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} width={45} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
                 labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
