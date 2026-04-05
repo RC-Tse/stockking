@@ -224,12 +224,19 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
         } else {
           result = fullData.filter(d => d.fullDate >= customS && d.fullDate <= customE)
         }
+      } else if (!isTotal) {
+        const cy = currentYear.toString()
+        let cutoff = `${cy}-12-31`
+        if (range === '1M') cutoff = `${cy}-01-31`
+        else if (range === '3M') cutoff = `${cy}-03-31`
+        else if (range === '6M') cutoff = `${cy}-06-30`
+        else if (range === '9M') cutoff = `${cy}-09-30`
+        result = fullData.filter(d => d.fullDate >= `${cy}-01-01` && d.fullDate <= cutoff)
       } else {
         let viewportDays = 0
         if (range === '1M') viewportDays = 30
         else if (range === '3M') viewportDays = 90
         else if (range === '6M') viewportDays = 180
-        else if (range === '9M') viewportDays = 270
         else if (range === '1Y') viewportDays = 365
 
         let todayIdx = fullData.findIndex(d => d.fullDate === todayStr)
@@ -424,8 +431,8 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={enrichedStockHistory}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={stockTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
-              <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--t3)'}} axisLine={false} tickLine={false} />
+              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={stockTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
+              <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--t3)'}} axisLine={false} tickLine={false} mirror={true} />
               <Tooltip content={<StockTooltip />} />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
               <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" />
@@ -506,8 +513,8 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={yearTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
-              <YAxis hide domain={[0, 'auto']} />
+              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={yearTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
+              <YAxis domain={['auto', 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} mirror={true} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
                 labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
@@ -562,8 +569,8 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={totalGoalData}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={totalTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
-              <YAxis hide domain={[0, 'auto']} />
+              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={totalTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
+              <YAxis domain={['auto', 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} mirror={true} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
                 labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
