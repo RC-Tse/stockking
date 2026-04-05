@@ -54,6 +54,33 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
     await handleSave({ theme: themeId })
   }
 
+  const renderSaveButton = () => (
+    <button 
+      onClick={async () => {
+        setSaving(true)
+        try {
+          const res = await fetch('/api/settings', {
+            method: 'POST',
+            body: JSON.stringify(localSettings)
+          })
+          if (!res.ok) throw new Error()
+          setSaveStatus('✅ 已儲存')
+          setTimeout(() => setSaveStatus(null), 2000)
+          await onSave(localSettings)
+        } catch (e) {
+          setSaveStatus('❌ 儲存失敗')
+          setTimeout(() => setSaveStatus(null), 2000)
+        } finally {
+          setSaving(false)
+        }
+      }}
+      disabled={saving}
+      className="w-full mt-4 py-4 rounded-2xl bg-accent text-[var(--bg-base)] font-extrabold text-[15px] active:scale-[0.98] transition-all shadow-lg shadow-accent/10 disabled:opacity-50"
+    >
+      {saving ? '儲存中...' : (saveStatus || '儲存設定')}
+    </button>
+  )
+
   return (
     <div className="p-4 space-y-6 pb-32">
       {view === 'MAIN' && (
@@ -164,6 +191,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               </p>
             </div>
           </div>
+          {renderSaveButton()}
         </div>
       )}
 
@@ -255,30 +283,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
             </div>
           </div>
 
-          <button 
-            onClick={async () => {
-              setSaving(true)
-              try {
-                const res = await fetch('/api/settings', {
-                  method: 'POST',
-                  body: JSON.stringify(localSettings)
-                })
-                if (!res.ok) throw new Error()
-                setSaveStatus('✅ 已儲存')
-                setTimeout(() => setSaveStatus(null), 2000)
-                await onSave(localSettings)
-              } catch (e) {
-                setSaveStatus('❌ 儲存失敗')
-                setTimeout(() => setSaveStatus(null), 2000)
-              } finally {
-                setSaving(false)
-              }
-            }}
-            disabled={saving}
-            className="w-full py-4 rounded-2xl bg-accent text-[var(--bg-base)] font-extrabold text-[15px] active:scale-[0.98] transition-all shadow-lg shadow-accent/10 disabled:opacity-50"
-          >
-            {saving ? '儲存中...' : (saveStatus || '儲存設定')}
-          </button>
+          {renderSaveButton()}
         </div>
       )}
     </div>
