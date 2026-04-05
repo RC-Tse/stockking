@@ -127,11 +127,11 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
   const pieData = useMemo(() => {
     return holdings.map(h => ({
-      name: getStockName(h.symbol),
+      name: quotes[h.symbol]?.name_zh || getStockName(h.symbol),
       symbol: h.symbol,
       value: h.total_cost
     })).sort((a, b) => b.value - a.value)
-  }, [holdings])
+  }, [holdings, quotes])
 
   const selectedHolding = useMemo(() => {
     return holdings.find(h => h.symbol === selectedPieSym)
@@ -258,7 +258,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             <div className="glass p-4 space-y-4 border-accent/20">
               <div className="flex justify-between items-start">
                 <div>
-                  <h4 className="text-[var(--t1)] font-black text-sm">{getStockName(selectedHolding.symbol)}</h4>
+                  <h4 className="text-[var(--t1)] font-black text-sm">{quotes[selectedHolding.symbol]?.name_zh || getStockName(selectedHolding.symbol)}</h4>
                   <p className="text-[10px] font-mono text-[var(--t3)]">{codeOnly(selectedHolding.symbol)}</p>
                 </div>
                 <div className="text-right">
