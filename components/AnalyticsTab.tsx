@@ -16,24 +16,32 @@ interface Props {
   quotes: Record<string, Quote>
 }
 
-type StockRange = '1M' | '3M' | '1Y' | 'ALL'
+type StockRange = '1M' | '3M' | '1Y' | 'ALL' | 'CUSTOM'
 type GoalRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
 
 export default function AnalyticsTab({ holdings, transactions, settings, quotes }: Props) {
   // ── Stock Chart States ──
   const [selSym, setSelSym] = useState(holdings[0]?.symbol || '')
   const [stockRange, setStockRange] = useState<StockRange>('1M')
+  const [showCustomStock, setShowCustomStock] = useState(false)
+  const [customStockStart, setCustomStockStart] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
+  })
+  const [customStockEnd, setCustomStockEnd] = useState(() => new Date().toISOString().split('T')[0])
   const [stockHistory, setStockHistory] = useState<any[]>([])
   const [loadingStock, setLoading] = useState(false)
 
   // ── Goal Chart States ──
   const [yearRange, setYearRange] = useState<GoalRange>('1Y')
+  const [showCustomYear, setShowCustomYear] = useState(false)
+  const [customYearStart, setCustomYearStart] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
+  })
+  const [customYearEnd, setCustomYearEnd] = useState(() => new Date().toISOString().split('T')[0])
   const [totalRange, setTotalRange] = useState<GoalRange>('ALL')
   const [showCustomTotal, setShowCustomTotal] = useState(false)
   const [customStart, setCustomStart] = useState(() => {
-    const d = new Date()
-    d.setMonth(d.getMonth() - 1)
-    return d.toISOString().split('T')[0]
+    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
   })
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
 
@@ -42,7 +50,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     if (!selSym) return
     async function fetchHistory() {
       setLoading(true)
-      const rangeMap: Record<StockRange, string> = { '1M': '1mo', '3M': '3mo', '1Y': '1y', 'ALL': '5y' }
+      const rangeMap: Record<StockRange, string> = { '1M': '1mo', '3M': '3mo', '1Y': '1y', 'ALL': '5y', 'CUSTOM': '5y' }
       try {
         const res = await fetch(`/api/stocks/info?symbol=${selSym}&range=${rangeMap[stockRange]}`)
         if (res.ok) {
@@ -79,7 +87,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
       txIdx++
     }
 
-    return stockHistory.map((h, i) => {
+    const processed = stockHistory.map((h, i) => {
       let isBuy = false
       let txPrice = 0
       let txShares = 0
@@ -88,7 +96,6 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
 
       while (txIdx < txs.length && txs[txIdx].trade_date <= h.date) {
         const tx = txs[txIdx]
-        // Allow treating trades on weekends to map to the next available history date (h.date)
         if (tx.action !== 'SELL') {
           inventory.push({ shares: tx.shares, cost: tx.amount + tx.fee })
           isBuy = true
@@ -118,7 +125,13 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
         pnlPct: currentAvgCost !== null && currentAvgCost !== 0 ? ((h.price - currentAvgCost) / currentAvgCost) * 100 : 0
       }
     })
-  }, [stockHistory, transactions, selSym])
+
+    let finalData = processed
+    if (stockRange === 'CUSTOM') {
+      finalData = processed.filter(d => d.date >= customStockStart && d.date <= customStockEnd)
+    }
+    return finalData.map(d => ({...d, timestamp: new Date(d.date).getTime()}))
+  }, [stockHistory, transactions, selSym, stockRange, customStockStart, customStockEnd])
 
   // ── Goal Calculation Logic ──
   const calculateGoalData = (isTotal: boolean, range: GoalRange, customS?: string, customE?: string) => {
@@ -228,11 +241,60 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
       right = Math.min(fullData.length - 1, right)
     }
 
-    return fullData.slice(left, right + 1)
+    let result = fullData.slice(left, right + 1)
+    if (range === 'CUSTOM' && customS && customE && !isTotal) {
+      const cy = currentYear.toString()
+      const cS = customS < `${cy}-01-01` ? `${cy}-01-01` : customS
+      const cE = customE > `${cy}-12-31` ? `${cy}-12-31` : customE
+      result = fullData.filter(d => d.fullDate >= cS && d.fullDate <= cE)
+    }
+    return result.map(d => ({ ...d, timestamp: new Date(d.fullDate).getTime() }))
   }
 
-  const yearGoalData = useMemo(() => calculateGoalData(false, yearRange), [transactions, settings, yearRange, holdings, quotes])
+  const yearGoalData = useMemo(() => calculateGoalData(false, yearRange, customYearStart, customYearEnd), [transactions, settings, yearRange, customYearStart, customYearEnd, holdings, quotes])
   const totalGoalData = useMemo(() => calculateGoalData(true, totalRange, customStart, customEnd), [transactions, settings, totalRange, customStart, customEnd, holdings, quotes])
+
+  const formatTick = (ts: number) => {
+    const d = new Date(ts)
+    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  const generateTicks = (data: any[], dateField: string, isCustom: boolean, cS?: string, cE?: string) => {
+    if (!data || !data.length) return []
+    const startStr = data[0][dateField]
+    const endStr = data[data.length - 1][dateField]
+    const startTime = new Date(startStr).getTime()
+    const endTime = new Date(endStr).getTime()
+    const days = Math.ceil((endTime - startTime) / 86400000)
+
+    let stepMonths = 1
+    if (days >= 365) stepMonths = 3
+    else if (days >= 180) stepMonths = 2
+
+    const ticks = []
+    const startObj = new Date(startStr)
+    const endObj = new Date(endStr)
+
+    let curr = new Date(startObj.getFullYear(), startObj.getMonth(), 1)
+    
+    while(curr <= endObj) {
+        if (curr >= startObj) {
+           ticks.push(curr.getTime())
+        }
+        curr.setMonth(curr.getMonth() + stepMonths)
+    }
+
+    if (isCustom && cS && cE) {
+        ticks.push(new Date(cS).getTime())
+        ticks.push(new Date(cE).getTime())
+    }
+
+    return Array.from(new Set(ticks)).sort((a,b) => a - b)
+  }
+
+  const stockTicks = useMemo(() => generateTicks(enrichedStockHistory, 'date', stockRange === 'CUSTOM', customStockStart, customStockEnd), [enrichedStockHistory, stockRange, customStockStart, customStockEnd])
+  const yearTicks = useMemo(() => generateTicks(yearGoalData, 'fullDate', yearRange === 'CUSTOM', customYearStart, customYearEnd), [yearGoalData, yearRange, customYearStart, customYearEnd])
+  const totalTicks = useMemo(() => generateTicks(totalGoalData, 'fullDate', totalRange === 'CUSTOM', customStart, customEnd), [totalGoalData, totalRange, customStart, customEnd])
 
   const renderBuyDot = (props: any) => {
     const { cx, cy, payload } = props
@@ -305,12 +367,12 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden">
       {/* ── 1. 各股分析 ── */}
       <section className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <div className="relative inline-block">
+        <div className="flex flex-col space-y-2 px-1">
+          <div className="relative inline-block w-[60%]">
             <select 
               value={selSym} 
               onChange={e => setSelSym(e.target.value)}
-              className="appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-2 pr-10 font-black text-sm text-[var(--t1)] focus:outline-none focus:border-accent transition-all"
+              className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-2 pr-10 font-black text-sm text-[var(--t1)] focus:outline-none focus:border-accent transition-all truncate"
             >
               {holdings.map(h => (
                 <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})</option>
@@ -318,24 +380,43 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             </select>
             <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--t3)] pointer-events-none" />
           </div>
-          <div className="flex gap-1.5">
-            {(['1M', '3M', '1Y', 'ALL'] as StockRange[]).map(r => (
+          <div className="flex gap-1.5 flex-wrap">
+            {(['1M', '3M', '1Y', 'ALL'] as (StockRange)[]).map(r => (
               <button 
-                key={r} onClick={() => setStockRange(r)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${stockRange === r ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
               >
-                {r}
+                {r === 'ALL' ? '全部' : r}
               </button>
             ))}
+            <button 
+              onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
+              className={`px-3 py-1.5 flex items-center gap-1 rounded-lg text-[10px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+            >
+              <CalendarIcon size={10} /> 自訂
+            </button>
           </div>
         </div>
+
+        {showCustomStock && (
+          <div className="flex items-center justify-end gap-3 mt-2 animate-slide-up px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-[var(--t3)]">起</span>
+              <DatePicker value={customStockStart} onChange={(v: string) => setCustomStockStart(v)} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-[var(--t3)]">迄</span>
+              <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} />
+            </div>
+          </div>
+        )}
 
         <div className="card-base p-4 h-80 border-white/10 bg-black/20 relative">
           {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={enrichedStockHistory}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="date" hide />
+              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={stockTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
               <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--t3)'}} axisLine={false} tickLine={false} />
               <Tooltip content={<StockTooltip />} />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
@@ -364,20 +445,45 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
       {/* ── 2. 年度目標分析 ── */}
       <section className="space-y-4 pt-4 border-t border-white/5">
         <div className="flex items-center justify-between px-1">
-          <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">
+          <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
             <Target size={16} className="text-accent" /> 年度獲利進度
           </h3>
           <div className="flex gap-1.5 flex-wrap justify-end">
             {(['1M', '3M', '6M', '9M', '1Y'] as GoalRange[]).map(r => (
               <button 
-                key={r} onClick={() => setYearRange(r)}
-                className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === r ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                key={r} onClick={() => { setYearRange(r); setShowCustomYear(false); }}
+                className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === r && !showCustomYear ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
               >
                 {r}
               </button>
             ))}
+            <button 
+              onClick={() => { setYearRange('CUSTOM'); setShowCustomYear(!showCustomYear); }}
+              className={`px-2.5 py-1 flex items-center gap-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+            >
+              <CalendarIcon size={10} /> 自訂
+            </button>
           </div>
         </div>
+
+        {showCustomYear && (
+          <div className="flex items-center justify-end gap-3 mt-2 animate-slide-up px-1">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-[var(--t3)]">起</span>
+              <DatePicker value={customYearStart} onChange={(v: string) => {
+                 const cy = new Date().getFullYear().toString()
+                 setCustomYearStart(v < `${cy}-01-01` ? `${cy}-01-01` : v)
+              }} />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-[var(--t3)]">迄</span>
+              <DatePicker value={customYearEnd} onChange={(v: string) => {
+                 const cy = new Date().getFullYear().toString()
+                 setCustomYearEnd(v > `${cy}-12-31` ? `${cy}-12-31` : v)
+              }} />
+            </div>
+          </div>
+        )}
 
         <div className="card-base p-4 h-64 border-white/10 bg-black/20">
           <ResponsiveContainer width="100%" height="100%">
@@ -389,7 +495,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
+              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={yearTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
               <YAxis hide domain={[0, 'auto']} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
@@ -403,11 +509,13 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
 
       {/* ── 3. 總損益目標分析 ── */}
       <section className="space-y-4 pt-4 border-t border-white/5">
-        <div className="flex flex-col space-y-3 px-1">
-          {/* 第一行：🏆 圖示 + 時間快捷鍵（1M 3M 6M） */}
-          <div className="flex items-center justify-between">
-            <Trophy size={16} className="text-accent" />
-            <div className="flex items-center gap-1.5 flex-wrap justify-end">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
+            <Trophy size={16} className="text-accent inline mr-1" /> 總損益累積進度
+          </h3>
+
+          <div className="flex flex-col items-end gap-1.5">
+            <div className="flex items-center gap-1.5">
               {(['1M', '3M', '6M'] as GoalRange[]).map(r => (
                 <button 
                   key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
@@ -417,29 +525,22 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
                 </button>
               ))}
             </div>
-          </div>
-          
-          {/* 第二行：「總損益累積進度」標題（置中或靠左） */}
-          <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap text-left">
-            總損益累積進度
-          </h3>
-
-          {/* 第三行：剩餘時間快捷鍵（1Y 全部）+ 自訂按鈕 */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {(['1Y', 'ALL'] as GoalRange[]).map(r => (
+            <div className="flex items-center gap-1.5">
+              {(['1Y', 'ALL'] as GoalRange[]).map(r => (
+                <button 
+                  key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === r && !showCustomTotal ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                >
+                  {r === 'ALL' ? '全部' : r}
+                </button>
+              ))}
               <button 
-                key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
-                className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === r && !showCustomTotal ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                onClick={() => { setTotalRange('CUSTOM'); setShowCustomTotal(!showCustomTotal); }}
+                className={`px-2.5 py-1 flex items-center gap-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
               >
-                {r === 'ALL' ? '全部' : r}
+                <CalendarIcon size={10} /> 自訂
               </button>
-            ))}
-            <button 
-              onClick={() => { setTotalRange('CUSTOM'); setShowCustomTotal(!showCustomTotal); }}
-              className={`px-2.5 py-1 flex items-center gap-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-            >
-              <CalendarIcon size={10} /> 自訂
-            </button>
+            </div>
           </div>
         </div>
 
@@ -460,7 +561,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={totalGoalData}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="date" tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
+              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={totalTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} />
               <YAxis hide domain={[0, 'auto']} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
