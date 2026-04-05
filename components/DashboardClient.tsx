@@ -11,19 +11,22 @@ import {
   BarChart2, 
   ClipboardList, 
   Settings2, 
-  Plus 
+  Plus,
+  LineChart
 } from 'lucide-react'
 import HoldingsTab      from './HoldingsTab'
 import TransactionsTab  from './TransactionsTab'
 import SettingsTab      from './SettingsTab'
+import AnalyticsTab     from './AnalyticsTab'
 import AddDrawer        from './AddDrawer'
 
 export interface AppUser { id: string; email: string; name: string; avatar: string }
 
-type Tab = 'holdings' | 'transactions' | 'settings'
+type Tab = 'holdings' | 'analytics' | 'transactions' | 'settings'
 
 const TABS: { id: Tab; icon: any; label: string }[] = [
   { id: 'holdings',     icon: BarChart2, label: '持股'  },
+  { id: 'analytics',    icon: LineChart, label: '分析'  },
   { id: 'transactions', icon: ClipboardList, label: '紀錄'  },
   { id: 'settings',     icon: Settings2, label: '設定'  },
 ]
@@ -177,6 +180,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
         {loading ? <div className="p-10 text-center opacity-20 animate-pulse text-[var(--t1)]">載入中...</div> : (
           <>
             {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} onRefresh={refresh} onRefreshCal={refreshCal} />}
+            {tab === 'analytics' && <AnalyticsTab />}
             {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} onEditDca={setEditingDcaPlan} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSignOut={signOut} onSave={async s => {
               await fetch('/api/settings', { method: 'POST', body: JSON.stringify(s) })
