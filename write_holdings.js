@@ -1,4 +1,5 @@
-'use client'
+const fs = require('fs');
+const content = `'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax, getStockName } from '@/types'
@@ -16,7 +17,7 @@ import {
   ClipboardList,
   Pencil,
   Trash2,
-  Eye, 
+  Eye,
   EyeOff,
   PieChart as PieChartIcon
 } from 'lucide-react'
@@ -45,7 +46,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const [showData, setShowData] = useState(true)
   const [selectedPieSym, setSelectedPieSym] = useState<string | null>(null)
 
-  // FIFO Metrics
   const { 
     totalRealized,
     realizedCostBasis,
@@ -159,7 +159,10 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         <div className="flex items-center justify-between mb-6">
           <span className="text-base font-black text-[var(--t3)] uppercase tracking-[0.2em]">持股概覽 · {holdings.length} 檔</span>
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowData(!showData)} className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all">
+            <button 
+              onClick={() => setShowData(!showData)} 
+              className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all"
+            >
               {showData ? <Eye size={14} /> : <EyeOff size={14} />}
             </button>
             <button onClick={() => window.location.reload()} className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all">
@@ -174,12 +177,12 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             <StatBox label="目前市值" value={showData ? fmtMoney(currentMV) : "••••••"} className="w-1/2 text-center border-l border-white/5" large upDown={currentMV > currentCost ? 1 : -1} />
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="未實現損益" value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}` : "••••••"} className="w-1/2 text-center" upDown={unrealizedPnl} />
-            <StatBox label="未實現投報" value={showData ? `${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
+            <StatBox label="未實現損益" value={showData ? \`\${unrealizedPnl >= 0 ? '+' : ''}\${fmtMoney(Math.round(unrealizedPnl))}\` : "••••••"} className="w-1/2 text-center" upDown={unrealizedPnl} />
+            <StatBox label="未實現投報" value={showData ? \`\${unrealizedPct >= 0 ? '+' : ''}\${unrealizedPct.toFixed(2)}%\` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="已實現損益" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "••••••"} className="w-1/2 text-center" upDown={totalRealized} />
-            <StatBox label="已實現投報" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
+            <StatBox label="已實現損益" value={showData ? \`\${totalRealized >= 0 ? '+' : ''}\${fmtMoney(Math.round(totalRealized))}\` : "••••••"} className="w-1/2 text-center" upDown={totalRealized} />
+            <StatBox label="已實現投報" value={showData ? \`\${realizedPct >= 0 ? '+' : ''}\${realizedPct.toFixed(2)}%\` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
           </div>
           <div className="pt-6 border-t border-white/5 space-y-5">
             <ProgressBar label="年度獲利目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
@@ -209,7 +212,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               >
                 {pieData.map((entry, index) => (
                   <Cell 
-                    key={`cell-${index}`} 
+                    key={\`cell-\${index}\`} 
                     fill={PIE_COLORS[index % PIE_COLORS.length]} 
                     stroke="rgba(0,0,0,0.2)"
                     style={{ outline: 'none', cursor: 'pointer', opacity: selectedPieSym && selectedPieSym !== entry.symbol ? 0.4 : 1 }}
@@ -237,6 +240,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </div>
         </div>
 
+        {/* 圖例 */}
         <div className="grid grid-cols-2 gap-x-4 gap-y-2">
           {pieData.map((entry, index) => (
             <button 
@@ -246,13 +250,14 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             >
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
-                <span className={`text-[11px] font-bold truncate ${selectedPieSym === entry.symbol ? 'text-accent' : 'text-[var(--t2)]'}`}>{entry.name}</span>
+                <span className={\`text-[11px] font-bold truncate \${selectedPieSym === entry.symbol ? 'text-accent' : 'text-[var(--t2)]'}\`}>{entry.name}</span>
               </div>
               <span className="text-[10px] font-mono text-[var(--t3)] ml-2">{((entry.value / currentCost) * 100).toFixed(1)}%</span>
             </button>
           ))}
         </div>
 
+        {/* 詳細卡片 */}
         {selectedHolding && (
           <div className="mt-4 pt-4 border-t border-white/5 animate-slide-up">
             <div className="glass p-4 space-y-4 border-accent/20">
@@ -268,7 +273,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               </div>
               
               <div className="grid grid-cols-2 gap-4">
-                <DetailBox label="持股數量" value={`${selectedHolding.shares.toLocaleString()} 股`} />
+                <DetailBox label="持股數量" value={\`\${selectedHolding.shares.toLocaleString()} 股\`} />
                 <DetailBox label="平均成本" value={selectedHolding.avg_cost.toFixed(2)} />
                 <DetailBox label="持有成本" value={fmtMoney(selectedHolding.total_cost)} />
                 <DetailBox label="目前市值" value={fmtMoney(selectedHolding.market_value)} />
@@ -276,7 +281,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
               <div className="pt-2 border-t border-white/5 flex justify-between items-end">
                 <span className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest">未實現損益</span>
-                <span className={`font-black font-mono text-base ${selectedHolding.unrealized_pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                <span className={\`font-black font-mono text-base \${selectedHolding.unrealized_pnl >= 0 ? 'text-red-400' : 'text-green-400'}\`}>
                   {selectedHolding.unrealized_pnl >= 0 ? '+' : ''}{fmtMoney(selectedHolding.unrealized_pnl)} ({selectedHolding.pnl_pct.toFixed(2)}%)
                 </span>
               </div>
@@ -291,7 +296,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       {/* 4. 各股列表 */}
       <div className="space-y-4">
         {holdings.sort((a, b) => b.market_value - a.market_value).map(h => (
-          <HoldingItem key={h.symbol} h={h} q={quotes[h.symbol]} settings={settings} txs={transactions.filter(t => t.symbol === h.symbol)} isExpanded={expanded === h.symbol} onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)} onUpdated={onRefresh} onDelete={(id:number)=>setDeletingId(id)} />
+          <HoldingItem key={h.symbol} h={h} q={quotes[h.symbol]} settings={settings} txs={transactions.filter(t => t.symbol === h.symbol)} isExpanded={expanded === h.symbol} onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)} onUpdated={onRefresh} onDelete={(id)=>setDeletingId(id)} />
         ))}
 
         {closedHoldings.length > 0 && (
@@ -301,12 +306,12 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                 <Archive size={18} className="text-accent" />
                 <span className="font-black text-sm text-[var(--t2)]">已結算股票 ({closedHoldings.length} 檔)</span>
               </div>
-              <ChevronDown size={16} className={`text-accent transition-transform duration-300 ${closedExpanded ? 'rotate-180' : ''}`} />
+              <ChevronDown size={16} className={\`text-accent transition-transform duration-300 \${closedExpanded ? 'rotate-180' : ''}\`} />
             </button>
             {closedExpanded && (
               <div className="space-y-3 mt-3 animate-slide-up">
                 {closedHoldings.map(c => (
-                  <ClosedHoldingItem key={c.symbol} c={c} expanded={expanded === `closed-${c.symbol}`} onToggle={() => setExpanded(expanded === `closed-${c.symbol}` ? null : `closed-${c.symbol}`)} transactions={transactions.filter(t => t.symbol === c.symbol)} settings={settings} onRefresh={onRefresh} onDelete={(id:number)=>setDeletingId(id)} />
+                  <ClosedHoldingItem key={c.symbol} c={c} expanded={expanded === \`closed-\${c.symbol}\`} onToggle={() => setExpanded(expanded === \`closed-\${c.symbol}\` ? null : \`closed-\${c.symbol}\`)} transactions={transactions.filter(t => t.symbol === c.symbol)} settings={settings} onRefresh={onRefresh} onDelete={(id)=>setDeletingId(id)} />
                 ))}
               </div>
             )}
@@ -323,9 +328,9 @@ function StatBox({ label, value, upDown, large, className }: any) {
   const isHidden = value === "••••••"
   const color = (upDown === undefined || isHidden) ? 'text-[var(--t1)]' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
   return (
-    <div className={`flex flex-col ${className}`}>
+    <div className={\`flex flex-col \${className}\`}>
       <span className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest mb-1.5">{label}</span>
-      <span className={`font-black font-mono leading-none ${large ? 'text-[22px]' : 'text-[18px]'} ${color}`}>{value}</span>
+      <span className={\`font-black font-mono leading-none \${large ? 'text-[22px]' : 'text-[18px]'} \${color}\`}>{value}</span>
     </div>
   )
 }
@@ -349,11 +354,11 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
         </span>
         {goal > 0 ? (
           <div className="flex flex-col items-end">
-            <span className={`text-[13px] font-black font-mono ${isNegative ? 'text-red-400' : 'text-accent'}`}>
-              {showData ? `${achieved.toFixed(1)}%` : "••••••"}
+            <span className={\`text-[13px] font-black font-mono \${isNegative ? 'text-red-400' : 'text-accent'}\`}>
+              {showData ? \`\${achieved.toFixed(1)}%\` : "••••••"}
             </span>
             <span className="text-[10px] font-bold text-[var(--t3)]">
-              {showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "••••••"}
+              {showData ? \`\${fmtMoney(Math.round(current))} / \${fmtMoney(goal)}\` : "••••••"}
             </span>
           </div>
         ) : (
@@ -363,8 +368,8 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
       {goal > 0 && (
         <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
           <div 
-            className={`h-full transition-all duration-1000 ${isNegative ? 'bg-red-500/50' : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-bright)]'}`} 
-            style={{ width: `${Math.min(100, Math.max(0, achieved))}%` }} 
+            className={\`h-full transition-all duration-1000 \${isNegative ? 'bg-red-500/50' : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-bright)]'}\`} 
+            style={{ width: \`\${Math.min(100, Math.max(0, achieved))}\%\` }} 
           />
         </div>
       )}
@@ -378,7 +383,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
   const nameZh = q?.name_zh || h.symbol
 
   return (
-    <div className={`card-base overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-accent shadow-lg shadow-accent/5' : 'border-white/10 shadow-xl'}`}>
+    <div className={\`card-base overflow-hidden transition-all duration-300 border \${isExpanded ? 'border-accent shadow-lg shadow-accent/5' : 'border-white/10 shadow-xl'}\`}>
       <div className="p-4 cursor-pointer active:bg-bg-hover space-y-3" onClick={onToggle}>
         <div className="flex justify-between items-center">
           <div className="font-black text-[var(--t1)] text-base">
@@ -389,24 +394,24 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
         <div className="text-[11px] font-bold text-[var(--t2)]">
           {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
           {q?.change !== undefined && (
-            <span className={`ml-2 ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+            <span className={\`ml-2 \${q.change >= 0 ? 'text-red-400' : 'text-green-400'}\`}>
               {q.change >= 0 ? '▲' : '▼'} {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
             </span>
           )}
         </div>
 
-        <div className="h-px bg-white/5" />
+        <div className=\"h-px bg-white/5\" />
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className=\"grid grid-cols-2 gap-4\">
           <div>
-            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">持有成本 / 市值</div>
-            <div className="text-sm font-bold text-[var(--t1)] font-mono">
-              {fmtMoney(Math.round(h.total_cost))} / <span className="text-[var(--t1)]">{fmtMoney(Math.round(h.market_value))}</span>
+            <div className=\"text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1\">持有成本 / 市值</div>
+            <div className=\"text-sm font-bold text-[var(--t1)] font-mono\">
+              {fmtMoney(Math.round(h.total_cost))} / <span className=\"text-[var(--t1)]\">{fmtMoney(Math.round(h.market_value))}</span>
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">未實現損益</div>
-            <div className={`text-sm font-black font-mono ${color}`}>
+          <div className=\"text-right\">
+            <div className=\"text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1\">未實現損益</div>
+            <div className={\`text-sm font-black font-mono \${color}\`}>
               {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} ({(h.pnl_pct ?? 0).toFixed(2)}%)
             </div>
           </div>
@@ -414,7 +419,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
       </div>
 
       {isExpanded && (
-        <div className="bg-black/20 border-t border-white/5 p-3 space-y-2">
+        <div className=\"bg-black/20 border-t border-white/5 p-3 space-y-2\">
           {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
         </div>
       )}
@@ -424,20 +429,20 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
 
 function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRefresh, onDelete }: any) {
   const [name, setName] = useState(getStockName(c.symbol))
-  useEffect(() => { fetch(`/api/stockname?symbol=${c.symbol}`).then(res => res.json()).then(data => { if (data.name_zh) setName(data.name_zh) }) }, [c.symbol])
+  useEffect(() => { fetch(\`/api/stockname?symbol=\${c.symbol}\`).then(res => res.json()).then(data => { if (data.name_zh) setName(data.name_zh) }) }, [c.symbol])
   return (
-    <div className="card-base overflow-hidden border border-white/5">
-      <div className="p-4 cursor-pointer" onClick={onToggle}>
-        <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center gap-2"><span className="font-black text-[var(--t1)] text-base">{name} ({codeOnly(c.symbol)})</span></div>
-          <div className={`font-black font-mono text-base ${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>{c.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(c.pnl))}</div>
+    <div className=\"card-base overflow-hidden border border-white/5\">
+      <div className=\"p-4 cursor-pointer\" onClick={onToggle}>
+        <div className=\"flex justify-between items-center mb-2\">
+          <div className=\"flex items-center gap-2\"><span className=\"font-black text-[var(--t1)] text-base\">{name} ({codeOnly(c.symbol)})</span></div>
+          <div className={\`font-black font-mono text-base \${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}\`}>{c.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(c.pnl))}</div>
         </div>
-        <div className="flex justify-between items-center">
-          <span className="text-[10px] font-bold text-[var(--t3)]">總成本 {fmtMoney(Math.round(c.buyCost))} · 總營收 {fmtMoney(Math.round(c.sellRev))}</span>
-          <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>{(c.pnlPct ?? 0).toFixed(2)}%</div>
+        <div className=\"flex justify-between items-center\">
+          <span className=\"text-[10px] font-bold text-[var(--t3)]\">總成本 {fmtMoney(Math.round(c.buyCost))} · 總營收 {fmtMoney(Math.round(c.sellRev))}</span>
+          <div className={\`text-[10px] font-bold \${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}\`}>{(c.pnlPct ?? 0).toFixed(2)}%</div>
         </div>
       </div>
-      {expanded && <div className="bg-black/20 border-t border-white/5 p-3 space-y-2">{transactions.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onRefresh} onDelete={onDelete} />)}</div>}
+      {expanded && <div className=\"bg-black/20 border-t border-white/5 p-3 space-y-2\">{transactions.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onRefresh} onDelete={onDelete} />)}</div>}
     </div>
   )
 }
@@ -525,7 +530,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
         return
       }
 
-      const res = await fetch(`/api/stocks?symbols=${held.join(',')}&date=${dateStr}`)
+      const res = await fetch(\`/api/stocks?symbols=\${held.join(',')}&date=\${dateStr}\`)
       if (!res.ok) throw new Error('API fetch error')
       const quotesData = await res.json() || {}
 
@@ -568,23 +573,23 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
   }
 
   return (
-    <div className="space-y-4">
-      <div className="card-base p-5 space-y-6 border-white/10 shadow-2xl">
-        <div className="flex items-center justify-between">
-          <button onClick={() => setViewDate(new Date(year, month - 2, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-accent active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronLeft size={20}/></button>
-          <div className="flex gap-2 font-black text-[var(--t1)] text-[20px]">
-            <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded transition-colors ${view === 'YEAR' ? 'text-accent' : 'active:opacity-60'}`}>{year} 年</button>
-            <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded transition-colors ${view === 'MONTH' ? 'text-accent' : 'active:opacity-60'}`}>{month} 月</button>
+    <div className=\"space-y-4\">
+      <div className=\"card-base p-5 space-y-6 border-white/10 shadow-2xl\">
+        <div className=\"flex items-center justify-between\">
+          <button onClick={() => setViewDate(new Date(year, month - 2, 1))} className=\"w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-accent active:scale-90 transition-all border border-white/5 shadow-lg\"><ChevronLeft size={20}/></button>
+          <div className=\"flex gap-2 font-black text-[var(--t1)] text-[20px]\">
+            <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={\`px-2 rounded transition-colors \${view === 'YEAR' ? 'text-accent' : 'active:opacity-60'}\`}>{year} 年</button>
+            <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={\`px-2 rounded transition-colors \${view === 'MONTH' ? 'text-accent' : 'active:opacity-60'}\`}>{month} 月</button>
           </div>
-          <button onClick={() => setViewDate(new Date(year, month, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-accent active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronRight size={20}/></button>
+          <button onClick={() => setViewDate(new Date(year, month, 1))} className=\"w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-accent active:scale-90 transition-all border border-white/5 shadow-lg\"><ChevronRight size={20}/></button>
         </div>
 
         {view === 'CALENDAR' && (
-          <div className="grid grid-cols-7 gap-2">
-            {['日','一','二','三','四','五','六'].map((d, i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-accent':'text-[var(--t3)]'}`}>{d}</div>)}
+          <div className=\"grid grid-cols-7 gap-2\">
+            {['日','一','二','三','四','五','六'].map((d, i) => <div key={d} className={\`text-center text-[11px] font-bold py-1 \${i===0?'text-red-400':i===6?'text-accent':'text-[var(--t3)]'}\`}>{d}</div>)}
             {days.map((d, i) => {
-              if (d === null) return <div key={`empty-${i}`} style={{ minHeight: '58px' }} />
-              const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`, entry = entryMap[d]
+              if (d === null) return <div key={\`empty-\${i}\`} style={{ minHeight: '58px' }} />
+              const dateStr = \`\${year}-\${String(month).padStart(2,'0')}-\${String(d).padStart(2,'0')}\`, entry = entryMap[d]
               const dObj = new Date(dateStr)
               const isWeekend = dObj.getDay() === 0 || dObj.getDay() === 6
               const pnlPct = entry?.pnl_pct || 0
@@ -593,62 +598,62 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
               const hasPnl = entry && (entry.pnl !== 0 || (entry.realized_pnl !== 0 && entry.realized_pnl !== undefined))
               
               if (!isWeekend) {
-                if (pnlPct > 0) bg = `rgba(224, 80, 80, ${Math.min(0.85, 0.3 + (pnlPct/5)*0.55)})`
-                else if (pnlPct < 0) bg = `rgba(66, 176, 122, ${Math.min(0.85, 0.3 + (Math.abs(pnlPct)/5)*0.55)})`
+                if (pnlPct > 0) bg = \`rgba(224, 80, 80, \${Math.min(0.85, 0.3 + (pnlPct/5)*0.55)})\`
+                else if (pnlPct < 0) bg = \`rgba(66, 176, 122, \${Math.min(0.85, 0.3 + (Math.abs(pnlPct)/5)*0.55)})\`
                 else bg = 'var(--bg-surface)'
               }
               
               return (
                 <div key={d} onClick={() => toggleDate(dateStr)} 
-                  className={`cal-day relative rounded-[10px] border transition-all flex flex-col items-center justify-center ${isSel ? 'border-accent bg-accent z-10 scale-105 shadow-accent/20' : isToday ? 'border-accent shadow-accent/10' : 'border-transparent'}`} 
+                  className={\`cal-day relative rounded-[10px] border transition-all flex flex-col items-center justify-center \${isSel ? 'border-accent bg-accent z-10 scale-105 shadow-accent/20' : isToday ? 'border-accent shadow-accent/10' : 'border-transparent'}\`} 
                   style={{ background: isSel ? 'var(--accent)' : bg, minHeight: '58px' }}>
                   
-                  <span className={`absolute top-1 left-1.5 leading-none ${
+                  <span className={\`absolute top-1 left-1.5 leading-none \${
                     isToday ? 'text-[14px] font-[800] text-accent' : 
                     isSel ? 'text-bg-base' : 
                     !isWeekend && hasPnl ? 'text-[var(--t1)]' : 'text-[var(--t3)]'
-                  } ${!isWeekend && hasPnl ? 'text-[14px] font-[800]' : 'text-[13px] font-[600]'}`}>{d}</span>
+                  } \${!isWeekend && hasPnl ? 'text-[14px] font-[800]' : 'text-[13px] font-[600]'}\`}>{d}</span>
 
                   {!isWeekend && entry && (
-                    <div className="flex flex-col items-center justify-center mt-4 space-y-1">
-                      <div className={`text-[12px] font-[700] leading-none ${isSel ? 'text-bg-base' : 'text-[var(--t1)]'}`}>
+                    <div className=\"flex flex-col items-center justify-center mt-4 space-y-1\">
+                      <div className={\`text-[12px] font-[700] leading-none \${isSel ? 'text-bg-base' : 'text-[var(--t1)]'}\`}>
                         {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
                       </div>
-                      <div className={`text-[11px] font-[600] leading-none ${isSel ? 'text-bg-base/60' : 'text-white/85'}`}>
+                      <div className={\`text-[11px] font-[600] leading-none \${isSel ? 'text-bg-base/60' : 'text-white/85'}\`}>
                         {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                       </div>
                       {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
-                        <div className={`text-[9px] font-black leading-none mt-0.5 ${isSel ? 'text-bg-base' : 'text-accent'}`}>
+                        <div className={\`text-[9px] font-black leading-none mt-0.5 \${isSel ? 'text-bg-base' : 'text-accent'}\`}>
                           {entry.realized_pnl > 0 ? '+' : ''}{shortMoney(entry.realized_pnl)}
                         </div>
                       )}
                     </div>
                   )}
-                  {hasTxMap[d] && <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent shadow-sm border border-bg-base" />}
+                  {hasTxMap[d] && <div className=\"absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent shadow-sm border border-bg-base\" />}
                 </div>
               )
             })}
           </div>
         )}
-        {view === 'YEAR' && <div className="grid grid-cols-3 gap-2">{Array.from({length:10}, (_,i)=>new Date().getFullYear()-7+i).map(y => <button key={y} onClick={()=>{setViewDate(new Date(y, month-1, 1)); setView('CALENDAR')}} className={`py-4 rounded-xl font-black transition-all ${year===y?'bg-accent text-bg-base shadow-lg':'bg-bg-hover text-[var(--t2)] active:bg-bg-card'}`}>{y}</button>)}</div>}
-        {view === 'MONTH' && <div className="grid grid-cols-3 gap-2">{Array.from({length:12}, (_,i)=>i+1).map(m => <button key={m} onClick={()=>{setViewDate(new Date(year, m-1, 1)); setView('CALENDAR')}} className={`py-4 rounded-xl font-black transition-all ${month===m?'bg-accent text-bg-base shadow-lg':'bg-bg-hover text-[var(--t2)] active:bg-bg-card'}`}>{m} 月</button>)}</div>}
+        {view === 'YEAR' && <div className=\"grid grid-cols-3 gap-2\">{Array.from({length:10}, (_,i)=>new Date().getFullYear()-7+i).map(y => <button key={y} onClick={()=>{setViewDate(new Date(y, month-1, 1)); setView('CALENDAR')}} className={\`py-4 rounded-xl font-black transition-all \${year===y?'bg-accent text-bg-base shadow-lg':'bg-bg-hover text-[var(--t2)] active:bg-bg-card'}\`}>{y}</button>)}</div>}
+        {view === 'MONTH' && <div className=\"grid grid-cols-3 gap-2\">{Array.from({length:12}, (_,i)=>i+1).map(m => <button key={m} onClick={()=>{setViewDate(new Date(year, m-1, 1)); setView('CALENDAR')}} className={\`py-4 rounded-xl font-black transition-all \${month===m?'bg-accent text-bg-base shadow-lg':'bg-bg-hover text-[var(--t2)] active:bg-bg-card'}\`}>{m} 月</button>)}</div>}
       </div>
 
       {selectedDate && (
-        <div className="animate-slide-up card-base p-5 space-y-5 border-white/10 shadow-2xl">
-          <div className="flex justify-between items-center border-b border-white/5 pb-3">
-            <div className="flex flex-col">
-              <h3 className="font-black text-base text-[var(--t1)]">{selectedDate.split('-')[1]} 月 {selectedDate.split('-')[2]} 日 持股明細</h3>
+        <div className=\"animate-slide-up card-base p-5 space-y-5 border-white/10 shadow-2xl\">
+          <div className=\"flex justify-between items-center border-b border-white/5 pb-3\">
+            <div className=\"flex flex-col\">
+              <h3 className=\"font-black text-base text-[var(--t1)]\">{selectedDate.split('-')[1]} 月 {selectedDate.split('-')[2]} 日 持股明細</h3>
               {!isHoliday && (() => { 
                 const entry = entries?.find((e: CalendarEntry) => e.entry_date === selectedDate); 
                 if (!entry) return null; 
                 return (
-                  <div className="flex flex-col gap-0.5 mt-1">
-                    <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  <div className=\"flex flex-col gap-0.5 mt-1\">
+                    <span className={\`text-[10px] font-black font-mono \${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}\`}>
                       當日市值變動 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({(entry.pnl_pct ?? 0).toFixed(2)}%)
                     </span>
                     {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
-                      <span className="text-[10px] font-black font-mono text-accent">
+                      <span className=\"text-[10px] font-black font-mono text-accent\">
                         當日已實現損益 {entry.realized_pnl > 0 ? '+' : ''}{fmtMoney(entry.realized_pnl)}
                       </span>
                     )}
@@ -656,25 +661,25 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                 )
               })()}
             </div>
-            {loading && <RefreshCw size={14} className="animate-spin text-accent" />}
+            {loading && <RefreshCw size={14} className=\"animate-spin text-accent\" />}
           </div>
           
           {isHoliday ? (
-            <div className="py-8 flex flex-col items-center justify-center text-center space-y-2">
-              <div className="text-[16px] font-black text-[var(--t2)]">休市日</div>
-              <div className="text-[12px] font-bold text-[var(--t3)]">當日無交易或市值變動</div>
+            <div className=\"py-8 flex flex-col items-center justify-center text-center space-y-2\">
+              <div className=\"text-[16px] font-black text-[var(--t2)]\">休市日</div>
+              <div className=\"text-[12px] font-bold text-[var(--t3)]\">當日無交易或市值變動</div>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className=\"space-y-4\">
               {dayDetails?.map(det => (
-                <div key={det.symbol} className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
-                  <div className="flex justify-between items-start">
+                <div key={det.symbol} className=\"p-4 rounded-xl bg-white/5 border border-white/5 space-y-3\">
+                  <div className=\"flex justify-between items-start\">
                     <div>
-                      <div className="font-black text-[var(--t1)] text-base">{det.name_zh} <span className="text-xs text-[var(--t3)] font-mono">{codeOnly(det.symbol)}</span></div>
-                      <div className="text-[11px] font-bold text-[var(--t2)] mt-1">
+                      <div className=\"font-black text-[var(--t1)] text-base\">{det.name_zh} <span className=\"text-xs text-[var(--t3)] font-mono\">{codeOnly(det.symbol)}</span></div>
+                      <div className=\"text-[11px] font-bold text-[var(--t2)] mt-1\">
                         {(det.shares ?? 0).toLocaleString()} 股 · 收盤 {det.price.toFixed(2)}
                         {det.change !== undefined && (
-                          <span className={`ml-2 ${det.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                          <span className={\`ml-2 \${det.change >= 0 ? 'text-red-400' : 'text-green-400'}\`}>
                             {det.change >= 0 ? '▲' : '▼'} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
                           </span>
                         )}
@@ -682,16 +687,16 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
+                  <div className=\"grid grid-cols-2 gap-4 pt-2 border-t border-white/5\">
                     <div>
-                      <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">持有成本 / 市值</div>
-                      <div className="text-sm font-bold text-[var(--t1)] font-mono">
-                        {fmtMoney(Math.round(det.total_cost))} / <span className="text-[var(--t1)]">{fmtMoney(det.market_value)}</span>
+                      <div className=\"text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1\">持有成本 / 市值</div>
+                      <div className=\"text-sm font-bold text-[var(--t1)] font-mono\">
+                        {fmtMoney(Math.round(det.total_cost))} / <span className=\"text-[var(--t1)]\">{fmtMoney(det.market_value)}</span>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">當日損益</div>
-                      <div className={`text-sm font-black font-mono ${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                    <div className=\"text-right\">
+                      <div className=\"text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1\">當日損益</div>
+                      <div className={\`text-sm font-black font-mono \${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}\`}>
                         {det.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(det.pnl))} ({det.pnl_pct.toFixed(2)}%)
                       </div>
                     </div>
@@ -705,13 +710,13 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
             const dayTxs = transactions?.filter((t: Transaction) => t.trade_date === selectedDate)
             if (!dayTxs?.length) return null
             return (
-              <div className="pt-4 border-t border-white/5 space-y-4">
-                <h4 className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest flex items-center gap-2"><ClipboardList size={14}/> 當天交易</h4>
-                <div className="space-y-3">
+              <div className=\"pt-4 border-t border-white/5 space-y-4\">
+                <h4 className=\"text-[11px] font-black text-[var(--t3)] uppercase tracking-widest flex items-center gap-2\"><ClipboardList size={14}/> 當天交易</h4>
+                <div className=\"space-y-3\">
                   {dayTxs.map((tx: Transaction) => (
-                    <div key={tx.id} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='BUY'?'買入':'賣出'}</span><span className="font-black text-[var(--t1)] truncate max-w-[100px]">{tx.name_zh}</span></div>
-                      <div className="text-right"><div className={`font-mono font-black ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-[var(--t3)] font-bold">{(tx.shares ?? 0).toLocaleString()} 股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
+                    <div key={tx.id} className=\"flex justify-between items-center text-sm\">
+                      <div className=\"flex items-center gap-2\"><span className={\`text-[9px] font-black px-1.5 py-0.5 rounded border \${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}\`}>{tx.action==='BUY'?'買入':'賣出'}</span><span className=\"font-black text-[var(--t1)] truncate max-w-[100px]\">{tx.name_zh}</span></div>
+                      <div className=\"text-right\"><div className={\`font-mono font-black \${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}\`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div><div className=\"text-[9px] text-[var(--t3)] font-bold\">{(tx.shares ?? 0).toLocaleString()} 股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
                     </div>
                   ))}
                 </div>
@@ -744,44 +749,99 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   }
   
   if (isEditing) return (
-    <div className="p-5 rounded-2xl bg-bg-surface border border-accent/30 space-y-5 my-2 shadow-2xl animate-slide-up">
-      <div className="text-center pb-2 border-b border-white/5"><h4 className="font-black text-sm text-accent tracking-tight">編輯：{isBuy?'買入':'賣出'} {t.name_zh || t.symbol}</h4></div>
-      <div className="flex gap-2 p-1 bg-black/20 rounded-xl">
-        <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>整張 (1000股)</button>
-        <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>零股</button>
+    <div className=\"p-5 rounded-2xl bg-bg-surface border border-accent/30 space-y-5 my-2 shadow-2xl animate-slide-up\">
+      <div className=\"text-center pb-2 border-b border-white/5\"><h4 className=\"font-black text-sm text-accent tracking-tight\">編輯：{isBuy?'買入':'賣出'} {t.name_zh || t.symbol}</h4></div>
+      <div className=\"flex gap-2 p-1 bg-black/20 rounded-xl\">
+        <button onClick={() => setTradeType('FULL')} className={\`flex-1 py-2 text-[10px] font-black rounded-lg transition-all \${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}\`}>整張 (1000股)</button>
+        <button onClick={() => setTradeType('FRACTIONAL')} className={\`flex-1 py-2 text-[10px] font-black rounded-lg transition-all \${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}\`}>零股</button>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v):setShares(v)}} className="input-base text-center font-black py-3" /></div>
-        <div className="space-y-1.5"><Label>成交價</Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>
+      <div className=\"grid grid-cols-2 gap-4\">
+        <div className=\"space-y-1.5\"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type=\"number\" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v as any):setShares(v as any)}} className=\"input-base text-center font-black py-3\" /></div>
+        <div className=\"space-y-1.5\"><Label>成交價</Label><input type=\"number\" step=\"0.01\" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className=\"input-base text-center font-black py-3\" /></div>
       </div>
-      <div className="space-y-1.5"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
-      <div className="space-y-1.5"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-sm py-3" placeholder="選填..." /></div>
-      <div className="card-base p-4 space-y-2 bg-black/20 text-[11px] font-bold">
-        <div className="flex justify-between opacity-40"><span>手續費 + 稅</span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
-        <div className="flex justify-between items-center pt-2 border-t border-white/5"><span className="text-[var(--t2)]">預估淨收支</span><span className={`text-base font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
+      <div className=\"space-y-1.5\"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
+      <div className=\"space-y-1.5\"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className=\"input-base text-sm py-3\" placeholder=\"選填...\" /></div>
+      <div className=\"card-base p-4 space-y-2 bg-black/20 text-[11px] font-bold\">
+        <div className=\"flex justify-between opacity-40\"><span>手續費 + 稅</span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
+        <div className=\"flex justify-between items-center pt-2 border-t border-white/5\"><span className=\"text-[var(--t2)]\">預估淨收支</span><span className={\`text-base font-black \${net>=0?'text-red-400':'text-green-400'}\`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
       </div>
-      <div className="flex gap-3 pt-1"><button onClick={handleSave} disabled={!isValid || loading} className="flex-[3] btn-primary py-3.5">確認修改</button><button onClick={() => setIsEditing(false)} className="flex-1 btn-secondary py-3.5">取消</button></div>
+      <div className=\"flex gap-3 pt-1\"><button onClick={handleSave} disabled={!isValid || loading} className=\"flex-[3] btn-primary py-3.5\">確認修改</button><button onClick={() => setIsEditing(false)} className=\"flex-1 btn-secondary py-3.5\">取消</button></div>
     </div>
   )
   return (
-    <div className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0">
-      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.trade_type === 'DCA' && <span className="text-accent font-black">定期定額</span>}</div><div className="text-sm font-bold text-[var(--t1)]">{(t.shares ?? 0).toLocaleString()} 股 @ {(t.price ?? 0).toFixed(2)}</div></div>
-      <div className="text-right">
-        <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
-        <div className="flex gap-3 justify-end mt-1">
-          <button onClick={() => setIsEditing(true)} className="text-[11px] font-black text-accent active:opacity-50 transition-opacity">編輯</button>
-          <button onClick={() => onDelete(t.id)} className="text-[11px] font-black text-red-400 active:opacity-50 transition-opacity">刪除</button>
+    <div className=\"flex justify-between items-center py-2.5 border-b border-white/5 last:border-0\">
+      <div className=\"flex flex-col\"><div className=\"flex items-center gap-2 text-[11px] opacity-40 font-mono\">{t.trade_date} {t.trade_type === 'DCA' && <span className=\"text-accent font-black\">定期定額</span>}</div><div className=\"text-sm font-bold text-[var(--t1)]\">{(t.shares ?? 0).toLocaleString()} 股 @ {(t.price ?? 0).toFixed(2)}</div></div>
+      <div className=\"text-right\">
+        <div className={\`text-base font-mono font-black \${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}\`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
+        <div className=\"flex gap-3 justify-end mt-1\">
+          <button onClick={() => setIsEditing(true)} className=\"text-[11px] font-black text-accent active:opacity-50 transition-opacity\">編輯</button>
+          <button onClick={() => onDelete(t.id)} className=\"text-[11px] font-black text-red-400 active:opacity-50 transition-opacity\">刪除</button>
         </div>
       </div>
     </div>
   )
 }
 
-function shortMoney(v: number): string {
-  const abs = Math.abs(v), sign = v < 0 ? '-' : ''
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`
-  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1)}K`
-  return `${sign}${abs.toFixed(0)}`
+function StatBox({ label, value, upDown, large, className }: any) {
+  const isHidden = value === \"••••••\"
+  const color = (upDown === undefined || isHidden) ? 'text-[var(--t1)]' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
+  return (
+    <div className={\`flex flex-col \${className}\`}>
+      <span className=\"text-[11px] font-black text-[var(--t3)] uppercase tracking-widest mb-1.5\">{label}</span>
+      <span className={\`font-black font-mono leading-none \${large ? 'text-[22px]' : 'text-[18px]'} \${color}\`}>{value}</span>
+    </div>
+  )
 }
 
-function Label({ children }: { children: React.ReactNode }) { return <label className="text-[10px] font-black opacity-30 uppercase tracking-widest ml-1 mb-1 block">{children}</label> }
+function DetailBox({ label, value }: { label: string, value: string }) {
+  return (
+    <div>
+      <div className=\"text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1\">{label}</div>
+      <div className=\"text-sm font-bold text-[var(--t1)] font-mono\">{value}</div>
+    </div>
+  )
+}
+
+function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: any) {
+  const isNegative = current < 0
+  return (
+    <div className=\"space-y-2.5\">
+      <div className=\"flex justify-between items-end\">
+        <span className=\"text-[13px] font-black text-[var(--t2)] flex items-center gap-2\">
+          <Icon size={14} className=\"text-accent\" /> {label}
+        </span>
+        {goal > 0 ? (
+          <div className=\"flex flex-col items-end\">
+            <span className={\`text-[13px] font-black font-mono \${isNegative ? 'text-red-400' : 'text-accent'}\`}>
+              {showData ? \`\${achieved.toFixed(1)}%\` : \"••••••\"}
+            </span>
+            <span className=\"text-[10px] font-bold text-[var(--t3)]\">
+              {showData ? \`\${fmtMoney(Math.round(current))} / \${fmtMoney(goal)}\` : \"••••••\"}
+            </span>
+          </div>
+        ) : (
+          <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className=\"text-[11px] font-bold text-accent/50\">點此設定目標 ➔</button>
+        )}
+      </div>
+      {goal > 0 && (
+        <div className=\"h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5\">
+          <div 
+            className={\`h-full transition-all duration-1000 \${isNegative ? 'bg-red-500/50' : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-bright)]'}\`} 
+            style={{ width: \`\${Math.min(100, Math.max(0, achieved))}\%\` }} 
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
+function shortMoney(v: number): string {
+  const abs = Math.abs(v), sign = v < 0 ? '-' : ''
+  if (abs >= 1_000_000) return \`\${sign}\${(abs / 1_000_000).toFixed(1)}M\`
+  if (abs >= 1_000) return \`\${sign}\${(abs / 1_000).toFixed(1)}K\`
+  return \`\${sign}\${abs.toFixed(0)}\`
+}
+
+function Label({ children }: { children: React.ReactNode }) { return <label className=\"text-[10px] font-black opacity-30 uppercase tracking-widest ml-1 mb-1 block\">{children}</label> }
+\`;
+fs.writeFileSync('components/HoldingsTab.tsx', content, 'utf8');

@@ -199,7 +199,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
               {selectedHolding && (
                 <ReferenceLine y={selectedHolding.avg_cost} stroke="var(--t3)" strokeDasharray="5 5" label={{ position: 'left', value: '成本', fill: 'var(--t3)', fontSize: 10, fontWeight: 'bold' }} />
               )}
-              <Brush dataKey="date" height={20} stroke="var(--accent)" fill="transparent" travelerWidth={10} />
+              <Brush dataKey="date" height={20} stroke="var(--accent)" fill="transparent" travellerWidth={10} />
             </LineChart>
           </ResponsiveContainer>
         </div>
