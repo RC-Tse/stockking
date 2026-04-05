@@ -226,24 +226,17 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
         }
       } else {
         let viewportDays = 0
-        if (range === '1M') viewportDays = 15
-        else if (range === '3M') viewportDays = 45
-        else if (range === '6M') viewportDays = 90
-        else if (range === '9M') viewportDays = 135
-        else if (range === '1Y') viewportDays = isTotal ? 182 : 364
+        if (range === '1M') viewportDays = 30
+        else if (range === '3M') viewportDays = 90
+        else if (range === '6M') viewportDays = 180
+        else if (range === '9M') viewportDays = 270
+        else if (range === '1Y') viewportDays = 365
 
         let todayIdx = fullData.findIndex(d => d.fullDate === todayStr)
         if (todayIdx === -1) todayIdx = fullData.length - 1
 
-        let left = todayIdx - viewportDays
-        let right = todayIdx + viewportDays
-
-        if (!isTotal) {
-          if (left < 0) { right += Math.abs(left); left = 0 }
-          if (right >= fullData.length) { left -= (right - fullData.length + 1); right = fullData.length - 1 }
-        }
-        left = Math.max(0, left)
-        right = Math.min(fullData.length - 1, right)
+        let right = todayIdx
+        let left = Math.max(0, right - viewportDays)
 
         result = fullData.slice(left, right + 1)
       }
@@ -260,7 +253,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
-  const generateTicks = (data: any[], dateField: string, isCustom: boolean, cS?: string, cE?: string) => {
+  const generateTicks = (data: any[], dateField: string) => {
     if (!data || !data.length) return []
     const startStr = data[0][dateField]
     const endStr = data[data.length - 1][dateField]
@@ -272,38 +265,39 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     if (days >= 365) stepMonths = 3
     else if (days >= 180) stepMonths = 2
 
-    const ticks = []
+    const ticks = [startTime, endTime]
     const startObj = new Date(startStr)
     const endObj = new Date(endStr)
 
     let curr = new Date(startObj.getFullYear(), startObj.getMonth(), 1)
     
     while(curr <= endObj) {
-        if (curr >= startObj) {
-           ticks.push(curr.getTime())
+        const checkAndAdd = (d: Date) => {
+          if (d > startObj && d < endObj) {
+            const dt = d.getTime()
+            const distStart = (dt - startTime) / 86400000
+            const distEnd = (endTime - dt) / 86400000
+            if (distStart > 5 && distEnd > 5) {
+               ticks.push(dt)
+            }
+          }
         }
+
+        checkAndAdd(curr)
         if (days <= 45) {
-           const d10 = new Date(curr.getFullYear(), curr.getMonth(), 10)
-           const d20 = new Date(curr.getFullYear(), curr.getMonth(), 20)
-           const d30 = new Date(curr.getFullYear(), curr.getMonth(), 30)
-           if (d10 >= startObj && d10 <= endObj) ticks.push(d10.getTime())
-           if (d20 >= startObj && d20 <= endObj) ticks.push(d20.getTime())
-           if (d30 >= startObj && d30 <= endObj) ticks.push(d30.getTime())
+           checkAndAdd(new Date(curr.getFullYear(), curr.getMonth(), 10))
+           checkAndAdd(new Date(curr.getFullYear(), curr.getMonth(), 20))
+           checkAndAdd(new Date(curr.getFullYear(), curr.getMonth(), 30))
         }
         curr.setMonth(curr.getMonth() + stepMonths)
-    }
-
-    if (isCustom && cS && cE) {
-        ticks.push(new Date(cS).getTime())
-        ticks.push(new Date(cE).getTime())
     }
 
     return Array.from(new Set(ticks)).sort((a,b) => a - b)
   }
 
-  const stockTicks = useMemo(() => generateTicks(enrichedStockHistory, 'date', stockRange === 'CUSTOM', customStockStart, customStockEnd), [enrichedStockHistory, stockRange, customStockStart, customStockEnd])
-  const yearTicks = useMemo(() => generateTicks(yearGoalData, 'fullDate', yearRange === 'CUSTOM', customYearStart, customYearEnd), [yearGoalData, yearRange, customYearStart, customYearEnd])
-  const totalTicks = useMemo(() => generateTicks(totalGoalData, 'fullDate', totalRange === 'CUSTOM', customStart, customEnd), [totalGoalData, totalRange, customStart, customEnd])
+  const stockTicks = useMemo(() => generateTicks(enrichedStockHistory, 'date'), [enrichedStockHistory])
+  const yearTicks = useMemo(() => generateTicks(yearGoalData, 'fullDate'), [yearGoalData])
+  const totalTicks = useMemo(() => generateTicks(totalGoalData, 'fullDate'), [totalGoalData])
 
   const renderBuyDot = (props: any) => {
     const { cx, cy, payload } = props
@@ -328,13 +322,13 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           <div className="text-[11px] text-[var(--t3)] mb-2 uppercase tracking-widest">{data.date}</div>
           <div className="flex justify-between gap-4 mb-1">
             <span className="text-[12px] text-[var(--t2)] flex-1">收盤價</span>
-            <span className="font-mono text-[var(--t1)]">{data.price.toFixed(2)}</span>
+            <span className="font-mono text-accent">{data.price.toFixed(2)}</span>
           </div>
           {data.avgCost !== null && (
             <>
               <div className="flex justify-between gap-4 mb-1">
                 <span className="text-[12px] text-[var(--t2)] flex-1">對應均價</span>
-                <span className="font-mono text-accent">{data.avgCost.toFixed(2)}</span>
+                <span className="font-mono text-[rgba(255,255,255,0.8)]">{data.avgCost.toFixed(2)}</span>
               </div>
               <div className="flex justify-between gap-4 mb-1">
                 <span className="text-[12px] text-[var(--t2)] flex-1">差距金額</span>
@@ -347,19 +341,19 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             </>
           )}
           {data.isBuy && (
-            <div className="mt-2 pt-2 border-t border-accent/20">
-              <div className="text-[11px] font-black text-red-400 mb-0.5">🟢 買入紀錄</div>
+            <div className="mt-2 pt-2 border-t border-[#e05050]/20">
+              <div className="text-[11px] font-black text-[#e05050] mb-0.5">買入紀錄</div>
               <div className="flex justify-between gap-4">
-                <span className="text-[11px] text-[var(--t2)]">價格:</span>
-                <span className="text-[11px] text-[var(--t1)]">{data.txPrice.toFixed(2)} 元</span>
+                <span className="text-[11px] text-[#e05050]/70">價格:</span>
+                <span className="text-[11px] text-[#e05050]">{data.txPrice.toFixed(2)} 元</span>
               </div>
               <div className="flex justify-between gap-4">
-                <span className="text-[11px] text-[var(--t2)]">數量:</span>
-                <span className="text-[11px] text-[var(--t1)]">{data.txShares.toLocaleString()} 股</span>
+                <span className="text-[11px] text-[#e05050]/70">數量:</span>
+                <span className="text-[11px] text-[#e05050]">{data.txShares.toLocaleString()} 股</span>
               </div>
-              <div className="flex justify-between gap-4 mt-1 border-t border-white/5 pt-1">
-                <span className="text-[11px] text-[var(--t2)]">買入後新均價:</span>
-                <span className="text-[11px] font-black text-accent">{data.avgCost.toFixed(2)}</span>
+              <div className="flex justify-between gap-4 mt-1 border-t border-[#e05050]/20 pt-1">
+                <span className="text-[11px] text-[#e05050]/70">買入後新均價:</span>
+                <span className="text-[11px] font-black text-[#e05050]">{data.avgCost.toFixed(2)}</span>
               </div>
             </div>
           )}
@@ -380,20 +374,20 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
             <TrendingUp size={16} className="text-accent inline mr-1" /> 單一個股走勢與點位分析
           </h3>
-          <div className="flex items-center justify-between">
-            <div className="relative inline-block w-[40%]">
-              <select 
-                value={selSym} 
-                onChange={e => setSelSym(e.target.value)}
-                className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-2 pr-10 font-black text-sm text-[var(--t1)] focus:outline-none focus:border-accent transition-all truncate"
-              >
-                {holdings.map(h => (
-                  <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})</option>
-                ))}
-              </select>
-              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--t3)] pointer-events-none" />
-            </div>
-            <div className="flex gap-1.5 flex-wrap justify-end max-w-[60%]">
+          <div className="relative w-[60%]">
+            <select 
+              value={selSym} 
+              onChange={e => setSelSym(e.target.value)}
+              className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-2 pr-10 font-black text-sm text-[var(--t1)] focus:outline-none focus:border-accent transition-all truncate"
+            >
+              {holdings.map(h => (
+                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})</option>
+              ))}
+            </select>
+            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--t3)] pointer-events-none" />
+          </div>
+          <div className="flex justify-end w-full">
+            <div className="flex gap-1.5 flex-wrap">
               {(['1M', '3M', '1Y', 'ALL'] as (StockRange)[]).map(r => (
                 <button 
                   key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
@@ -436,7 +430,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
               <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" />
               <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" />
-              <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="🔴 買入點標記" />
+              <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -459,25 +453,27 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
 
       {/* ── 2. 年度目標分析 ── */}
       <section className="space-y-4 pt-4 border-t border-white/5">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex flex-col space-y-3 px-1">
           <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
-            <Target size={16} className="text-accent" /> 年度獲利進度
+            <Target size={16} className="text-accent" /> 年度損益累積進度
           </h3>
-          <div className="flex gap-1.5 flex-wrap justify-end">
-            {(['1M', '3M', '6M', '9M', '1Y'] as GoalRange[]).map(r => (
+          <div className="flex justify-end w-full">
+            <div className="flex gap-1.5 flex-wrap">
+              {(['1M', '3M', '6M', '9M', '1Y'] as GoalRange[]).map(r => (
+                <button 
+                  key={r} onClick={() => { setYearRange(r); setShowCustomYear(false); }}
+                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === r && !showCustomYear ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                >
+                  {r}
+                </button>
+              ))}
               <button 
-                key={r} onClick={() => { setYearRange(r); setShowCustomYear(false); }}
-                className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === r && !showCustomYear ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                onClick={() => { setYearRange('CUSTOM'); setShowCustomYear(!showCustomYear); }}
+                className={`px-2.5 py-1 flex items-center gap-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
               >
-                {r}
+                <CalendarIcon size={10} /> 自訂
               </button>
-            ))}
-            <button 
-              onClick={() => { setYearRange('CUSTOM'); setShowCustomYear(!showCustomYear); }}
-              className={`px-2.5 py-1 flex items-center gap-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-            >
-              <CalendarIcon size={10} /> 自訂
-            </button>
+            </div>
           </div>
         </div>
 
@@ -525,24 +521,13 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
 
       {/* ── 3. 總損益目標分析 ── */}
       <section className="space-y-4 pt-4 border-t border-white/5">
-        <div className="flex items-center justify-between px-1">
+        <div className="flex flex-col space-y-3 px-1">
           <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
             <Trophy size={16} className="text-accent inline mr-1" /> 總損益累積進度
           </h3>
-
-          <div className="flex flex-col items-end gap-1.5">
-            <div className="flex items-center gap-1.5">
-              {(['1M', '3M', '6M'] as GoalRange[]).map(r => (
-                <button 
-                  key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === r && !showCustomTotal ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-                >
-                  {r}
-                </button>
-              ))}
-            </div>
-            <div className="flex items-center gap-1.5">
-              {(['1Y', 'ALL'] as GoalRange[]).map(r => (
+          <div className="flex justify-end w-full">
+            <div className="flex gap-1.5 flex-wrap items-center">
+              {(['1M', '3M', '6M', '1Y', 'ALL'] as GoalRange[]).map(r => (
                 <button 
                   key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
                   className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === r && !showCustomTotal ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
