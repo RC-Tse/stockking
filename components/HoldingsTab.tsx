@@ -113,8 +113,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const unrealizedPct = currentCost ? (unrealizedPnl / currentCost) * 100 : 0
   const realizedPct = realizedCostBasis ? (totalRealized / realizedCostBasis) * 100 : 0
   
+  const totalPnl = totalRealized + unrealizedPnl
   const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
-  const totalAchieved = settings.total_goal > 0 ? (currentMV / settings.total_goal) * 100 : null
+  const totalAchieved = settings.total_goal > 0 ? (totalPnl / settings.total_goal) * 100 : null
 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [closedExpanded, setClosedExpanded] = useState(false)
@@ -168,8 +169,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </div>
           {/* 年度目標 & 總目標 */}
           <div className="pt-6 border-t border-white/5 space-y-5">
-            <ProgressBar label="年度目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
-            <ProgressBar label="總資產目標" icon={Trophy} current={currentMV} goal={settings.total_goal} achieved={totalAchieved} showData={showData} />
+            <ProgressBar label="年度獲利目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
+            <ProgressBar label="總損益目標" icon={Trophy} current={totalPnl} goal={settings.total_goal} achieved={totalAchieved} showData={showData} />
           </div>
         </div>
       </div>
@@ -218,6 +219,7 @@ function StatBox({ label, value, upDown, large, className }: any) {
 }
 
 function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: any) {
+  const isNegative = current < 0
   return (
     <div className="space-y-2.5">
       <div className="flex justify-between items-end">
@@ -226,8 +228,12 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
         </span>
         {goal > 0 ? (
           <div className="flex flex-col items-end">
-            <span className="text-[13px] font-black font-mono text-accent">{showData ? `${achieved.toFixed(1)}%` : "••••••"}</span>
-            <span className="text-[10px] font-bold text-[var(--t3)]">{showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "••••••"}</span>
+            <span className={`text-[13px] font-black font-mono ${isNegative ? 'text-red-400' : 'text-accent'}`}>
+              {showData ? `${achieved.toFixed(1)}%` : "••••••"}
+            </span>
+            <span className="text-[10px] font-bold text-[var(--t3)]">
+              {showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "••••••"}
+            </span>
           </div>
         ) : (
           <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[11px] font-bold text-accent/50">點此設定目標 ➔</button>
@@ -235,7 +241,10 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
       </div>
       {goal > 0 && (
         <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-          <div className="h-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-bright)] transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, achieved))}%` }} />
+          <div 
+            className={`h-full transition-all duration-1000 ${isNegative ? 'bg-red-500/50' : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-bright)]'}`} 
+            style={{ width: `${Math.min(100, Math.max(0, achieved))}%` }} 
+          />
         </div>
       )}
     </div>
