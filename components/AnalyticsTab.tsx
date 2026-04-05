@@ -376,15 +376,28 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
   const getDynamicYMin = (val: number) => {
     if (val >= 0) return 0
     const abs = Math.abs(val)
-    let step = 100
-    if (abs > 100000) step = 100000
-    else if (abs > 10000) step = 10000
-    else if (abs > 1000) step = 1000
-
-    let target = Math.ceil(abs / step) * step
-    if (target === abs) target += step
-    return -target
+    if (abs <= 1000) return -1000
+    if (abs <= 10000) return -Math.ceil(abs / 1000) * 1000
+    return -Math.ceil(abs / 10000) * 10000
   }
+
+  const generateYTicks = (data: any[], key: string, targetGoal: number) => {
+    const minVal = Math.min(0, ...data.map(d => d[key] || 0))
+    const minBound = getDynamicYMin(minVal)
+    const maxVal = Math.max(targetGoal, ...data.map(d => d[key] || 0))
+    
+    // 確保包含最小值、0、以及最大值
+    const ticks = [minBound, 0]
+    if (maxVal > 0) {
+      ticks.push(Math.round(maxVal * 0.33))
+      ticks.push(Math.round(maxVal * 0.66))
+      ticks.push(Math.round(maxVal))
+    }
+    return Array.from(new Set(ticks)).sort((a, b) => a - b)
+  }
+
+  const yearYTicks = useMemo(() => generateYTicks(yearGoalData, 'actual', settings.year_goal), [yearGoalData, settings.year_goal])
+  const totalYTicks = useMemo(() => generateYTicks(totalGoalData, 'actual', settings.total_goal), [totalGoalData, settings.total_goal])
 
   return (
     <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
@@ -439,13 +452,13 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           </div>
         )}
 
-        <div className="card-base p-4 pr-1 h-80 border-white/10 bg-black/20 relative">
+        <div className="card-base pt-4 pb-4 pl-4 pr-0 h-80 border-white/10 bg-black/20 relative">
           {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={enrichedStockHistory} margin={{ top: 5, right: 40, left: 0, bottom: 5 }}>
+            <LineChart data={enrichedStockHistory} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={stockTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--t3)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={38} />
+              <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--accent)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
               <Tooltip content={<StockTooltip />} />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
               <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" />
@@ -516,9 +529,9 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           </div>
         )}
 
-        <div className="card-base p-4 pr-1 h-64 border-white/10 bg-black/20">
+        <div className="card-base pt-4 pb-4 pl-4 pr-0 h-64 border-white/10 bg-black/20">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={yearGoalData} margin={{ top: 5, right: 40, left: 0, bottom: 5 }}>
+            <AreaChart data={yearGoalData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="colorIdeal" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.1}/>
@@ -527,7 +540,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={yearTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={[getDynamicYMin, 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={38} />
+              <YAxis domain={[yearYTicks[0], 'auto']} ticks={yearYTicks} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
                 labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
@@ -578,12 +591,12 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
           </div>
         )}
 
-        <div className="card-base p-4 pr-1 h-64 border-white/10 bg-black/20 mt-4">
+        <div className="card-base pt-4 pb-4 pl-4 pr-0 h-64 border-white/10 bg-black/20 mt-4">
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={totalGoalData} margin={{ top: 5, right: 40, left: 0, bottom: 5 }}>
+            <LineChart data={totalGoalData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
               <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={totalTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={[getDynamicYMin, 'auto']} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={38} />
+              <YAxis domain={[totalYTicks[0], 'auto']} ticks={totalYTicks} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
                 labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
