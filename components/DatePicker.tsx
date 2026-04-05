@@ -34,7 +34,7 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
 
   const displayValue = value ? (() => {
     const [y, m, d] = value.split('-')
-    return `${y}�?{m}??{d}?�`
+    return `${y} 年 ${m} 月 ${d} 日`
   })() : ''
 
   const currentYear = viewDate.getFullYear()
@@ -61,7 +61,7 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
           if (value) setViewDate(new Date(value))
         }}
         className="input-base cursor-pointer focus:border-accent font-mono font-black"
-        placeholder="????"
+        placeholder="選擇日期"
         />
 
         {isOpen && (
@@ -74,11 +74,11 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
             </button>
 
             <div className="flex gap-2 font-black text-[var(--t1)] text-[20px]">
-              <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded ${view === 'YEAR' ? 'text-accent' : ''}`}>
-                {currentYear} ?
+              <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded transition-colors ${view === 'YEAR' ? 'text-accent' : ''}`}>
+                {currentYear} 年
               </button>
-              <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded ${view === 'MONTH' ? 'text-accent' : ''}`}>
-                {currentMonth + 1} ??
+              <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded transition-colors ${view === 'MONTH' ? 'text-accent' : ''}`}>
+                {currentMonth + 1} 月
               </button>
             </div>
 
@@ -89,7 +89,7 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
 
           {view === 'CALENDAR' && (
             <div className="grid grid-cols-7 gap-1.5">
-              {['??,'一','?,'?,'??,'?,'??].map((d, i) => (
+              {['日','一','二','三','四','五','六'].map((d, i) => (
                 <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-accent':'text-[var(--t3)]'}`}>{d}</div>
               ))}
               {(() => {
@@ -136,7 +136,7 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
               {Array.from({ length: 12 }, (_, i) => i + 1).map(m => (
                 <button key={m} onClick={() => { setViewDate(new Date(currentYear, m - 1, 1)); setView('CALENDAR') }}
                   className={`py-4 rounded-xl font-black transition-all ${currentMonth + 1 === m ? 'bg-accent text-bg-base' : 'bg-bg-hover text-[var(--t2)]'}`}
-                >{m}??/button>
+                >{m} 月</button>
               ))}
             </div>
           )}

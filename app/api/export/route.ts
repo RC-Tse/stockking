@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
-import { calcFee, calcTax, getStockName, codeOnly } from '@/types'
+import { getStockName } from '@/types'
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -28,35 +28,35 @@ export async function GET(req: NextRequest) {
   // Filter for the specific period for first two sheets
   const filteredTxs = allTxs.filter(t => t.trade_date >= start_date && t.trade_date <= end_date)
 
-  // Sheet 1: ?��?交�?
+  // Sheet 1: 手動交易
   const selfTxs = filteredTxs.filter(t => t.trade_type !== 'DCA').map(t => ({
-    '?��?': t.trade_date,
-    '?�票�??': t.symbol,
-    '中�??�稱': t.name_zh || getStockName(t.symbol),
-    '�?�?: t.action === 'BUY' ? '買入' : '�?��',
-    '?�張/?�股': t.shares % 1000 === 0 ? '?�張' : '?�股',
-    '?�數': t.shares,
-    '?�交??: t.price,
-    '交�??��?': t.amount,
-    '?��?�?: t.fee,
-    '交�?�?: t.tax,
-    '淨收??: t.net_amount,
-    '?�註': t.note || ''
+    '日期': t.trade_date,
+    '股票代碼': t.symbol,
+    '中文名稱': t.name_zh || getStockName(t.symbol),
+    '動作': t.action === 'BUY' ? '買入' : '賣出',
+    '整張/零股': t.shares % 1000 === 0 ? '整張' : '零股',
+    '股數': t.shares,
+    '成交價': t.price,
+    '交易金額': t.amount,
+    '手續費': t.fee,
+    '交易稅': t.tax,
+    '淨收支': t.net_amount,
+    '備註': t.note || ''
   }))
 
-  // Sheet 2: 定�?定�?
+  // Sheet 2: 定期定額
   const dcaTxs = filteredTxs.filter(t => t.trade_type === 'DCA').map(t => ({
-    '?��?': t.trade_date,
-    '?�票�??': t.symbol,
-    '中�??�稱': t.name_zh || getStockName(t.symbol),
-    '?�購?��?': Math.abs(t.net_amount),
-    '買入?�數': t.shares,
-    '?�交??: t.price,
-    '?��?�?: t.fee,
-    '淨收??: t.net_amount
+    '日期': t.trade_date,
+    '股票代碼': t.symbol,
+    '中文名稱': t.name_zh || getStockName(t.symbol),
+    '申購金額': Math.abs(t.net_amount),
+    '買入股數': t.shares,
+    '成交價': t.price,
+    '手續費': t.fee,
+    '淨收支': t.net_amount
   }))
 
-  // Sheet 3: ?��??��? (Based on total history)
+  // Sheet 3: 庫存匯總 (Based on total history)
   const inventory: Record<string, { shares: number, cost: number }[]> = {}
   const stats: Record<string, { buyCost: number, sellRev: number }> = {}
 
@@ -97,14 +97,14 @@ export async function GET(req: NextRequest) {
     const mv = Math.round(heldShares * lastPrice)
 
     return {
-      '?�票�??': sym,
-      '中�??�稱': getStockName(sym),
-      '買入總�???: Math.round(s.buyCost),
-      '�?��總收??: Math.round(s.sellRev),
-      '已實?��???: Math.round(s.sellRev - (s.buyCost - heldCost)),
-      '?��??�股??: heldShares,
-      '?��?市�??��?': mv,
-      '?�實?��????��?': Math.round(mv - heldCost)
+      '股票代碼': sym,
+      '中文名稱': getStockName(sym),
+      '買入總成本': Math.round(s.buyCost),
+      '賣出總收入': Math.round(s.sellRev),
+      '已實現損益': Math.round(s.sellRev - (s.buyCost - heldCost)),
+      '目前持股數': heldShares,
+      '目前市值估算': mv,
+      '未實現損益估算': Math.round(mv - heldCost)
     }
   })
 
@@ -112,13 +112,13 @@ export async function GET(req: NextRequest) {
   const wb = XLSX.utils.book_new()
   
   const ws1 = XLSX.utils.json_to_sheet(selfTxs)
-  XLSX.utils.book_append_sheet(wb, ws1, '?��?交�?')
+  XLSX.utils.book_append_sheet(wb, ws1, '手動交易')
   
   const ws2 = XLSX.utils.json_to_sheet(dcaTxs)
-  XLSX.utils.book_append_sheet(wb, ws2, '定�?定�?')
+  XLSX.utils.book_append_sheet(wb, ws2, '定期定額')
   
   const ws3 = XLSX.utils.json_to_sheet(summary)
-  XLSX.utils.book_append_sheet(wb, ws3, '?��??��?')
+  XLSX.utils.book_append_sheet(wb, ws3, '庫存匯總')
 
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 
