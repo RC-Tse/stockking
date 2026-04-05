@@ -40,7 +40,7 @@ export default function LoginPage() {
           👑
         </div>
         <h1
-          className="text-gold text-4xl font-black tracking-tight"
+          className="text-accent text-4xl font-black tracking-tight"
           style={{ letterSpacing: '-0.02em' }}
         >
           少年存股王
@@ -52,7 +52,7 @@ export default function LoginPage() {
           <div className="h-px w-12" style={{ background: 'var(--border-bright)' }} />
           <span
             className="text-xs font-mono tracking-widest"
-            style={{ color: 'var(--gold)' }}
+            style={{ color: 'var(--accent)' }}
           >
             台股投資追蹤系統
           </span>
@@ -110,8 +110,8 @@ export default function LoginPage() {
             key={f}
             className="text-xs px-2.5 py-1 rounded-full"
             style={{
-              background: 'var(--gold-dim)',
-              color: 'var(--gold)',
+              background: 'var(--accent-dim)',
+              color: 'var(--accent)',
               border: '1px solid var(--border-bright)',
             }}
           >

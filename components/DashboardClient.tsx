@@ -28,19 +28,15 @@ const TABS: { id: Tab; icon: any; label: string }[] = [
   { id: 'settings',     icon: Settings2, label: '設定'  },
 ]
 
-// ─── FIFO holdings computation ───────────────────────────────────────────────
 function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settings: UserSettings): Holding[] {
   const inventory: Record<string, { shares: number; cost: number }[]> = {}
-  
   const sorted = [...txs].sort((a, b) => {
     if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
     return a.id - b.id
   })
-
   for (const tx of sorted) {
     if (!inventory[tx.symbol]) inventory[tx.symbol] = []
     const lots = inventory[tx.symbol]
-
     if (tx.action === 'BUY' || tx.action === 'DCA') {
       lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
     } else if (tx.action === 'SELL') {
@@ -58,22 +54,17 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       }
     }
   }
-
   return Object.entries(inventory)
     .map(([sym, lots]) => {
       const netShares = lots.reduce((s, l) => s + l.shares, 0)
       if (netShares <= 0) return null
-
       const totalCost = lots.reduce((s, l) => s + l.cost, 0)
       const avgCost = totalCost / netShares
-      
       const cp = quotes[sym]?.price || 0
       const mv = Math.round(cp * netShares)
-      
       const fee = calcFee(mv, settings, true)
       const tax = calcTax(mv, sym, settings)
       const upnl = mv - fee - tax - totalCost
-
       return {
         symbol: sym,
         shares: netShares,
@@ -98,7 +89,6 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [editingDcaPlan, setEditingDcaPlan] = useState<DCAPlan | null>(null)
   const [loading, setLoading]     = useState(true)
-  const autoCalSaved = useRef(false)
   const router = useRouter()
   const supabase = createClient()
 
@@ -107,7 +97,8 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     document.documentElement.setAttribute('data-theme', t)
     const icon = document.querySelector('link[rel="apple-touch-icon"]')
     if (icon) {
-      icon.setAttribute('href', t === 'light' ? '/icons/icon-192-light.svg' : '/icons/icon-192.svg')
+      const isLightIcon = t === 'light' || t === 'rose'
+      icon.setAttribute('href', isLightIcon ? '/icons/icon-192-light.svg' : '/icons/icon-192.svg')
     }
   }, [settings.theme])
 
@@ -120,10 +111,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     setTxs(txData)
     setSettings(setData)
     setLoading(false)
-
-    const syms = Array.from(new Set(
-      txData.map(t => t.symbol)
-    ))
+    const syms = Array.from(new Set(txData.map(t => t.symbol)))
     if (syms.length) {
       const qRes = await fetch(`/api/stocks?symbols=${syms.join(',')}`)
       if (qRes.ok) {
@@ -145,24 +133,17 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     refresh()
     const now = new Date()
     refreshCal(now.getFullYear(), now.getMonth() + 1)
-    fetch('/api/stockname/refresh').catch(() => {})
   }, [refresh, refreshCal])
 
-  // Unified PnL logic
   const { totalPnl, pnlPct, totalMV } = useMemo(() => {
-    let buyTotal = 0
-    let sellTotal = 0
+    let buyTotal = 0, sellTotal = 0
     for (const t of txs) {
       if (t.action === 'BUY' || t.action === 'DCA') buyTotal += (t.amount + t.fee)
       if (t.action === 'SELL') sellTotal += t.net_amount
     }
     const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
     const tp = sellTotal + currentMV - buyTotal
-    return {
-      totalPnl: tp,
-      totalMV: currentMV,
-      pnlPct: buyTotal ? (tp / buyTotal) * 100 : 0
-    }
+    return { totalPnl: tp, totalMV: currentMV, pnlPct: buyTotal ? (tp / buyTotal) * 100 : 0 }
   }, [txs, holdings])
 
   const signOut = async () => {
@@ -171,39 +152,29 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   }
 
   return (
-    <div className="min-h-dvh flex flex-col bg-base md:max-w-[480px] md:mx-auto md:border-x md:border-white/5">
-
-      {/* ══ HEADER ══════════════════════════════════════════════ */}
-      <header className="sticky top-0 z-40 pt-safe bg-[#0a0c10e0] backdrop-blur-xl border-b border-white/5">
+    <div className="min-h-dvh flex flex-col bg-[var(--bg-base)] md:max-w-[480px] md:mx-auto md:border-x md:border-white/5">
+      <header className="sticky top-0 z-40 pt-safe bg-[var(--bg-base)]/80 backdrop-blur-xl border-b border-white/5">
         <div className="flex items-center justify-between px-4 py-3 gap-2">
-          {/* Logo */}
           <div className="flex items-center gap-2 shrink-0">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#d4af37" strokeWidth="2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
               <path d="M2 19h20M3 9l4 4 5-8 5 8 4-4 1 10H2L3 9z"/>
             </svg>
           </div>
-
-          {/* Summary */}
           <div className="flex-1 flex flex-col items-center">
-            <span className="text-[18px] font-black text-white leading-tight">
-              {fmtMoney(totalMV)}
-            </span>
+            <span className="text-[18px] font-black text-[var(--t1)] leading-tight">{fmtMoney(totalMV)}</span>
             <span className={`text-[11px] font-bold ${totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
               {totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(totalPnl))} ({pnlPct.toFixed(1)}%)
             </span>
           </div>
-
-          {/* Avatar */}
           <button onClick={signOut}
-            className="shrink-0 w-8 h-8 rounded-full border-2 border-gold-dim overflow-hidden bg-bg-surface flex items-center justify-center text-[10px] font-black text-gold">
+            className="shrink-0 w-8 h-8 rounded-full border-2 border-[var(--accent-dim)] overflow-hidden bg-[var(--bg-surface)] flex items-center justify-center text-[10px] font-black text-accent">
             {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name?.[0] || 'U'}
           </button>
         </div>
       </header>
 
-      {/* ══ CONTENT ═════════════════════════════════════════════ */}
       <main className="flex-1 overflow-y-auto pb-32">
-        {loading ? <div className="p-10 text-center opacity-20 animate-pulse">載入中...</div> : (
+        {loading ? <div className="p-10 text-center opacity-20 animate-pulse text-[var(--t1)]">載入中...</div> : (
           <>
             {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} onRefresh={refresh} onRefreshCal={refreshCal} />}
             {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} onEditDca={setEditingDcaPlan} />}
@@ -215,35 +186,31 @@ export default function DashboardClient({ user }: { user: AppUser }) {
         )}
       </main>
 
-      {/* ══ FAB ═════════════════════════════════════════════════ */}
       {(tab === 'holdings' || tab === 'transactions') && (
         <button
           onClick={() => { setEditingDcaPlan(null); setDrawerOpen(true); }}
-          className="fixed bottom-[82px] right-4 z-30 w-14 h-14 rounded-full flex items-center justify-center text-[#0a0c10] shadow-[0_4px_20px_rgba(212,175,55,0.4)] active:scale-90 transition-all border border-white/10"
-          style={{ background: 'linear-gradient(135deg, #d4af37, #f0d060)' }}>
+          className="fixed bottom-[82px] right-4 z-30 w-14 h-14 rounded-full flex items-center justify-center text-[var(--bg-base)] shadow-[0_4px_20px_var(--accent-dim)] active:scale-90 transition-all border border-white/10"
+          style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-bright))' }}>
           <Plus size={28} strokeWidth={3} />
         </button>
       )}
 
-      {/* ══ BOTTOM NAV ══════════════════════════════════════════ */}
-      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#080a0eF2] backdrop-blur-2xl border-t border-[#d4af3740]">
+      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[var(--bg-base)]/95 backdrop-blur-2xl border-t border-[var(--accent-dim)]">
         <div className="flex h-16">
           {TABS.map(t => {
-            const Icon = t.icon
-            const active = tab === t.id
+            const Icon = t.icon, active = tab === t.id
             return (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${active ? 'text-gold' : 'text-white/30'}`}>
+                className={`flex-1 relative flex flex-col items-center justify-center gap-1 transition-all ${active ? 'text-accent' : 'text-[var(--t3)]'}`}>
                 <Icon size={22} strokeWidth={active ? 2.5 : 2} />
                 <span className="font-bold text-[10px] uppercase tracking-wider">{t.label}</span>
-                {active && <div className="absolute bottom-0 inset-x-8 h-0.5 bg-gold rounded-full" />}
+                {active && <div className="absolute bottom-0 inset-x-8 h-0.5 bg-accent rounded-full" />}
               </button>
             )
           })}
         </div>
       </nav>
 
-      {/* ══ ADD DRAWER ══════════════════════════════════════════ */}
       <AddDrawer
         open={drawerOpen}
         settings={settings}

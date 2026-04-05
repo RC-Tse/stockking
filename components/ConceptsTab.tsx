@@ -27,7 +27,7 @@ export default function ConceptsTab({ quotes, onFetchQuotes }: Props) {
   return (
     <div className="p-4 space-y-2">
       <div className="text-xs mb-3 px-1" style={{ color: 'var(--t3)' }}>
-        點擊概念群組查看個股即時行情
+        點�?概念群�??��??�股?��?行�?
       </div>
 
       {Object.entries(CONCEPT_GROUPS).map(([name, group]) => {
@@ -48,9 +48,8 @@ export default function ConceptsTab({ quotes, onFetchQuotes }: Props) {
               </div>
               <div className="flex items-center gap-2 shrink-0 ml-2">
                 <span className="text-xs font-mono" style={{ color: 'var(--t3)' }}>
-                  {group.stocks.length} 檔
-                </span>
-                <span style={{ color: 'var(--gold)', fontSize: 12, transform: isOpen ? 'rotate(180deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>▼</span>
+                  {group.stocks.length} �?                </span>
+                <span style={{ color: 'var(--accent)', fontSize: 12, transform: isOpen ? 'rotate(180deg)' : 'none', display: 'inline-block', transition: 'transform 0.2s' }}>??/span>
               </div>
             </button>
 
@@ -74,7 +73,7 @@ export default function ConceptsTab({ quotes, onFetchQuotes }: Props) {
                         >
                           {/* Symbol + name */}
                           <div className="flex items-center gap-2 min-w-0">
-                            <span className="font-black text-sm font-mono" style={{ color: 'var(--gold)', minWidth: 40 }}>
+                            <span className="font-black text-sm font-mono" style={{ color: 'var(--accent)', minWidth: 40 }}>
                               {codeOnly(sym)}
                             </span>
                             <span className="text-xs truncate" style={{ color: 'var(--t2)' }}>{label}</span>

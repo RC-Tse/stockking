@@ -37,7 +37,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showData, setShowData] = useState(true)
 
-  // ── Calculate FIFO Metrics ──
+  // ?? Calculate FIFO Metrics ??
   const { 
     totalRealized,
     realizedCostBasis,
@@ -127,49 +127,49 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       setDeletingId(null); onRefresh()
     } catch (e) {
       console.error(e)
-      alert('刪除失敗，請稍後再試')
+      alert('?除失?，?稍??試')
     }
   }
 
   return (
     <div className="p-4 space-y-6 tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
-      {/* 1. 持股概覽卡片 */}
+      {/* 1. ?股概覽?? */}
       <div className="glass p-5 relative overflow-hidden animate-slide-up border border-white/10 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <span className="text-base font-black text-white/30 uppercase tracking-[0.2em]">持股概覽 · {holdings.length} 檔</span>
+          <span className="text-base font-black text-[var(--t3)] uppercase tracking-[0.2em]">?股概覽 · {holdings.length} ?/span>
           <div className="flex items-center gap-2">
             <button 
               onClick={() => setShowData(!showData)} 
-              className="p-2 rounded-full bg-white/5 text-gold border border-white/10 active:scale-95 transition-all"
+              className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all"
             >
               {showData ? <Eye size={14} /> : <EyeOff size={14} />}
             </button>
-            <button onClick={() => window.location.reload()} className="p-2 rounded-full bg-white/5 text-gold border border-white/10 active:scale-95 transition-all">
+            <button onClick={() => window.location.reload()} className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all">
               <RefreshCw size={14} />
             </button>
           </div>
         </div>
 
         <div className="space-y-6">
-          {/* 第一列 */}
+          {/* 第???*/}
           <div className="flex items-center">
-            <StatBox label="持有成本" value={showData ? fmtMoney(currentCost) : "— — —"} className="w-1/2 text-center" large />
-            <StatBox label="目前市值" value={showData ? fmtMoney(currentMV) : "— — —"} className="w-1/2 text-center border-l border-white/5" large upDown={currentMV > currentCost ? 1 : -1} />
+            <StatBox label="???本" value={showData ? fmtMoney(currentCost) : "??????} className="w-1/2 text-center" large />
+            <StatBox label="??市? value={showData ? fmtMoney(currentMV) : "??????} className="w-1/2 text-center border-l border-white/5" large upDown={currentMV > currentCost ? 1 : -1} />
           </div>
-          {/* 第二列 */}
+          {/* 第???*/}
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="未實現損益" value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}` : "— — —"} className="w-1/2 text-center" upDown={unrealizedPnl} />
-            <StatBox label="未實現損益比" value={showData ? `${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%` : "— — —"} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
+            <StatBox label="?實???? value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}` : "??????} className="w-1/2 text-center" upDown={unrealizedPnl} />
+            <StatBox label="?實????" value={showData ? `${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%` : "??????} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
           </div>
-          {/* 第三列 */}
+          {/* 第???*/}
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="已實現損益" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "— — —"} className="w-1/2 text-center" upDown={totalRealized} />
-            <StatBox label="已實現損益比" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "— — —"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
+            <StatBox label="已實???? value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "??????} className="w-1/2 text-center" upDown={totalRealized} />
+            <StatBox label="已實????" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "??????} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
           </div>
-          {/* 第四列 & 第五列 */}
+          {/* 第???& 第???*/}
           <div className="pt-6 border-t border-white/5 space-y-5">
-            <ProgressBar label="年度目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
-            <ProgressBar label="總目標" icon={Trophy} current={currentMV} goal={settings.total_goal} achieved={totalAchieved} showData={showData} />
+            <ProgressBar label="年度??" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
+            <ProgressBar label="總目? icon={Trophy} current={currentMV} goal={settings.total_goal} achieved={totalAchieved} showData={showData} />
           </div>
         </div>
       </div>
@@ -183,12 +183,12 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
         {closedHoldings.length > 0 && (
           <div className="pt-4">
-            <button onClick={() => setClosedExpanded(!closedExpanded)} className="w-full flex items-center justify-between p-4 card-base border-gold/20 active:bg-bg-hover transition-all">
+            <button onClick={() => setClosedExpanded(!closedExpanded)} className="w-full flex items-center justify-between p-4 card-base border-accent/20 active:bg-bg-hover transition-all">
               <div className="flex items-center gap-3">
-                <Archive size={18} className="text-gold" />
-                <span className="font-black text-sm text-white/60">已結算股票 ({closedHoldings.length}檔)</span>
+                <Archive size={18} className="text-accent" />
+                <span className="font-black text-sm text-[var(--t2)]">已?算股?({closedHoldings.length}?</span>
               </div>
-              <ChevronDown size={16} className={`text-white/20 transition-transform duration-300 ${closedExpanded ? 'rotate-180' : ''}`} />
+              <ChevronDown size={16} className={`text-accent transition-transform duration-300 ${closedExpanded ? 'rotate-180' : ''}`} />
             </button>
             {closedExpanded && (
               <div className="space-y-3 mt-3 animate-slide-up">
@@ -207,11 +207,11 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 }
 
 function StatBox({ label, value, upDown, large, className }: any) {
-  const isHidden = value === "— — —"
-  const color = (upDown === undefined || isHidden) ? 'text-white' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
+  const isHidden = value === "??????
+  const color = (upDown === undefined || isHidden) ? 'text-[var(--t1)]' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
   return (
     <div className={`flex flex-col ${className}`}>
-      <span className="text-[11px] font-black text-white/20 uppercase tracking-widest mb-1.5">{label}</span>
+      <span className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest mb-1.5">{label}</span>
       <span className={`font-black font-mono leading-none ${large ? 'text-[22px]' : 'text-[18px]'} ${color}`}>{value}</span>
     </div>
   )
@@ -221,21 +221,21 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
   return (
     <div className="space-y-2.5">
       <div className="flex justify-between items-end">
-        <span className="text-[13px] font-black text-white/40 flex items-center gap-2">
-          <Icon size={14} className="text-gold" /> {label}
+        <span className="text-[13px] font-black text-[var(--t2)] flex items-center gap-2">
+          <Icon size={14} className="text-accent" /> {label}
         </span>
         {goal > 0 ? (
           <div className="flex flex-col items-end">
-            <span className="text-[13px] font-black font-mono text-gold">{showData ? `${achieved.toFixed(1)}%` : "— — —"}</span>
-            <span className="text-[10px] font-bold text-white/20">{showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "— — —"}</span>
+            <span className="text-[13px] font-black font-mono text-accent">{showData ? `${achieved.toFixed(1)}%` : "??????}</span>
+            <span className="text-[10px] font-bold text-[var(--t3)]">{showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "??????}</span>
           </div>
         ) : (
-          <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[11px] font-bold text-gold/50">點此設定目標 →</button>
+          <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[11px] font-bold text-accent/50">點此設??? ??/button>
         )}
       </div>
       {goal > 0 && (
         <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
-          <div className="h-full bg-gradient-to-r from-[#d4af37] to-[#f0d060] transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, achieved))}%` }} />
+          <div className="h-full bg-gradient-to-r from-[var(--accent)] to-[var(--accent-bright)] transition-all duration-1000" style={{ width: `${Math.min(100, Math.max(0, achieved))}%` }} />
         </div>
       )}
     </div>
@@ -248,21 +248,21 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
   const nameZh = q?.name_zh || h.symbol
 
   return (
-    <div className={`card-base overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-gold shadow-lg shadow-gold/5' : 'border-white/10 shadow-xl'}`}>
+    <div className={`card-base overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-accent shadow-lg shadow-accent/5' : 'border-white/10 shadow-xl'}`}>
       <div className="p-4 cursor-pointer active:bg-bg-hover space-y-3" onClick={onToggle}>
         {/* Row 1: Name + Symbol */}
         <div className="flex justify-between items-center">
-          <div className="font-black text-white text-base">
-            {nameZh} <span className="text-xs text-white/30 font-mono ml-1">{codeOnly(h.symbol)}</span>
+          <div className="font-black text-[var(--t1)] text-base">
+            {nameZh} <span className="text-xs text-[var(--t3)] font-mono ml-1">{codeOnly(h.symbol)}</span>
           </div>
         </div>
         
         {/* Row 2: Shares, Price, Change */}
-        <div className="text-[11px] font-bold text-white/40">
-          {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
+        <div className="text-[11px] font-bold text-[var(--t2)]">
+          {(h.shares ?? 0).toLocaleString()} ??· ?盤 {(h.current_price ?? 0).toFixed(2)}
           {q?.change !== undefined && (
             <span className={`ml-2 ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {q.change >= 0 ? '▲' : '▼'} {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
+              {q.change >= 0 ? '?? : '??} {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
             </span>
           )}
         </div>
@@ -273,13 +273,13 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
         {/* Row 3 & 4: Cost/MV and PnL */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">持有成本 / 目前市值</div>
-            <div className="text-sm font-bold text-white/80 font-mono">
-              {fmtMoney(Math.round(h.total_cost))} / <span className="text-white">{fmtMoney(Math.round(h.market_value))}</span>
+            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">???本 / ??市?/div>
+            <div className="text-sm font-bold text-[var(--t1)] font-mono">
+              {fmtMoney(Math.round(h.total_cost))} / <span className="text-[var(--t1)]">{fmtMoney(Math.round(h.market_value))}</span>
             </div>
           </div>
           <div className="text-right">
-            <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">未實現損益</div>
+            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">?實????/div>
             <div className={`text-sm font-black font-mono ${color}`}>
               {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} ({(h.pnl_pct ?? 0).toFixed(2)}%)
             </div>
@@ -303,11 +303,11 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
     <div className="card-base overflow-hidden border border-white/5">
       <div className="p-4 cursor-pointer" onClick={onToggle}>
         <div className="flex justify-between items-center mb-2">
-          <div className="flex items-center gap-2"><span className="font-black text-white text-base">{name}（{codeOnly(c.symbol)}）</span></div>
+          <div className="flex items-center gap-2"><span className="font-black text-[var(--t1)] text-base">{name}（{codeOnly(c.symbol)}?/span></div>
           <div className={`font-black font-mono text-base ${c.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>{c.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(c.pnl))}</div>
         </div>
         <div className="flex justify-between items-center">
-          <span className="text-[10px] font-bold text-white/20">成本 {fmtMoney(Math.round(c.buyCost))} · 收入 {fmtMoney(Math.round(c.sellRev))}</span>
+          <span className="text-[10px] font-bold text-[var(--t3)]">?本 {fmtMoney(Math.round(c.buyCost))} · ?入 {fmtMoney(Math.round(c.sellRev))}</span>
           <div className={`text-[10px] font-bold ${c.pnl >= 0 ? 'text-red-400/50' : 'text-green-400/50'}`}>{(c.pnlPct ?? 0).toFixed(2)}%</div>
         </div>
       </div>
@@ -435,7 +435,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
     } catch (e) {
       console.error('toggleDate error:', e)
       setDayDetails([])
-      alert('載入失敗，請稍後再試')
+      alert('載入失?，?稍??試')
     } finally {
       setLoading(false)
     }
@@ -445,17 +445,17 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
     <div className="space-y-4">
       <div className="card-base p-5 space-y-6 border-white/10 shadow-2xl">
         <div className="flex items-center justify-between">
-          <button onClick={() => setViewDate(new Date(year, month - 2, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-gold active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronLeft size={20}/></button>
-          <div className="flex gap-2 font-black text-white text-[20px]">
-            <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded transition-colors ${view === 'YEAR' ? 'text-gold' : 'active:opacity-60'}`}>{year} 年</button>
-            <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded transition-colors ${view === 'MONTH' ? 'text-gold' : 'active:opacity-60'}`}>{month} 月</button>
+          <button onClick={() => setViewDate(new Date(year, month - 2, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-accent active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronLeft size={20}/></button>
+          <div className="flex gap-2 font-black text-[var(--t1)] text-[20px]">
+            <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded transition-colors ${view === 'YEAR' ? 'text-accent' : 'active:opacity-60'}`}>{year} ?/button>
+            <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded transition-colors ${view === 'MONTH' ? 'text-accent' : 'active:opacity-60'}`}>{month} ??/button>
           </div>
-          <button onClick={() => setViewDate(new Date(year, month, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-gold active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronRight size={20}/></button>
+          <button onClick={() => setViewDate(new Date(year, month, 1))} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-accent active:scale-90 transition-all border border-white/5 shadow-lg"><ChevronRight size={20}/></button>
         </div>
 
         {view === 'CALENDAR' && (
           <div className="grid grid-cols-7 gap-2">
-            {['日','一','二','三','四','五','六'].map((d, i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-gold':'text-white/20'}`}>{d}</div>)}
+            {['??,'一','?,'?,'??,'?,'??].map((d, i) => <div key={d} className={`text-center text-[11px] font-bold py-1 ${i===0?'text-red-400':i===6?'text-accent':'text-[var(--t3)]'}`}>{d}</div>)}
             {days.map((d, i) => {
               if (d === null) return <div key={`empty-${i}`} style={{ minHeight: '58px' }} />
               const dateStr = `${year}-${String(month).padStart(2,'0')}-${String(d).padStart(2,'0')}`, entry = entryMap[d]
@@ -474,69 +474,69 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
               
               return (
                 <div key={d} onClick={() => toggleDate(dateStr)} 
-                  className={`cal-day relative rounded-[10px] border transition-all flex flex-col items-center justify-center ${isSel ? 'border-gold bg-gold z-10 scale-105 shadow-gold/20' : isToday ? 'border-gold shadow-gold/10' : 'border-transparent'}`} 
-                  style={{ background: isSel ? 'var(--gold)' : bg, minHeight: '58px' }}>
+                  className={`cal-day relative rounded-[10px] border transition-all flex flex-col items-center justify-center ${isSel ? 'border-accent bg-accent z-10 scale-105 shadow-accent/20' : isToday ? 'border-accent shadow-accent/10' : 'border-transparent'}`} 
+                  style={{ background: isSel ? 'var(--accent)' : bg, minHeight: '58px' }}>
                   
                   <span className={`absolute top-1 left-1.5 leading-none ${
-                    isToday ? 'text-[14px] font-[800] text-gold' : 
+                    isToday ? 'text-[14px] font-[800] text-accent' : 
                     isSel ? 'text-bg-base' : 
-                    !isWeekend && hasPnl ? 'text-white' : 'text-white/20'
+                    !isWeekend && hasPnl ? 'text-[var(--t1)]' : 'text-[var(--t3)]'
                   } ${!isWeekend && hasPnl ? 'text-[14px] font-[800]' : 'text-[13px] font-[600]'}`}>{d}</span>
 
                   {!isWeekend && entry && (
                     <div className="flex flex-col items-center justify-center mt-4 space-y-1">
-                      <div className={`text-[12px] font-[700] leading-none ${isSel ? 'text-bg-base' : 'text-white'}`}>
+                      <div className={`text-[12px] font-[700] leading-none ${isSel ? 'text-bg-base' : 'text-[var(--t1)]'}`}>
                         {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
                       </div>
                       <div className={`text-[11px] font-[600] leading-none ${isSel ? 'text-bg-base/60' : 'text-white/85'}`}>
                         {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                       </div>
                       {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
-                        <div className={`text-[9px] font-black leading-none mt-0.5 ${isSel ? 'text-bg-base' : 'text-gold'}`}>
+                        <div className={`text-[9px] font-black leading-none mt-0.5 ${isSel ? 'text-bg-base' : 'text-accent'}`}>
                           {entry.realized_pnl > 0 ? '+' : ''}{shortMoney(entry.realized_pnl)}
                         </div>
                       )}
                     </div>
                   )}
-                  {hasTxMap[d] && <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-gold shadow-sm border border-bg-base" />}
+                  {hasTxMap[d] && <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-accent shadow-sm border border-bg-base" />}
                 </div>
               )
             })}
           </div>
         )}
-        {view === 'YEAR' && <div className="grid grid-cols-3 gap-2">{Array.from({length:10}, (_,i)=>new Date().getFullYear()-7+i).map(y => <button key={y} onClick={()=>{setViewDate(new Date(y, month-1, 1)); setView('CALENDAR')}} className={`py-4 rounded-xl font-black transition-all ${year===y?'bg-gold text-bg-base shadow-lg':'bg-bg-hover text-white/40 active:bg-bg-card'}`}>{y}</button>)}</div>}
-        {view === 'MONTH' && <div className="grid grid-cols-3 gap-2">{Array.from({length:12}, (_,i)=>i+1).map(m => <button key={m} onClick={()=>{setViewDate(new Date(year, m-1, 1)); setView('CALENDAR')}} className={`py-4 rounded-xl font-black transition-all ${month===m?'bg-gold text-bg-base shadow-lg':'bg-bg-hover text-white/40 active:bg-bg-card'}`}>{m}月</button>)}</div>}
+        {view === 'YEAR' && <div className="grid grid-cols-3 gap-2">{Array.from({length:10}, (_,i)=>new Date().getFullYear()-7+i).map(y => <button key={y} onClick={()=>{setViewDate(new Date(y, month-1, 1)); setView('CALENDAR')}} className={`py-4 rounded-xl font-black transition-all ${year===y?'bg-accent text-bg-base shadow-lg':'bg-bg-hover text-[var(--t2)] active:bg-bg-card'}`}>{y}</button>)}</div>}
+        {view === 'MONTH' && <div className="grid grid-cols-3 gap-2">{Array.from({length:12}, (_,i)=>i+1).map(m => <button key={m} onClick={()=>{setViewDate(new Date(year, m-1, 1)); setView('CALENDAR')}} className={`py-4 rounded-xl font-black transition-all ${month===m?'bg-accent text-bg-base shadow-lg':'bg-bg-hover text-[var(--t2)] active:bg-bg-card'}`}>{m}??/button>)}</div>}
       </div>
 
       {selectedDate && (
         <div className="animate-slide-up card-base p-5 space-y-5 border-white/10 shadow-2xl">
           <div className="flex justify-between items-center border-b border-white/5 pb-3">
             <div className="flex flex-col">
-              <h3 className="font-black text-base text-white">{selectedDate.split('-')[1]}月{selectedDate.split('-')[2]}日 持股損益細項</h3>
+              <h3 className="font-black text-base text-[var(--t1)]">{selectedDate.split('-')[1]}?{selectedDate.split('-')[2]}???股??細?</h3>
               {!isHoliday && (() => { 
                 const entry = entries?.find((e: CalendarEntry) => e.entry_date === selectedDate); 
                 if (!entry) return null; 
                 return (
                   <div className="flex flex-col gap-0.5 mt-1">
                     <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      當日市值損益 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({(entry.pnl_pct ?? 0).toFixed(2)}%)
+                      ?日市值???{entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({(entry.pnl_pct ?? 0).toFixed(2)}%)
                     </span>
                     {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
-                      <span className="text-[10px] font-black font-mono text-gold">
-                        當日已實現損益 {entry.realized_pnl > 0 ? '+' : ''}{fmtMoney(entry.realized_pnl)}
+                      <span className="text-[10px] font-black font-mono text-accent">
+                        ?日已實????{entry.realized_pnl > 0 ? '+' : ''}{fmtMoney(entry.realized_pnl)}
                       </span>
                     )}
                   </div>
                 )
               })()}
             </div>
-            {loading && <RefreshCw size={14} className="animate-spin text-gold" />}
+            {loading && <RefreshCw size={14} className="animate-spin text-accent" />}
           </div>
           
           {isHoliday ? (
             <div className="py-8 flex flex-col items-center justify-center text-center space-y-2">
-              <div className="text-[16px] font-black text-white/40">未開盤</div>
-              <div className="text-[12px] font-bold text-white/20">當日無交易，損益為 0</div>
+              <div className="text-[16px] font-black text-[var(--t2)]">????/div>
+              <div className="text-[12px] font-bold text-[var(--t3)]">?日?交??????0</div>
             </div>
           ) : (
             <div className="space-y-4">
@@ -544,12 +544,12 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                 <div key={det.symbol} className="p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
                   <div className="flex justify-between items-start">
                     <div>
-                      <div className="font-black text-white text-base">{det.name_zh} <span className="text-xs text-white/30 font-mono">{codeOnly(det.symbol)}</span></div>
-                      <div className="text-[11px] font-bold text-white/40 mt-1">
-                        {(det.shares ?? 0).toLocaleString()} 股 · 收盤 {det.price.toFixed(2)}
+                      <div className="font-black text-[var(--t1)] text-base">{det.name_zh} <span className="text-xs text-[var(--t3)] font-mono">{codeOnly(det.symbol)}</span></div>
+                      <div className="text-[11px] font-bold text-[var(--t2)] mt-1">
+                        {(det.shares ?? 0).toLocaleString()} ??· ?盤 {det.price.toFixed(2)}
                         {det.change !== undefined && (
                           <span className={`ml-2 ${det.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                            {det.change >= 0 ? '▲' : '▼'} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
+                            {det.change >= 0 ? '?? : '??} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
                           </span>
                         )}
                       </div>
@@ -558,13 +558,13 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
 
                   <div className="grid grid-cols-2 gap-4 pt-2 border-t border-white/5">
                     <div>
-                      <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">持有成本 / 目前市值</div>
-                      <div className="text-sm font-bold text-white/80 font-mono">
-                        {fmtMoney(Math.round(det.total_cost))} / <span className="text-white">{fmtMoney(det.market_value)}</span>
+                      <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">???本 / ??市?/div>
+                      <div className="text-sm font-bold text-[var(--t1)] font-mono">
+                        {fmtMoney(Math.round(det.total_cost))} / <span className="text-[var(--t1)]">{fmtMoney(det.market_value)}</span>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">當日損益</div>
+                      <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">?日??</div>
                       <div className={`text-sm font-black font-mono ${det.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                         {det.pnl >= 0 ? '+' : ''}{fmtMoney(Math.round(det.pnl))} ({det.pnl_pct.toFixed(2)}%)
                       </div>
@@ -580,12 +580,12 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
             if (!dayTxs?.length) return null
             return (
               <div className="pt-4 border-t border-white/5 space-y-4">
-                <h4 className="text-[11px] font-black text-white/30 uppercase tracking-widest flex items-center gap-2"><ClipboardList size={14}/> 當天交易</h4>
+                <h4 className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest flex items-center gap-2"><ClipboardList size={14}/> ?天交?</h4>
                 <div className="space-y-3">
                   {dayTxs.map((tx: Transaction) => (
                     <div key={tx.id} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='BUY'?'買入':'賣出'}</span><span className="font-black text-white truncate max-w-[100px]">{tx.name_zh}</span></div>
-                      <div className="text-right"><div className={`font-mono font-black ${isHoliday ? 'text-white/20' : tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{isHoliday ? '—' : tx.net_amount >= 0 ? '+' : ''}{isHoliday ? '' : fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-white/20 font-bold">{(tx.shares ?? 0).toLocaleString()}股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
+                      <div className="flex items-center gap-2"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='BUY'?'買入':'?'}</span><span className="font-black text-[var(--t1)] truncate max-w-[100px]">{tx.name_zh}</span></div>
+                      <div className="text-right"><div className={`font-mono font-black ${isHoliday ? 'text-[var(--t3)]' : tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{isHoliday ? '?? : tx.net_amount >= 0 ? '+' : ''}{isHoliday ? '' : fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-[var(--t3)] font-bold">{(tx.shares ?? 0).toLocaleString()}??@ {(tx.price ?? 0).toFixed(2)}</div></div>
                     </div>
                   ))}
                 </div>
@@ -618,33 +618,33 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   }
   
   if (isEditing) return (
-    <div className="p-5 rounded-2xl bg-bg-surface border border-gold/30 space-y-5 my-2 shadow-2xl animate-slide-up">
-      <div className="text-center pb-2 border-b border-white/5"><h4 className="font-black text-sm text-gold tracking-tight">編輯：{isBuy?'買入':'賣出'} {t.name_zh || t.symbol}</h4></div>
+    <div className="p-5 rounded-2xl bg-bg-surface border border-accent/30 space-y-5 my-2 shadow-2xl animate-slide-up">
+      <div className="text-center pb-2 border-b border-white/5"><h4 className="font-black text-sm text-accent tracking-tight">編輯：{isBuy?'買入':'?'} {t.name_zh || t.symbol}</h4></div>
       <div className="flex gap-2 p-1 bg-black/20 rounded-xl">
-        <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-gold text-bg-base shadow-md':'text-white/30'}`}>整張 (1000股)</button>
-        <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-gold text-bg-base shadow-md':'text-white/30'}`}>零股</button>
+        <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>?張 (1000??</button>
+        <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>?股</button>
       </div>
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v as any):setShares(v as any)}} className="input-base text-center font-black py-3" /></div>
-        <div className="space-y-1.5"><Label>成交價</Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>
+        <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'?數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v as any):setShares(v as any)}} className="input-base text-center font-black py-3" /></div>
+        <div className="space-y-1.5"><Label>?交??/Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>
       </div>
-      <div className="space-y-1.5"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
-      <div className="space-y-1.5"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-sm py-3" placeholder="選填..." /></div>
+      <div className="space-y-1.5"><Label>交???</Label><DatePicker value={date} onChange={setDate} /></div>
+      <div className="space-y-1.5"><Label>?註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-sm py-3" placeholder="?填..." /></div>
       <div className="card-base p-4 space-y-2 bg-black/20 text-[11px] font-bold">
-        <div className="flex justify-between opacity-40"><span>手續費 + 稅</span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
-        <div className="flex justify-between items-center pt-2 border-t border-white/5"><span className="text-white/60">預估淨收支</span><span className={`text-base font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
+        <div className="flex justify-between opacity-40"><span>???+ ?/span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
+        <div className="flex justify-between items-center pt-2 border-t border-white/5"><span className="text-[var(--t2)]">?估淨收??/span><span className={`text-base font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
       </div>
-      <div className="flex gap-3 pt-1"><button onClick={handleSave} disabled={!isValid || loading} className="flex-[3] btn-primary py-3.5">儲存修改</button><button onClick={() => setIsEditing(false)} className="flex-1 btn-secondary py-3.5">取消</button></div>
+      <div className="flex gap-3 pt-1"><button onClick={handleSave} disabled={!isValid || loading} className="flex-[3] btn-primary py-3.5">??修改</button><button onClick={() => setIsEditing(false)} className="flex-1 btn-secondary py-3.5">??</button></div>
     </div>
   )
   return (
     <div className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0">
-      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.trade_type === 'DCA' && <span className="text-gold font-black">定期定額</span>}</div><div className="text-sm font-bold text-white/90">{(t.shares ?? 0).toLocaleString()}股 @ {(t.price ?? 0).toFixed(2)}</div></div>
+      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.trade_type === 'DCA' && <span className="text-accent font-black">定?定?</span>}</div><div className="text-sm font-bold text-[var(--t1)]">{(t.shares ?? 0).toLocaleString()}??@ {(t.price ?? 0).toFixed(2)}</div></div>
       <div className="text-right">
         <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
         <div className="flex gap-3 justify-end mt-1">
-          <button onClick={() => setIsEditing(true)} className="text-[11px] font-black text-gold active:opacity-50 transition-opacity">編輯</button>
-          <button onClick={() => onDelete(t.id)} className="text-[11px] font-black text-red-400 active:opacity-50 transition-opacity">刪除</button>
+          <button onClick={() => setIsEditing(true)} className="text-[11px] font-black text-accent active:opacity-50 transition-opacity">編輯</button>
+          <button onClick={() => onDelete(t.id)} className="text-[11px] font-black text-red-400 active:opacity-50 transition-opacity">?除</button>
         </div>
       </div>
     </div>

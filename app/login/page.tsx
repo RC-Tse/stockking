@@ -27,24 +27,22 @@ export default function LoginPage() {
         <div
           className="text-[72px] leading-none mb-5 select-none"
         >
-          👑
+          ??
         </div>
         <h1
-          className="text-gold text-4xl font-black tracking-tight"
+          className="text-accent text-4xl font-black tracking-tight"
           style={{ letterSpacing: '-0.02em' }}
         >
-          少年存股王
-        </h1>
+          少年存股??        </h1>
         <p className="mt-2 text-sm" style={{ color: 'var(--t2)' }}>
-          讓每一分錢都發光
-        </p>
+          讓�?一?�錢?�發??        </p>
         <div className="mt-5 flex items-center gap-3 justify-center">
           <div className="h-px w-12" style={{ background: 'var(--border-bright)' }} />
           <span
             className="text-xs font-mono tracking-widest"
-            style={{ color: 'var(--gold)' }}
+            style={{ color: 'var(--accent)' }}
           >
-            台股投資追蹤系統
+            ?�股?��?追蹤系統
           </span>
           <div className="h-px w-12" style={{ background: 'var(--border-bright)' }} />
         </div>
@@ -56,10 +54,10 @@ export default function LoginPage() {
         style={{ boxShadow: '0 24px 64px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.04)' }}
       >
         <h2 className="font-bold text-base text-center mb-1" style={{ color: 'var(--t1)' }}>
-          登入您的帳戶
+          ?�入?��?帳戶
         </h2>
         <p className="text-xs text-center mb-6" style={{ color: 'var(--t3)' }}>
-          資料雲端同步，跨裝置即時存取
+          資�??�端?�步，跨裝置?��?存�?
         </p>
 
         <button
@@ -78,30 +76,29 @@ export default function LoginPage() {
                 className="w-4 h-4 rounded-full border-2 animate-spin inline-block"
                 style={{ borderColor: 'rgba(0,0,0,0.2)', borderTopColor: 'var(--bg-base)' }}
               />
-              連線中…
-            </>
+              ???中�?            </>
           ) : (
             <>
               <GoogleIcon />
-              使用 Google 帳號登入
+              使用 Google 帳�??�入
             </>
           )}
         </button>
 
         <p className="text-xs text-center mt-4" style={{ color: 'var(--t3)' }}>
-          登入即同意個人資料用於帳號管理
+          ?�入?��??�個人資�??�於帳�?管�?
         </p>
       </div>
 
       {/* Feature pills */}
       <div className="relative z-10 flex flex-wrap gap-2 justify-center mt-7 max-w-xs">
-        {['☁️ 雲端同步', '📱 iOS PWA', '📊 盈虧月曆', '💼 持股追蹤', '💡 概念股'].map((f) => (
+        {['?��? ?�端?�步', '?�� iOS PWA', '?? ?�虧?��?', '?�� ?�股追蹤', '?�� 概念??].map((f) => (
           <span
             key={f}
             className="text-xs px-2.5 py-1 rounded-full"
             style={{
-              background: 'var(--gold-dim)',
-              color: 'var(--gold)',
+              background: 'var(--accent-dim)',
+              color: 'var(--accent)',
               border: '1px solid var(--border-bright)',
             }}
           >

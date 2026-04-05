@@ -92,7 +92,7 @@ export interface UserSettings {
   font_size: 'small' | 'medium' | 'large'
   year_goal: number
   total_goal: number
-  theme: 'dark' | 'light'
+  theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
