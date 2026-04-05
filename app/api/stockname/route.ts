@@ -9,7 +9,7 @@ async function refreshAllNames() {
   const dataToUpsert: { symbol: string; name_zh: string; updated_at: string }[] = []
 
   try {
-    // 1. ?��?上�?
+    // 1. 獲取上市
     const twseRes = await fetch(TWSE_API, { next: { revalidate: 0 } })
     if (twseRes.ok) {
       const list = await twseRes.json()
@@ -22,7 +22,7 @@ async function refreshAllNames() {
       })
     }
 
-    // 2. ?��?上�?
+    // 2. 獲取上櫃
     const tpexRes = await fetch(TPEX_API, { next: { revalidate: 0 } })
     if (tpexRes.ok) {
       const list = await tpexRes.json()
@@ -35,9 +35,9 @@ async function refreshAllNames() {
       })
     }
 
-    // 3. ?�次存入 Supabase
+    // 3. 分次存入 Supabase
     if (dataToUpsert.length > 0) {
-      // ?�於資�??�大 (2000+)，�??�寫?�避??timeout
+      // 由於資料量大 (2000+)，分批寫入避開 timeout
       const chunkSize = 500
       for (let i = 0; i < dataToUpsert.length; i += chunkSize) {
         const chunk = dataToUpsert.slice(i, i + chunkSize)
@@ -55,13 +55,13 @@ export async function GET(req: NextRequest) {
   const { pathname, searchParams } = new URL(req.url)
   const supabase = await createClient()
 
-  // ?��? /api/stockname/refresh
+  // 處理 /api/stockname/refresh
   if (pathname.endsWith('/refresh')) {
     const success = await refreshAllNames()
     return NextResponse.json({ success })
   }
 
-  // ?��? /api/stockname?symbol=...
+  // 處理 /api/stockname?symbol=...
   const symbol = searchParams.get('symbol')?.toUpperCase().trim()
   if (!symbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
 
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     .single()
 
   if (!cached) {
-    // ?��??�就?��?次�???
+    // 沒快取就刷新一次全量
     await refreshAllNames()
     const { data: retry } = await supabase
       .from('stock_names')
@@ -86,6 +86,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ symbol, name_zh: cached.name_zh })
   }
 
-  // ?��??��???(?�能??ETF ?�特殊代??，�???symbol ?�綴?��?�?(但�?題�?求�??��??�中?��?此�??�盡??
+  // 真的找不到 (可能是 ETF 或特殊代碼)，返回 symbol 前綴作為備份
   return NextResponse.json({ symbol, name_zh: symbol.split('.')[0] })
 }
