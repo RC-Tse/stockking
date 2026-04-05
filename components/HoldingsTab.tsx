@@ -469,7 +469,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
               if (!isWeekend) {
                 if (pnlPct > 0) bg = `rgba(224, 80, 80, ${Math.min(0.85, 0.3 + (pnlPct/5)*0.55)})`
                 else if (pnlPct < 0) bg = `rgba(66, 176, 122, ${Math.min(0.85, 0.3 + (Math.abs(pnlPct)/5)*0.55)})`
-                else if (hasPnl) bg = '#1e2535'
+                else bg = 'var(--bg-surface)'
               }
               
               return (

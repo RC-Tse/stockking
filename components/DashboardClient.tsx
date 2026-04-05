@@ -103,7 +103,12 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const supabase = createClient()
 
   useEffect(() => {
-    document.documentElement.setAttribute('data-theme', settings.theme || 'luxury')
+    const t = settings.theme || 'dark'
+    document.documentElement.setAttribute('data-theme', t)
+    const icon = document.querySelector('link[rel="apple-touch-icon"]')
+    if (icon) {
+      icon.setAttribute('href', t === 'light' ? '/icons/icon-192-light.svg' : '/icons/icon-192.svg')
+    }
   }, [settings.theme])
 
   const refresh = useCallback(async () => {

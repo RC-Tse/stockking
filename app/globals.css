@@ -5,68 +5,38 @@
 /* ── Design System ───────────────────────────────────────────── */
 
 :root {
+  /* 深色主題 (預設) */
   --bg-base: #0a0c10;
   --bg-surface: #10141c;
   --bg-card: #161c28;
   --bg-hover: #1e2535;
-  --border: rgba(255,255,255,0.06);
-  --border-bright: rgba(212,175,55,0.3);
-  --gold: #d4af37;
-  --gold-bright: #f0d060;
-  --gold-dim: rgba(212,175,55,0.1);
+  --border: rgba(255, 255, 255, 0.06);
+  --border-bright: rgba(212, 175, 55, 0.3);
   --t1: #f0ece4;
   --t2: #8a8070;
   --t3: #4a4540;
+
+  /* 共有變數 */
+  --gold: #d4af37;
+  --gold-bright: #f0d060;
+  --gold-dim: rgba(212, 175, 55, 0.12);
   --red: #e05050;
-  --red-dim: rgba(224,80,80,0.15);
+  --red-dim: rgba(224, 80, 80, 0.15);
   --grn: #42b07a;
-  --grn-dim: rgba(66,176,122,0.15);
+  --grn-dim: rgba(66, 176, 122, 0.15);
   --flat: #707888;
 }
 
-[data-theme="minimal"] {
-  --bg-base: #111214;
-  --bg-surface: #18191c;
-  --bg-card: #202124;
-  --bg-hover: #2a2b2f;
-  --border: rgba(255,255,255,0.08);
-  --border-bright: rgba(120,120,140,0.4);
-  --gold: #a0a8b8;
-  --gold-bright: #c8d0e0;
-  --gold-dim: rgba(160,168,184,0.12);
-  --t1: #e8e8ec;
-  --t2: #808088;
-  --t3: #404048;
-}
-
-[data-theme="tech"] {
-  --bg-base: #050d14;
-  --bg-surface: #081520;
-  --bg-card: #0c1e30;
-  --bg-hover: #122840;
-  --border: rgba(0,200,200,0.08);
-  --border-bright: rgba(0,200,180,0.35);
-  --gold: #00c8b4;
-  --gold-bright: #00e8d0;
-  --gold-dim: rgba(0,200,180,0.12);
-  --t1: #d0eef0;
-  --t2: #5a8a90;
-  --t3: #2a4a50;
-}
-
-[data-theme="morandi"] {
-  --bg-base: #0d1018;
-  --bg-surface: #141820;
-  --bg-card: #1a2030;
-  --bg-hover: #202840;
-  --border: rgba(255,255,255,0.06);
-  --border-bright: rgba(201,165,100,0.35);
-  --gold: #c9a564;
-  --gold-bright: #e8c880;
-  --gold-dim: rgba(201,165,100,0.12);
-  --t1: #ece8e0;
-  --t2: #9a9080;
-  --t3: #5a5450;
+[data-theme="light"] {
+  --bg-base: #f5f3ef;
+  --bg-surface: #ece9e3;
+  --bg-card: #e2ddd5;
+  --bg-hover: #d8d2c8;
+  --border: rgba(0, 0, 0, 0.06);
+  --border-bright: rgba(212, 175, 55, 0.4);
+  --t1: #1a1814;
+  --t2: #6a6050;
+  --t3: #9a9080;
 }
 
 html {
@@ -81,6 +51,7 @@ body {
   font-family: 'Inter', 'PingFang TC', sans-serif;
   overscroll-behavior: none;
   background: var(--bg-base);
+  color: var(--t1);
 }
 
 @media (max-width: 767px) {
@@ -90,17 +61,26 @@ body {
 /* ── UI Components ───────────────────────────────────────────── */
 
 .glass {
-  background: rgba(22, 28, 40, 0.85);
+  background: var(--bg-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(212, 175, 55, 0.2);
+  border: 1px solid var(--border-bright);
   border-radius: 16px;
+}
+
+[data-theme="light"] .glass {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(212, 175, 55, 0.2);
 }
 
 .card-base {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 16px;
+}
+
+[data-theme="light"] .card-base {
+  border-color: rgba(0, 0, 0, 0.1);
 }
 
 .input-base {
@@ -113,7 +93,13 @@ body {
   outline: none;
   transition: all 0.2s;
 }
+
+[data-theme="light"] .input-base {
+  background: var(--bg-hover);
+}
+
 .input-base:focus { border-color: var(--gold); background: var(--bg-hover); }
+
 
 /* Buttons */
 .btn-primary {

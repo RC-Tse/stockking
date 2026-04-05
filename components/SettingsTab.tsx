@@ -20,10 +20,8 @@ interface Props {
 type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL'
 
 const THEMES = [
-  { id: 'luxury', name: '深色奢華', colors: ['#080a0e', '#161c28', '#d4af37'] },
-  { id: 'minimal', name: '極簡現代', colors: ['#111214', '#202124', '#a0a8b8'] },
-  { id: 'tech', name: '科技感', colors: ['#050d14', '#0c1e30', '#00c8b4'] },
-  { id: 'morandi', name: '溫潤質感', colors: ['#0d1018', '#1a2030', '#c9a564'] },
+  { id: 'dark', name: '深色主題', colors: ['#0a0c10', '#161c28', '#d4af37'] },
+  { id: 'light', name: '淺色主題', colors: ['#f5f3ef', '#e2ddd5', '#d4af37'] },
 ]
 
 export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
@@ -40,8 +38,15 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
     setSaving(false)
   }
 
-  const handleThemeChange = (themeId: any) => {
-    handleSave({ theme: themeId })
+  const handleThemeChange = async (themeId: 'dark' | 'light') => {
+    // 立即套用 UI 反饋
+    document.documentElement.setAttribute('data-theme', themeId)
+    // 更新圖示
+    const icon = document.querySelector('link[rel="apple-touch-icon"]')
+    if (icon) {
+      icon.setAttribute('href', themeId === 'light' ? '/icons/icon-192-light.svg' : '/icons/icon-192.svg')
+    }
+    await handleSave({ theme: themeId })
   }
 
   return (
