@@ -213,41 +213,42 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
       })
     }
 
-    if (range === 'ALL') return fullData
-    if (range === 'CUSTOM' && customS && customE) {
-      return fullData.filter(d => d.fullDate >= customS && d.fullDate <= customE)
+    let result = fullData
+    if (range !== 'ALL') {
+      if (range === 'CUSTOM' && customS && customE) {
+        if (!isTotal) {
+          const cy = currentYear.toString()
+          const cS = customS < `${cy}-01-01` ? `${cy}-01-01` : customS
+          const cE = customE > `${cy}-12-31` ? `${cy}-12-31` : customE
+          result = fullData.filter(d => d.fullDate >= cS && d.fullDate <= cE)
+        } else {
+          result = fullData.filter(d => d.fullDate >= customS && d.fullDate <= customE)
+        }
+      } else {
+        let viewportDays = 0
+        if (range === '1M') viewportDays = 15
+        else if (range === '3M') viewportDays = 45
+        else if (range === '6M') viewportDays = 90
+        else if (range === '9M') viewportDays = 135
+        else if (range === '1Y') viewportDays = isTotal ? 182 : 364
+
+        let todayIdx = fullData.findIndex(d => d.fullDate === todayStr)
+        if (todayIdx === -1) todayIdx = fullData.length - 1
+
+        let left = todayIdx - viewportDays
+        let right = todayIdx + viewportDays
+
+        if (!isTotal) {
+          if (left < 0) { right += Math.abs(left); left = 0 }
+          if (right >= fullData.length) { left -= (right - fullData.length + 1); right = fullData.length - 1 }
+        }
+        left = Math.max(0, left)
+        right = Math.min(fullData.length - 1, right)
+
+        result = fullData.slice(left, right + 1)
+      }
     }
 
-    let viewportDays = 0
-    if (range === '1M') viewportDays = 15
-    else if (range === '3M') viewportDays = 45
-    else if (range === '6M') viewportDays = 90
-    else if (range === '9M') viewportDays = 135
-    else if (range === '1Y') viewportDays = isTotal ? 182 : 364
-
-    let todayIdx = fullData.findIndex(d => d.fullDate === todayStr)
-    if (todayIdx === -1) todayIdx = fullData.length - 1
-
-    let left = todayIdx - viewportDays
-    let right = todayIdx + viewportDays
-
-    if (!isTotal) {
-      if (left < 0) { right += Math.abs(left); left = 0 }
-      if (right >= fullData.length) { left -= (right - fullData.length + 1); right = fullData.length - 1 }
-      left = Math.max(0, left)
-      right = Math.min(fullData.length - 1, right)
-    } else {
-      left = Math.max(0, left)
-      right = Math.min(fullData.length - 1, right)
-    }
-
-    let result = fullData.slice(left, right + 1)
-    if (range === 'CUSTOM' && customS && customE && !isTotal) {
-      const cy = currentYear.toString()
-      const cS = customS < `${cy}-01-01` ? `${cy}-01-01` : customS
-      const cE = customE > `${cy}-12-31` ? `${cy}-12-31` : customE
-      result = fullData.filter(d => d.fullDate >= cS && d.fullDate <= cE)
-    }
     return result.map(d => ({ ...d, timestamp: new Date(d.fullDate).getTime() }))
   }
 
@@ -280,6 +281,14 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     while(curr <= endObj) {
         if (curr >= startObj) {
            ticks.push(curr.getTime())
+        }
+        if (days <= 45) {
+           const d10 = new Date(curr.getFullYear(), curr.getMonth(), 10)
+           const d20 = new Date(curr.getFullYear(), curr.getMonth(), 20)
+           const d30 = new Date(curr.getFullYear(), curr.getMonth(), 30)
+           if (d10 >= startObj && d10 <= endObj) ticks.push(d10.getTime())
+           if (d20 >= startObj && d20 <= endObj) ticks.push(d20.getTime())
+           if (d30 >= startObj && d30 <= endObj) ticks.push(d30.getTime())
         }
         curr.setMonth(curr.getMonth() + stepMonths)
     }
@@ -364,37 +373,42 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
   const finalTotalPnl = totalGoalData.filter(d => d.actual !== null).pop()?.actual || 0
 
   return (
-    <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden">
+    <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
       {/* ── 1. 各股分析 ── */}
       <section className="space-y-4">
-        <div className="flex flex-col space-y-2 px-1">
-          <div className="relative inline-block w-[60%]">
-            <select 
-              value={selSym} 
-              onChange={e => setSelSym(e.target.value)}
-              className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-2 pr-10 font-black text-sm text-[var(--t1)] focus:outline-none focus:border-accent transition-all truncate"
-            >
-              {holdings.map(h => (
-                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--t3)] pointer-events-none" />
-          </div>
-          <div className="flex gap-1.5 flex-wrap">
-            {(['1M', '3M', '1Y', 'ALL'] as (StockRange)[]).map(r => (
-              <button 
-                key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+        <div className="flex flex-col space-y-3 px-1">
+          <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
+            <TrendingUp size={16} className="text-accent inline mr-1" /> 單一個股走勢與點位分析
+          </h3>
+          <div className="flex items-center justify-between">
+            <div className="relative inline-block w-[40%]">
+              <select 
+                value={selSym} 
+                onChange={e => setSelSym(e.target.value)}
+                className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-2 pr-10 font-black text-sm text-[var(--t1)] focus:outline-none focus:border-accent transition-all truncate"
               >
-                {r === 'ALL' ? '全部' : r}
+                {holdings.map(h => (
+                  <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})</option>
+                ))}
+              </select>
+              <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--t3)] pointer-events-none" />
+            </div>
+            <div className="flex gap-1.5 flex-wrap justify-end max-w-[60%]">
+              {(['1M', '3M', '1Y', 'ALL'] as (StockRange)[]).map(r => (
+                <button 
+                  key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                >
+                  {r === 'ALL' ? '全部' : r}
+                </button>
+              ))}
+              <button 
+                onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
+                className={`px-3 py-1.5 flex items-center gap-1 rounded-lg text-[10px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+              >
+                <CalendarIcon size={10} /> 自訂
               </button>
-            ))}
-            <button 
-              onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
-              className={`px-3 py-1.5 flex items-center gap-1 rounded-lg text-[10px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-            >
-              <CalendarIcon size={10} /> 自訂
-            </button>
+            </div>
           </div>
         </div>
 
@@ -420,8 +434,9 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
               <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--t3)'}} axisLine={false} tickLine={false} />
               <Tooltip content={<StockTooltip />} />
               <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-              <Line type="stepAfter" dataKey="avgCost" stroke="var(--t3)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" />
-              <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線 / 買入點" />
+              <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" />
+              <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" />
+              <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="🔴 買入點標記" />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -499,6 +514,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
               <YAxis hide domain={[0, 'auto']} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
+                labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
               />
               <Area type="monotone" dataKey="ideal" stroke="var(--accent)" strokeDasharray="5 5" fillOpacity={1} fill="url(#colorIdeal)" name="理想進度" />
               <Line type="monotone" dataKey="actual" stroke={finalYearPnl >= 0 ? '#e05050' : '#42b07a'} strokeWidth={3} dot={false} name="累積損益" connectNulls={false} />
@@ -565,6 +581,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
               <YAxis hide domain={[0, 'auto']} />
               <Tooltip 
                 contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
+                labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
               />
               <Line type="monotone" dataKey="actual" stroke={finalTotalPnl >= 0 ? '#e05050' : '#42b07a'} strokeWidth={3} dot={false} name="累積損益" connectNulls={false} />
             </LineChart>

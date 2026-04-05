@@ -34,7 +34,7 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
 
   const displayValue = value ? (() => {
     const [y, m, d] = value.split('-')
-    return `${y} 年 ${m} 月 ${d} 日`
+    return `${y}/${m}/${d}`
   })() : ''
 
   const currentYear = viewDate.getFullYear()
@@ -65,8 +65,10 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
         />
 
         {isOpen && (
-        <div className="absolute top-full left-0 right-0 mt-2 z-[100] p-5 space-y-6 shadow-2xl animate-slide-up glass" 
-             style={{ minWidth: '300px' }}>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+             onClick={() => setIsOpen(false)}>
+          <div className="p-5 space-y-6 shadow-2xl animate-slide-up glass max-w-[320px] w-full rounded-[24px]" 
+               onClick={e => e.stopPropagation()}>
 
           <div className="flex items-center justify-between">
             <button onClick={() => moveMonth(-1)} className="w-10 h-10 flex items-center justify-center rounded-full bg-bg-hover text-accent active:scale-90 transition-all" disabled={view !== 'CALENDAR'}>
@@ -140,6 +142,7 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
     </div>
