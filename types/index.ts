@@ -92,7 +92,7 @@ export interface UserSettings {
   font_size: 'small' | 'medium' | 'large'
   year_goal: number
   total_goal: number
-  theme: 'luxury' | 'minimal' | 'tech' | 'morandi'
+  theme: 'dark' | 'light'
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -110,7 +110,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   font_size: 'medium',
   year_goal: 0,
   total_goal: 0,
-  theme: 'luxury'
+  theme: 'dark'
 }
 
 // ETF codes for tax calculation

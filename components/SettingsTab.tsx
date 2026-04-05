@@ -22,7 +22,7 @@ type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL'
 const THEMES = [
   { id: 'dark', name: '深色主題', colors: ['#0a0c10', '#161c28', '#d4af37'] },
   { id: 'light', name: '淺色主題', colors: ['#f5f3ef', '#e2ddd5', '#d4af37'] },
-]
+] as const
 
 export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
   const [view, setView] = useState<View>('MAIN')
