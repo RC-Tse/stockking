@@ -136,6 +136,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     refresh()
     const now = new Date()
     refreshCal(now.getFullYear(), now.getMonth() + 1)
+    
+    // 背景靜默更新股票名稱資料庫
+    fetch('/api/stockname/refresh').catch(console.error)
   }, [refresh, refreshCal])
 
   const { totalPnl, pnlPct, totalMV } = useMemo(() => {
