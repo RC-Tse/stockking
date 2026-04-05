@@ -180,7 +180,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
         {loading ? <div className="p-10 text-center opacity-20 animate-pulse text-[var(--t1)]">載入中...</div> : (
           <>
             {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} onRefresh={refresh} onRefreshCal={refreshCal} />}
-            {tab === 'analytics' && <AnalyticsTab />}
+            {tab === 'analytics' && <AnalyticsTab holdings={holdings} transactions={txs} settings={settings} quotes={quotes} />}
             {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} onEditDca={setEditingDcaPlan} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSignOut={signOut} onSave={async s => {
               await fetch('/api/settings', { method: 'POST', body: JSON.stringify(s) })

@@ -92,6 +92,7 @@ export interface UserSettings {
   font_size: 'small' | 'medium' | 'large'
   year_goal: number
   total_goal: number
+  total_goal_start_date: string
   theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
 }
 
@@ -110,6 +111,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   font_size: 'medium',
   year_goal: 0,
   total_goal: 0,
+  total_goal_start_date: new Date().toISOString().split('T')[0],
   theme: 'dark'
 }
 

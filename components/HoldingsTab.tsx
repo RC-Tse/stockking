@@ -22,6 +22,12 @@ import {
 } from 'lucide-react'
 import DatePicker from './DatePicker'
 import ConfirmModal from './ConfirmModal'
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+
+const PIE_COLORS = [
+  '#d4af37', '#e05050', '#42b07a', '#1C5D99', 
+  '#717744', '#CBC0D3', '#C8B8DB', '#639FAB'
+]
 
 interface Props {
   holdings: Holding[]
@@ -37,8 +43,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const currentYear = new Date().getFullYear().toString()
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showData, setShowData] = useState(true)
+  const [selectedPieSym, setSelectedPieSym] = useState<string | null>(null)
 
-  // ── Calculate FIFO Metrics ──
   const { 
     totalRealized,
     realizedCostBasis,
@@ -118,6 +124,18 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
   const totalAchieved = settings.total_goal > 0 ? (totalPnl / settings.total_goal) * 100 : null
 
+  const pieData = useMemo(() => {
+    return holdings.map(h => ({
+      name: getStockName(h.symbol),
+      symbol: h.symbol,
+      value: h.total_cost
+    })).sort((a, b) => b.value - a.value)
+  }, [holdings])
+
+  const selectedHolding = useMemo(() => {
+    return holdings.find(h => h.symbol === selectedPieSym)
+  }, [holdings, selectedPieSym])
+
   const [expanded, setExpanded] = useState<string | null>(null)
   const [closedExpanded, setClosedExpanded] = useState(false)
 
@@ -172,19 +190,106 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         </div>
       </div>
 
-      {/* 2. 損益月曆 */}
-      <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} holdings={holdings} quotes={quotes} />
+      {/* 2. 圓餅圖 */}
+      <div className="card-base p-6 space-y-6 border-white/10 shadow-xl bg-black/20">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider flex items-center gap-2">
+            <PieChartIcon size={14} className="text-accent" /> 資產分佈 (成本)
+          </span>
+        </div>
 
-      {/* 3. 圓餅圖 (佔位) */}
-      <div className="card-base p-8 flex flex-col items-center justify-center text-center space-y-4 border-white/10 shadow-xl bg-black/20">
-        <div className="w-16 h-16 rounded-full bg-accent/5 flex items-center justify-center text-accent/40">
-          <PieChartIcon size={32} />
+        <div className="h-64 w-full relative">
+          <ResponsiveContainer width="100%" height="100%">
+            <PieChart>
+              <Pie
+                data={pieData}
+                innerRadius={65}
+                outerRadius={95}
+                paddingAngle={5}
+                dataKey="value"
+                onClick={(data) => setSelectedPieSym(selectedPieSym === data.symbol ? null : data.symbol)}
+              >
+                {pieData.map((entry, index) => (
+                  <Cell 
+                    key={`cell-${index}`} 
+                    fill={PIE_COLORS[index % PIE_COLORS.length]} 
+                    stroke="rgba(0,0,0,0.2)"
+                    style={{ outline: 'none', cursor: 'pointer', opacity: selectedPieSym && selectedPieSym !== entry.symbol ? 0.4 : 1 }}
+                  />
+                ))}
+              </Pie>
+              <Tooltip 
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    return (
+                      <div className="glass p-2 border-white/10 text-[10px] font-bold">
+                        {payload[0].name}: {fmtMoney(payload[0].value)}
+                      </div>
+                    )
+                  }
+                  return null
+                }}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+          <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+            <span className="text-[10px] font-black text-[var(--t3)] uppercase">持股分布</span>
+            <span className="text-lg font-black text-[var(--t1)] font-mono">{fmtMoney(Math.round(currentCost))}</span>
+          </div>
         </div>
-        <div className="space-y-1">
-          <h4 className="text-[15px] font-black text-[var(--t1)]">資產分佈</h4>
-          <p className="text-xs text-[var(--t3)] font-bold uppercase tracking-wider">圓餅圖 — 即將推出</p>
+
+        {/* 圖例 */}
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+          {pieData.map((entry, index) => (
+            <button 
+              key={entry.symbol}
+              onClick={() => setSelectedPieSym(selectedPieSym === entry.symbol ? null : entry.symbol)}
+              className="flex items-center justify-between group"
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
+                <span className={`text-[11px] font-bold truncate ${selectedPieSym === entry.symbol ? 'text-accent' : 'text-[var(--t2)]'}`}>{entry.name}</span>
+              </div>
+              <span className="text-[10px] font-mono text-[var(--t3)] ml-2">{((entry.value / currentCost) * 100).toFixed(1)}%</span>
+            </button>
+          ))}
         </div>
+
+        {/* 詳細卡片 */}
+        {selectedHolding && (
+          <div className="mt-4 pt-4 border-t border-white/5 animate-slide-up">
+            <div className="glass p-4 space-y-4 border-accent/20">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h4 className="text-[var(--t1)] font-black text-sm">{getStockName(selectedHolding.symbol)}</h4>
+                  <p className="text-[10px] font-mono text-[var(--t3)]">{codeOnly(selectedHolding.symbol)}</p>
+                </div>
+                <div className="text-right">
+                  <div className="text-[10px] font-black text-[var(--t3)] uppercase mb-0.5">佔總投入比例</div>
+                  <div className="text-sm font-black text-accent font-mono">{((selectedHolding.total_cost / currentCost) * 100).toFixed(1)}%</div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4">
+                <DetailBox label="持股數量" value={`${selectedHolding.shares.toLocaleString()} 股`} />
+                <DetailBox label="平均成本" value={selectedHolding.avg_cost.toFixed(2)} />
+                <DetailBox label="持有成本" value={fmtMoney(selectedHolding.total_cost)} />
+                <DetailBox label="目前市值" value={fmtMoney(selectedHolding.market_value)} />
+              </div>
+
+              <div className="pt-2 border-t border-white/5 flex justify-between items-end">
+                <span className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest">未實現損益</span>
+                <span className={`font-black font-mono text-base ${selectedHolding.unrealized_pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {selectedHolding.unrealized_pnl >= 0 ? '+' : ''}{fmtMoney(selectedHolding.unrealized_pnl)} ({selectedHolding.pnl_pct.toFixed(2)}%)
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
+
+      {/* 3. 損益月曆 */}
+      <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} holdings={holdings} quotes={quotes} />
 
       {/* 4. 各股列表 */}
       <div className="space-y-4">
@@ -224,6 +329,15 @@ function StatBox({ label, value, upDown, large, className }: any) {
     <div className={`flex flex-col ${className}`}>
       <span className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest mb-1.5">{label}</span>
       <span className={`font-black font-mono leading-none ${large ? 'text-[22px]' : 'text-[18px]'} ${color}`}>{value}</span>
+    </div>
+  )
+}
+
+function DetailBox({ label, value }: { label: string, value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">{label}</div>
+      <div className="text-sm font-bold text-[var(--t1)] font-mono">{value}</div>
     </div>
   )
 }
@@ -662,6 +776,59 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
           <button onClick={() => onDelete(t.id)} className="text-[11px] font-black text-red-400 active:opacity-50 transition-opacity">刪除</button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function StatBox({ label, value, upDown, large, className }: any) {
+  const isHidden = value === "••••••"
+  const color = (upDown === undefined || isHidden) ? 'text-[var(--t1)]' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
+  return (
+    <div className={`flex flex-col ${className}`}>
+      <span className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest mb-1.5">{label}</span>
+      <span className={`font-black font-mono leading-none ${large ? 'text-[22px]' : 'text-[18px]'} ${color}`}>{value}</span>
+    </div>
+  )
+}
+
+function DetailBox({ label, value }: { label: string, value: string }) {
+  return (
+    <div>
+      <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">{label}</div>
+      <div className="text-sm font-bold text-[var(--t1)] font-mono">{value}</div>
+    </div>
+  )
+}
+
+function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: any) {
+  const isNegative = current < 0
+  return (
+    <div className="space-y-2.5">
+      <div className="flex justify-between items-end">
+        <span className="text-[13px] font-black text-[var(--t2)] flex items-center gap-2">
+          <Icon size={14} className="text-accent" /> {label}
+        </span>
+        {goal > 0 ? (
+          <div className="flex flex-col items-end">
+            <span className={`text-[13px] font-black font-mono ${isNegative ? 'text-red-400' : 'text-accent'}`}>
+              {showData ? `${achieved.toFixed(1)}%` : "••••••"}
+            </span>
+            <span className="text-[10px] font-bold text-[var(--t3)]">
+              {showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "••••••"}
+            </span>
+          </div>
+        ) : (
+          <button onClick={() => window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))} className="text-[11px] font-bold text-accent/50">點此設定目標 ➔</button>
+        )}
+      </div>
+      {goal > 0 && (
+        <div className="h-2 w-full bg-black/40 rounded-full overflow-hidden border border-white/5">
+          <div 
+            className={`h-full transition-all duration-1000 ${isNegative ? 'bg-red-500/50' : 'bg-gradient-to-r from-[var(--accent)] to-[var(--accent-bright)]'}`} 
+            style={{ width: `${Math.min(100, Math.max(0, achieved))}%` }} 
+          />
+        </div>
+      )}
     </div>
   )
 }

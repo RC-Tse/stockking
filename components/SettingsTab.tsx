@@ -11,6 +11,8 @@ import {
   LogOut
 } from 'lucide-react'
 
+import DatePicker from './DatePicker'
+
 interface Props {
   settings: UserSettings
   onSignOut: () => Promise<void>
@@ -139,7 +141,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               </p>
             </div>
             <div className="space-y-2">
-              <Label>總資產市值目標 (TWD)</Label>
+              <Label>總損益目標 (TWD)</Label>
               <input 
                 type="number" inputMode="numeric"
                 value={localSettings.total_goal || ''} 
@@ -148,7 +150,17 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
                 placeholder="例如: 1000000"
               />
               <p className="text-[14px] md:text-[12px] text-[var(--t2)] font-medium leading-relaxed">
-                設定您長期的總資產市值目標。
+                設定您長期的總累積損益目標。
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label>總目標起始日</Label>
+              <DatePicker 
+                value={localSettings.total_goal_start_date} 
+                onChange={val => handleSave({ total_goal_start_date: val })} 
+              />
+              <p className="text-[14px] md:text-[12px] text-[var(--t2)] font-medium leading-relaxed">
+                設定總損益目標的計算起點。
               </p>
             </div>
           </div>

@@ -3,12 +3,12 @@ import { getStockName } from '@/types'
 
 export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get('symbol')?.toUpperCase()
+  const range = req.nextUrl.searchParams.get('range') || '4mo' // Default to 4mo for MA60
   if (!symbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
 
   try {
-    // Fetch 3 months of data to calculate 60-day MA
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=4mo`,
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}`,
       { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
     )
     if (!res.ok) return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 })
@@ -22,9 +22,18 @@ export async function GET(req: NextRequest) {
 
     const quotes = result.indicators?.quote?.[0]
     const closes = quotes?.close || []
-    const validCloses = closes.filter((c: any) => c !== null)
+    const timestamps = result.timestamp || []
     
+    // Map history
+    const history = timestamps.map((ts: number, i: number) => ({
+      date: new Date(ts * 1000).toISOString().split('T')[0],
+      price: closes[i] ? Math.round(closes[i] * 100) / 100 : null
+    })).filter((item: any) => item.price !== null)
+
+    const validCloses = closes.filter((c: any) => c !== null)
     const price = validCloses[validCloses.length - 1] || 0
+    
+    // MA60 always calculated if possible
     const last60 = validCloses.slice(-60)
     const ma60 = last60.length > 0 
       ? last60.reduce((s: number, c: number) => s + c, 0) / last60.length 
@@ -38,6 +47,7 @@ export async function GET(req: NextRequest) {
       price: Math.round(price * 100) / 100,
       ma60: Math.round(ma60 * 100) / 100,
       name: name,
+      history: history
     })
   } catch (err) {
     console.error('Error fetching stock info:', err)
