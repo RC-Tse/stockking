@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Transaction, Holding, CalendarEntry, UserSettings, Quote, DCAPlan,
+  Transaction, Holding, CalendarEntry, UserSettings, Quote,
   DEFAULT_SETTINGS, calcFee, calcTax, fmtMoney,
 } from '@/types'
 import { 
@@ -90,7 +90,6 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [calEntries, setCalEntries] = useState<CalendarEntry[]>([])
   const [holdings, setHoldings]   = useState<Holding[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [editingDcaPlan, setEditingDcaPlan] = useState<DCAPlan | null>(null)
   const [loading, setLoading]     = useState(true)
   const router = useRouter()
   const supabase = createClient()
@@ -184,7 +183,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
           <>
             {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} onRefresh={refresh} onRefreshCal={refreshCal} />}
             {tab === 'analytics' && <AnalyticsTab holdings={holdings} transactions={txs} settings={settings} quotes={quotes} />}
-            {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} onEditDca={setEditingDcaPlan} />}
+            {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSignOut={signOut} onSave={async s => {
               await fetch('/api/settings', { method: 'POST', body: JSON.stringify(s) })
               setSettings(s)
@@ -195,7 +194,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
 
       {(tab === 'holdings' || tab === 'transactions') && (
         <button
-          onClick={() => { setEditingDcaPlan(null); setDrawerOpen(true); }}
+          onClick={() => { setDrawerOpen(true); }}
           className="fixed bottom-[82px] right-4 z-30 w-14 h-14 rounded-full flex items-center justify-center text-[var(--bg-base)] shadow-[0_4px_20px_var(--accent-dim)] active:scale-90 transition-all border border-white/10"
           style={{ background: 'linear-gradient(135deg, var(--accent), var(--accent-bright))' }}>
           <Plus size={28} strokeWidth={3} />
@@ -221,13 +220,11 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       <AddDrawer
         open={drawerOpen}
         settings={settings}
-        initialPlan={editingDcaPlan}
-        onClose={() => { setDrawerOpen(false); setEditingDcaPlan(null); }}
+        onClose={() => { setDrawerOpen(false); }}
         onSave={async p => {
           await fetch('/api/transactions', { method: 'POST', body: JSON.stringify(p) })
           setDrawerOpen(false); refresh();
         }}
-        onSavePlan={() => refresh()}
       />
     </div>
   )

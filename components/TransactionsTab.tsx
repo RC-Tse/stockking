@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax, DCAPlan } from '@/types'
+import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax } from '@/types'
 import { 
   Download, 
   TrendingUp, 
@@ -21,18 +21,15 @@ interface Props {
   txs: Transaction[]
   settings: UserSettings
   onRefresh: () => void
-  onEditDca?: (plan: DCAPlan) => void
 }
 
-type TabMode = 'SELF' | 'DCA' | 'REALIZED'
+type TabMode = 'SELF' | 'REALIZED'
 type RangeMode = 'month' | '3months' | 'year' | 'all' | 'custom'
 
-export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }: Props) {
+export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
   const [tab, setTab] = useState<TabMode>('SELF')
   const [filter, setFilter] = useState('')
   const [deletingId, setDeletingId] = useState<number | null>(null)
-  const [dcaPlans, setDcaPlans] = useState<DCAPlan[]>([])
-  const [exportOpen, setExportOpen] = useState(false)
 
   // Realized Tab States
   const [rangeMode, setRangeMode] = useState<RangeMode>('all')
@@ -40,20 +37,11 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
   const [customEnd, setCustomEnd] = useState('')
   const [expandedRealized, setExpandedRealized] = useState<string | null>(null)
 
-  const [expandedYears, setExpandedYears] = useState<Record<string, boolean>>({ [new Date().getFullYear().toString()]: true })
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({ [`${new Date().getFullYear()}-${new Date().getMonth() + 1}`]: true })
-
-  const fetchDcaPlans = useCallback(async () => {
-    const res = await fetch('/api/dca')
-    if (res.ok) setDcaPlans(await res.json())
-  }, [])
-
-  useEffect(() => { if (tab === 'DCA') fetchDcaPlans() }, [tab, fetchDcaPlans])
 
   const filtered = useMemo(() => {
     let result = txs
     if (tab === 'SELF') result = result.filter(t => t.trade_type !== 'DCA')
-    else if (tab === 'DCA') result = result.filter(t => t.trade_type === 'DCA')
     if (filter.trim() && tab !== 'REALIZED') {
       result = result.filter(t => codeOnly(t.symbol).includes(filter.toUpperCase()) || t.symbol.includes(filter.toUpperCase()) || (t.name_zh || getStockName(t.symbol)).includes(filter))
     }
@@ -121,17 +109,13 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
     setDeletingId(null); onRefresh()
   }
 
-  const deleteDca = async (id: number) => {
-    if (!confirm('確認刪除此定期定額計畫？')) return
-    await fetch(`/api/dca/${id}`, { method: 'DELETE' })
-    fetchDcaPlans()
-  }
+  const [exportOpen, setExportOpen] = useState(false)
 
   return (
     <div className="p-4 space-y-6 pb-32 tabular-nums">
       <div className="flex items-center gap-2">
         <div className="flex-1 flex bg-white/[0.03] p-1 rounded-xl border border-white/5">
-          {([{id:'SELF',label:'手動交易'},{id:'DCA',label:'定期定額'},{id:'REALIZED',label:'已實交易'}] as const).map(t => (
+          {([{id:'SELF',label:'手動交易'},{id:'REALIZED',label:'已實交易'}] as const).map(t => (
             <button key={t.id} onClick={()=>setTab(t.id)} className={`flex-1 py-2.5 text-sm font-black rounded-lg transition-all relative ${tab===t.id?'text-accent bg-white/5':'text-[var(--t2)]'}`}>{t.label}{tab===t.id && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-accent rounded-full" />}</button>
           ))}
         </div>
@@ -169,24 +153,17 @@ export default function TransactionsTab({ txs, settings, onRefresh, onEditDca }:
       ) : (
         <div className="space-y-6 animate-slide-up">
           <div className="px-1"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="搜尋股票代碼或名稱.." className="input-base py-4 text-base"/></div>
-          {tab === 'SELF' ? (
-            Object.keys(groupedData).sort((a,b)=>b.localeCompare(a)).map(year => (
-              <div key={year} className="space-y-4">
-                <div className="flex items-center gap-3 px-2 opacity-40"><Calendar size={16} className="text-accent"/><span className="font-black text-lg text-[var(--t1)]">{year} 年</span><div className="h-px flex-1 bg-white/5"/></div>
-                {Object.keys(groupedData[year]).sort((a,b)=>Number(b)-Number(a)).map(month => (
-                  <div key={month} className="space-y-2">
-                    <button onClick={()=>{const k=`${year}-${month}`; setExpandedMonths(p=>({...p, [k]:!p[k]}))}} className="w-full flex justify-between p-4 card-base border-white/10 active:bg-bg-hover transition-all"><div className="flex items-center gap-2"><span className="font-black text-[var(--t1)]">{month} 月</span><span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[var(--t3)] font-bold">{groupedData[year][month].txs.length} 筆</span></div><div className={`font-mono font-black text-base ${groupedData[year][month].pnl>=0?'text-red-400':'text-green-400'}`}>{groupedData[year][month].pnl>=0?'+':''}{fmtMoney(Math.round(groupedData[year][month].pnl))}</div></button>
-                    {expandedMonths[`${year}-${month}`] && <div className="space-y-3 pt-1">{groupedData[year][month].txs.map((tx:any)=><TxRow key={tx.id} tx={tx} settings={settings} onDelete={(id:number)=>setDeletingId(id)} onUpdated={onRefresh}/>)}</div>}
-                  </div>
-                ))}
-              </div>
-            ))
-          ) : (
-            <div className="space-y-8">
-              <div className="space-y-4"><h3 className="text-[11px] font-black text-[var(--t3)] uppercase tracking-[0.2em] px-2">執行中計畫</h3>{dcaPlans.filter(p=>p.is_active).length?dcaPlans.filter(p=>p.is_active).map(p=>(<div key={p.id} className="card-base p-5 border-white/10 flex justify-between items-center shadow-lg"><div className="space-y-1.5"><div className="flex items-center gap-2"><span className="font-black text-[var(--t1)] text-base">{getStockName(p.symbol)}</span><span className="text-[10px] font-mono opacity-30">{codeOnly(p.symbol)}</span></div><div className="text-[12px] font-bold text-[var(--t2)] tracking-tight">每次 {fmtMoney(p.amount)} 元 · 每月 {p.days_of_month.join(', ')} 日</div></div><div className="flex gap-2"><button onClick={()=>onEditDca?.(p)} className="p-2.5 rounded-xl bg-white/5 text-accent border border-white/10 active:scale-90 transition-all shadow-sm"><Pencil size={16}/></button><button onClick={()=>deleteDca(p.id)} className="p-2.5 rounded-xl bg-red-400/5 text-red-400 border border-red-400/10 active:scale-90 transition-all shadow-sm"><Trash2 size={16}/></button></div></div>)):<div className="text-center py-16 card-base border-dashed border-white/10 opacity-20 text-sm italic">尚無定期定額計畫</div>}</div>
-              <div className="space-y-4"><h3 className="text-[11px] font-black text-[var(--t3)] uppercase tracking-[0.2em] px-2">扣款紀錄 (歷史)</h3>{Object.keys(groupedData).sort((a,b)=>b.localeCompare(a)).map(y=>(<div key={y} className="space-y-3">{Object.keys(groupedData[y]).sort((a,b)=>Number(b)-Number(a)).map(m=>(<div key={m} className="space-y-3">{groupedData[y][m].txs.map((tx:any)=><TxRow key={tx.id} tx={tx} settings={settings} onDelete={(id:number)=>setDeletingId(id)} onUpdated={onRefresh}/>)}</div>))}</div>))}</div>
+          {Object.keys(groupedData).sort((a,b)=>b.localeCompare(a)).map(year => (
+            <div key={year} className="space-y-4">
+              <div className="flex items-center gap-3 px-2 opacity-40"><Calendar size={16} className="text-accent"/><span className="font-black text-lg text-[var(--t1)]">{year} 年</span><div className="h-px flex-1 bg-white/5"/></div>
+              {Object.keys(groupedData[year]).sort((a,b)=>Number(b)-Number(a)).map(month => (
+                <div key={month} className="space-y-2">
+                  <button onClick={()=>{const k=`${year}-${month}`; setExpandedMonths(p=>({...p, [k]:!p[k]}))}} className="w-full flex justify-between p-4 card-base border-white/10 active:bg-bg-hover transition-all"><div className="flex items-center gap-2"><span className="font-black text-[var(--t1)]">{month} 月</span><span className="text-[10px] px-2 py-0.5 rounded-full bg-white/5 text-[var(--t3)] font-bold">{groupedData[year][month].txs.length} 筆</span></div><div className={`font-mono font-black text-base ${groupedData[year][month].pnl>=0?'text-red-400':'text-green-400'}`}>{groupedData[year][month].pnl>=0?'+':''}{fmtMoney(Math.round(groupedData[year][month].pnl))}</div></button>
+                  {expandedMonths[`${year}-${month}`] && <div className="space-y-3 pt-1">{groupedData[year][month].txs.map((tx:any)=><TxRow key={tx.id} tx={tx} settings={settings} onDelete={(id:number)=>setDeletingId(id)} onUpdated={onRefresh}/>)}</div>}
+                </div>
+              ))}
             </div>
-          )}
+          ))}
         </div>
       )}
       <ConfirmModal open={!!deletingId} onCancel={()=>setDeletingId(null)} onConfirm={confirmDelete} />
