@@ -130,7 +130,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       })).sort((a, b) => b.pnl - a.pnl)
 
     const allUnrealized = Object.values(unrealizedByBuyYear).reduce((s, a) => s + a, 0)
-    const yearPnl = (realizedByBuyYear[currentYear] || 0) + allUnrealized
+    const yearPnl = (realizedBySellYear[currentYear] || 0) + allUnrealized
 
     return { totalRealized, realizedCostBasis, closedHoldings, yearPnl }
   }, [transactions, currentYear, quotes, settings])

@@ -157,8 +157,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     const fullData = []
     const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (86400 * 1000))
 
-    let realized = 0 // Total realized this year (Standard)
-    let realized_this_year_buy_sell = 0 // Specialized realized (Strict)
+    let realized = 0 
     let total_cumulative_realized = 0 // For Total Progress Chart
     const inventory: Record<string, {shares: number, cost: number, buyDate: Date}[]> = {}
     let lastTxIdx = 0
@@ -195,7 +194,6 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
       
       while (lastTxIdx < sortedTxs.length && sortedTxs[lastTxIdx].trade_date <= dateStr) {
         const tx = sortedTxs[lastTxIdx]
-        const buyYear = tx.trade_date.split('-')[0]
         if (!inventory[tx.symbol]) inventory[tx.symbol] = []
         
         if (tx.action !== 'SELL') {
@@ -210,9 +208,6 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             
             if (dateStr.startsWith(currentYear.toString())) {
                realized += profit
-               if (lot.buyDate.getFullYear() === currentYear) {
-                 realized_this_year_buy_sell += profit
-               }
             }
             total_cumulative_realized += profit
             
@@ -242,7 +237,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
         })
         pnlValue = total_cumulative_realized + currentUnrealized
       } else {
-        // Year Goal = (Total Status Unrealized today) + (Strict Realized this year)
+        // Year Goal = (Total Status Unrealized today) + (Realized this year)
         let total_u = 0
         Object.keys(inventory).forEach(sym => {
           const q = quotes[sym]
@@ -258,7 +253,7 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             total_u += (netMV - lot.cost) * fraction
           })
         })
-        pnlValue = total_u + realized_this_year_buy_sell
+        pnlValue = total_u + realized
       }
 
       fullData.push({
