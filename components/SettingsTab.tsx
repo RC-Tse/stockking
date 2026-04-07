@@ -172,42 +172,6 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               </p>
             </div>
 
-            <div className="space-y-4 pt-4 border-t border-white/5 relative">
-              <div className="flex items-center gap-2">
-                <Label>年度損益計算範圍</Label>
-                <button onClick={() => setShowGoalTypeInfo(!showGoalTypeInfo)} className="text-accent active:scale-95 transition-all outline-none">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
-                </button>
-              </div>
-              {showGoalTypeInfo && (
-                <div className="absolute left-0 top-[28px] mt-2 z-50 w-[280px] p-4 rounded-2xl bg-[#111] border border-white/20 shadow-2xl backdrop-blur-xl text-[12px] text-[var(--t2)] space-y-3 animate-in zoom-in-95 leading-relaxed">
-                  <p><strong className="text-white">嚴守今年投入</strong>：僅統計今年度「新買入」部位的未實現與已實現損益。</p>
-                  <p><strong className="text-white">今年獲利收割</strong>：包含上述，並加上今年度賣出「過去年份的庫存」獲利了結的金額。</p>
-                  <p><strong className="text-white">部位全面結算</strong>：今年度的所有的賣出獲利，加上目前所有「尚未賣出的持股」帳面未實現損益。</p>
-                  <button onClick={() => setShowGoalTypeInfo(false)} className="w-full text-center p-2 mt-2 bg-white/10 rounded-xl text-white font-black active:bg-white/20 transition-all">我知道了</button>
-                </div>
-              )}
-              <div className="flex gap-2 p-1 bg-black/20 rounded-xl border border-white/5">
-                {[
-                  { id: 1, label: '嚴守今年投入' },
-                  { id: 2, label: '今年獲利收割' },
-                  { id: 3, label: '部位全面結算' }
-                ].map(opt => (
-                  <button
-                    key={opt.id}
-                    onClick={() => setLocalSettings(p => ({ ...p, year_goal_type: opt.id as any }))}
-                    className={`flex-1 py-2.5 text-[11px] font-black rounded-lg transition-all ${
-                      (localSettings.year_goal_type || 1) === opt.id 
-                        ? 'bg-accent text-bg-base shadow-md scale-[1.02]' 
-                        : 'text-[var(--t2)] active:bg-white/5 hover:bg-white/5'
-                    }`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
             <div className="space-y-2 pt-4 border-t border-white/5">
               <Label>總損益目標 (TWD)</Label>
               <input 

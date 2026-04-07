@@ -129,16 +129,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         pnlPct: data.buyCost > 0 ? (data.sellRev - data.buyCost) / data.buyCost * 100 : 0
       })).sort((a, b) => b.pnl - a.pnl)
 
-    let yearPnl = 0
-    const goalType = settings.year_goal_type || 1
-    if (goalType === 1) {
-      yearPnl = (realizedByBuyYear[currentYear] || 0) + (unrealizedByBuyYear[currentYear] || 0)
-    } else if (goalType === 2) {
-      yearPnl = (realizedBySellYear[currentYear] || 0) + (unrealizedByBuyYear[currentYear] || 0)
-    } else {
-      const allUnrealized = Object.values(unrealizedByBuyYear).reduce((s, a) => s + a, 0)
-      yearPnl = (realizedBySellYear[currentYear] || 0) + allUnrealized
-    }
+    const allUnrealized = Object.values(unrealizedByBuyYear).reduce((s, a) => s + a, 0)
+    const yearPnl = (realizedByBuyYear[currentYear] || 0) + allUnrealized
 
     return { totalRealized, realizedCostBasis, closedHoldings, yearPnl }
   }, [transactions, currentYear, quotes, settings])

@@ -224,8 +224,6 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
       }
 
       let pnlValue = 0
-      const type = settings.year_goal_type || 1
-
       if (isTotal) {
         let currentUnrealized = 0
         Object.keys(inventory).forEach(sym => {
@@ -235,47 +233,32 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             const daysSinceBuy = Math.max(1, (d.getTime() - lot.buyDate.getTime()) / 86400000)
             const daysTotal = Math.max(1, (today.getTime() - lot.buyDate.getTime()) / 86400000)
             const fraction = Math.min(1, Math.max(0, daysSinceBuy / daysTotal))
-            
             const gross = Math.floor(currentPrice * lot.shares)
             const fee = calcFee(gross, settings, true)
             const tax = calcTax(gross, sym, settings)
             const netMV = gross - fee - tax
-            const uPnl = netMV - lot.cost
-            currentUnrealized += uPnl * fraction
+            currentUnrealized += (netMV - lot.cost) * fraction
           })
         })
         pnlValue = total_cumulative_realized + currentUnrealized
       } else {
-        let u_this_year = 0
-        let u_prev_year = 0
-        
+        // Year Goal = (Total Status Unrealized today) + (Strict Realized this year)
+        let total_u = 0
         Object.keys(inventory).forEach(sym => {
           const q = quotes[sym]
           const currentPrice = q?.bid_price || q?.price || 0
           inventory[sym].forEach(lot => {
-            const isBuyThisYear = lot.buyDate.getFullYear() === currentYear
             const daysSinceBuy = Math.max(1, (d.getTime() - lot.buyDate.getTime()) / 86400000)
             const daysTotal = Math.max(1, (today.getTime() - lot.buyDate.getTime()) / 86400000)
             const fraction = Math.min(1, Math.max(0, daysSinceBuy / daysTotal))
-
             const gross = Math.floor(currentPrice * lot.shares)
             const fee = calcFee(gross, settings, true)
             const tax = calcTax(gross, sym, settings)
             const netMV = gross - fee - tax
-            const uPnl = netMV - lot.cost
-
-            if (isBuyThisYear) u_this_year += uPnl * fraction
-            else u_prev_year += uPnl * fraction
+            total_u += (netMV - lot.cost) * fraction
           })
         })
-
-        if (type === 1) {
-          pnlValue = u_this_year + realized_this_year_buy_sell
-        } else if (type === 2) {
-          pnlValue = u_this_year + realized
-        } else {
-          pnlValue = u_this_year + u_prev_year + realized
-        }
+        pnlValue = total_u + realized_this_year_buy_sell
       }
 
       fullData.push({
@@ -325,8 +308,8 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     return result.map(d => ({ ...d, timestamp: new Date(d.fullDate).getTime() }))
   }
 
-  const yearGoalData = useMemo(() => calculateGoalData(false, yearRange, customYearStart, customYearEnd), [transactions, settings, yearRange, customYearStart, customYearEnd, settings.year_goal_type, holdings, quotes])
-  const totalGoalData = useMemo(() => calculateGoalData(true, totalRange, customStart, customEnd), [transactions, settings, totalRange, customStart, customEnd, settings.year_goal_type, holdings, quotes])
+  const yearGoalData = useMemo(() => calculateGoalData(false, yearRange, customYearStart, customYearEnd), [transactions, settings, yearRange, customYearStart, customYearEnd, holdings, quotes])
+  const totalGoalData = useMemo(() => calculateGoalData(true, totalRange, customStart, customEnd), [transactions, settings, totalRange, customStart, customEnd, holdings, quotes])
 
   const formatTick = (ts: number) => {
     const d = new Date(ts)
