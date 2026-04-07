@@ -95,9 +95,14 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const supabase = createClient()
 
   const handleSaveSettings = async (updates: UserSettings) => {
-    // year_goal_type is stored in localStorage (not a Supabase column)
-    if (updates.year_goal_type !== undefined) {
-      localStorage.setItem('stockking_year_goal_type', String(updates.year_goal_type))
+    // These fields are not in the Supabase DB schema, so store them in localStorage
+    const localFields: Record<string, unknown> = {}
+    if (updates.year_goal_type !== undefined) localFields.year_goal_type = updates.year_goal_type
+    if (updates.dca_fee_min !== undefined) localFields.dca_fee_min = updates.dca_fee_min
+    if (updates.dca_fee_rate !== undefined) localFields.dca_fee_rate = updates.dca_fee_rate
+    if (Object.keys(localFields).length > 0) {
+      const prev = JSON.parse(localStorage.getItem('stockking_local_settings') || '{}')
+      localStorage.setItem('stockking_local_settings', JSON.stringify({ ...prev, ...localFields }))
     }
     await fetch('/api/settings', { method: 'POST', body: JSON.stringify(updates) })
     setSettings(updates)
@@ -120,11 +125,15 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     const txData: Transaction[]  = txRes.ok  ? await txRes.json()  : []
     let setData: UserSettings  = setRes.ok ? await setRes.json() : DEFAULT_SETTINGS
     
-    // dca_fee_min / dca_fee_rate come from Supabase directly
-    // Only year_goal_type needs to be restored from localStorage
+    // Restore localStorage-only settings (not in Supabase schema)
     try {
-      const savedType = localStorage.getItem('stockking_year_goal_type')
-      if (savedType) setData.year_goal_type = Number(savedType) as 1 | 2 | 3
+      const local = JSON.parse(localStorage.getItem('stockking_local_settings') || '{}')
+      if (local.year_goal_type !== undefined) setData.year_goal_type = Number(local.year_goal_type) as 1 | 2 | 3
+      if (local.dca_fee_min !== undefined) setData.dca_fee_min = Number(local.dca_fee_min)
+      if (local.dca_fee_rate !== undefined) setData.dca_fee_rate = Number(local.dca_fee_rate)
+      // Migrate old key format
+      const oldType = localStorage.getItem('stockking_year_goal_type')
+      if (oldType && local.year_goal_type === undefined) setData.year_goal_type = Number(oldType) as 1 | 2 | 3
     } catch {}
     
     setTxs(txData)
