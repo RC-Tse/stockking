@@ -51,7 +51,8 @@ export interface Quote {
   symbol: string
   name?: string
   name_zh?: string
-  price: number
+  price: number       // last traded price (regularMarketPrice)
+  bid_price?: number  // bid (买進第一檔), used for conservative valuation
   prev: number
   open: number
   high: number

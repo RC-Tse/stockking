@@ -63,8 +63,12 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       if (netShares <= 0) return null
       const totalCost = lots.reduce((s, l) => s + l.cost, 0)
       const avgCost = totalCost / netShares
-      const cp = quotes[sym]?.price || 0
-      const mv = Math.round(cp * netShares)
+      const q = quotes[sym]
+      // Use bid_price if available (matches brokerage conservative valuation)
+      // Otherwise fall back to last traded price
+      const cp = q?.bid_price || q?.price || 0
+      // Floor each holding's market value individually (Taiwan brokerage standard)
+      const mv = Math.floor(cp * netShares)
       const fee = calcFee(mv, settings, true)
       const tax = calcTax(mv, sym, settings)
       const upnl = mv - fee - tax - totalCost

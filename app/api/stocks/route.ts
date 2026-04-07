@@ -4,14 +4,34 @@ import { createClient } from '@/lib/supabase/server'
 const TWSE_API = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
 const TPEX_API = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
 
-async function fetchYahooQuote(symbol: string, nameZh?: string) {
+async function fetchBidPrice(symbol: string): Promise<number> {
   try {
+    // Yahoo Finance v6 quote API returns bid/ask prices
     const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`,
+      `https://query2.finance.yahoo.com/v6/finance/quote?symbols=${symbol}&fields=bid,ask,regularMarketPrice`,
       { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
     )
-    if (!res.ok) return null
+    if (!res.ok) return 0
     const data = await res.json()
+    const quote = data?.quoteResponse?.result?.[0]
+    // bid is 0 or missing outside market hours, fall back to 0
+    return (quote?.bid && quote.bid > 0) ? Number(quote.bid) : 0
+  } catch {
+    return 0
+  }
+}
+
+async function fetchYahooQuote(symbol: string, nameZh?: string) {
+  try {
+    const [chartRes, bidPrice] = await Promise.all([
+      fetch(
+        `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`,
+        { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
+      ),
+      fetchBidPrice(symbol)
+    ])
+    if (!chartRes.ok) return null
+    const data = await chartRes.json()
     const result = data.chart?.result?.[0]
     if (!result) return null
 
@@ -28,10 +48,13 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
     const change = Math.round((price - prev) * 100) / 100
     const change_pct = prev ? Math.round(change / prev * 10000) / 100 : 0
 
+    // Use bid_price when available (conservative valuation matching brokerage)
+    // bid_price is only > 0 during market hours; outside hours keep as 0 (caller will fall back to price)
     return {
       symbol,
       name_zh: nameZh,
       price,
+      bid_price: bidPrice > 0 ? bidPrice : undefined,
       prev,
       open,
       high,
