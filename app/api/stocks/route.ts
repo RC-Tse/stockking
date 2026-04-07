@@ -4,34 +4,74 @@ import { createClient } from '@/lib/supabase/server'
 const TWSE_API = 'https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL'
 const TPEX_API = 'https://www.tpex.org.tw/openapi/v1/tpex_mainboard_quotes'
 
-async function fetchBidPrice(symbol: string): Promise<number> {
+function parseTWNum(s: string | undefined | null): number {
+  if (!s) return 0
+  return parseFloat(String(s).replace(/,/g, '')) || 0
+}
+
+// Fetch official TWSE closing prices (same source as brokerages)
+async function fetchTWSEPriceMap(): Promise<Record<string, any>> {
   try {
-    // Yahoo Finance v6 quote API returns bid/ask prices
-    const res = await fetch(
-      `https://query2.finance.yahoo.com/v6/finance/quote?symbols=${symbol}&fields=bid,ask,regularMarketPrice`,
-      { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
-    )
-    if (!res.ok) return 0
-    const data = await res.json()
-    const quote = data?.quoteResponse?.result?.[0]
-    // bid is 0 or missing outside market hours, fall back to 0
-    return (quote?.bid && quote.bid > 0) ? Number(quote.bid) : 0
+    const res = await fetch(TWSE_API, { next: { revalidate: 1800 } }) // 30-min cache
+    if (!res.ok) return {}
+    const list: any[] = await res.json()
+    const map: Record<string, any> = {}
+    for (const item of list) {
+      const code = item.Code
+      if (!code) continue
+      const price = parseTWNum(item.ClosingPrice)
+      const open  = parseTWNum(item.OpeningPrice)
+      const high  = parseTWNum(item.HighestPrice)
+      const low   = parseTWNum(item.LowestPrice)
+      const change = parseTWNum(item.Change)
+      const prev  = price > 0 ? Math.round((price - change) * 10000) / 10000 : 0
+      const volume = parseTWNum(item.TradeVolume)
+      if (price > 0) {
+        map[`${code}.TW`] = { price, open, high, low, change, prev, volume }
+      }
+    }
+    return map
   } catch {
-    return 0
+    return {}
   }
 }
 
+// Fetch official TPEX closing prices
+async function fetchTPEXPriceMap(): Promise<Record<string, any>> {
+  try {
+    const res = await fetch(TPEX_API, { next: { revalidate: 1800 } })
+    if (!res.ok) return {}
+    const list: any[] = await res.json()
+    const map: Record<string, any> = {}
+    for (const item of list) {
+      const code = item.SecumId || item.SecuritiesCompanyCode
+      if (!code) continue
+      const price  = parseTWNum(item.Close || item.ClosingPrice)
+      const open   = parseTWNum(item.Open  || item.OpeningPrice)
+      const high   = parseTWNum(item.High  || item.HighestPrice)
+      const low    = parseTWNum(item.Low   || item.LowestPrice)
+      const change = parseTWNum(item.Change)
+      const prev   = price > 0 ? Math.round((price - change) * 10000) / 10000 : 0
+      const volume = parseTWNum(item.TradeVolume || item.Volume)
+      if (price > 0) {
+        map[`${code}.TWO`] = { price, open, high, low, change, prev, volume }
+      }
+    }
+    return map
+  } catch {
+    return {}
+  }
+}
+
+// Yahoo Finance fallback (used for non-TW stocks or when TWSE/TPEX has no data)
 async function fetchYahooQuote(symbol: string, nameZh?: string) {
   try {
-    const [chartRes, bidPrice] = await Promise.all([
-      fetch(
-        `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`,
-        { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
-      ),
-      fetchBidPrice(symbol)
-    ])
-    if (!chartRes.ok) return null
-    const data = await chartRes.json()
+    const res = await fetch(
+      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`,
+      { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
+    )
+    if (!res.ok) return null
+    const data = await res.json()
     const result = data.chart?.result?.[0]
     if (!result) return null
 
@@ -48,13 +88,10 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
     const change = Math.round((price - prev) * 100) / 100
     const change_pct = prev ? Math.round(change / prev * 10000) / 100 : 0
 
-    // Use bid_price when available (conservative valuation matching brokerage)
-    // bid_price is only > 0 during market hours; outside hours keep as 0 (caller will fall back to price)
     return {
       symbol,
       name_zh: nameZh,
       price,
-      bid_price: bidPrice > 0 ? bidPrice : undefined,
       prev,
       open,
       high,
@@ -74,7 +111,7 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
   try {
     const targetDate = new Date(date)
     const end = Math.floor(targetDate.getTime() / 1000) + 86400
-    const start = end - 86400 * 7 // Fetch 7 days to ensure we get at least two trading days
+    const start = end - 86400 * 7
 
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${start}&period2=${end}&interval=1d`,
@@ -88,7 +125,6 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
     const closes = result.indicators.quote[0].close
     const timestamps = result.timestamp || []
     
-    // Find the entry for the target date
     let targetIdx = -1
     for (let i = timestamps.length - 1; i >= 0; i--) {
       const d = new Date(timestamps[i] * 1000)
@@ -182,17 +218,56 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const nameMap = await getOrFetchNames(supabase, syms)
 
-  const results = await Promise.all(
-    syms.map(s => date 
-      ? fetchYahooHistoricalQuote(s, date, nameMap[s]) 
-      : fetchYahooQuote(s, nameMap[s])
-    )
-  )
+  if (date) {
+    // Historical quotes — Yahoo only
+    const results = await Promise.all(syms.map(s => fetchYahooHistoricalQuote(s, date, nameMap[s])))
+    const data: Record<string, any> = {}
+    results.forEach(q => { if (q) data[q.symbol] = q })
+    return NextResponse.json(data, { headers: { 'Cache-Control': 'public, s-maxage=30' } })
+  }
+
+  // Determine which symbols need TWSE vs TPEX vs Yahoo
+  const twsyms = syms.filter(s => s.endsWith('.TW'))
+  const tpexsyms = syms.filter(s => s.endsWith('.TWO'))
+  const othersyms = syms.filter(s => !s.endsWith('.TW') && !s.endsWith('.TWO'))
+
+  // Fetch official prices in parallel (TWSE+TPEX) + Yahoo for non-TW
+  const emptyMap: Record<string, any> = {}
+  const [twseMap, tpexMap, yahooResults] = await Promise.all([
+    twsyms.length  ? fetchTWSEPriceMap()  : Promise.resolve(emptyMap),
+    tpexsyms.length ? fetchTPEXPriceMap() : Promise.resolve(emptyMap),
+    othersyms.length ? Promise.all(othersyms.map(s => fetchYahooQuote(s, nameMap[s]))) : Promise.resolve([]),
+  ])
+
   const data: Record<string, any> = {}
 
-  results.forEach(q => {
-    if (q) data[q.symbol] = q
-  })
+  // Process TWSE stocks — use official price, Yahoo as fallback
+  for (const sym of twsyms) {
+    const official = twseMap[sym]
+    if (official && official.price > 0) {
+      const change_pct = official.prev ? Math.round(official.change / official.prev * 10000) / 100 : 0
+      data[sym] = { symbol: sym, name_zh: nameMap[sym], ...official, change_pct }
+    } else {
+      // Fallback to Yahoo if TWSE has no data (e.g. before market open)
+      const q = await fetchYahooQuote(sym, nameMap[sym])
+      if (q) data[sym] = q
+    }
+  }
+
+  // Process TPEX stocks
+  for (const sym of tpexsyms) {
+    const official = tpexMap[sym]
+    if (official && official.price > 0) {
+      const change_pct = official.prev ? Math.round(official.change / official.prev * 10000) / 100 : 0
+      data[sym] = { symbol: sym, name_zh: nameMap[sym], ...official, change_pct }
+    } else {
+      const q = await fetchYahooQuote(sym, nameMap[sym])
+      if (q) data[sym] = q
+    }
+  }
+
+  // Process non-TW stocks (Yahoo only)
+  ;(yahooResults as any[]).forEach(q => { if (q) data[q.symbol] = q })
 
   return NextResponse.json(data, { 
     headers: { 'Cache-Control': 'public, s-maxage=30' } 
