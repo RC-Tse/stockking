@@ -71,7 +71,7 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       const mv = Math.floor(cp * netShares)
       // Deduct estimated sell costs (matches brokerage '預估淨市值')
       // ETF: codes starting with '00' use 0.1% tax; stocks use 0.3%
-      const sell_fee = calcFee(mv, settings, false)  // SELL fee rate + discount
+      const sell_fee = calcFee(mv, settings, true)
       const sell_tax = calcTax(mv, sym, settings)
       const net_mv = mv - sell_fee - sell_tax
       const upnl = net_mv - totalCost

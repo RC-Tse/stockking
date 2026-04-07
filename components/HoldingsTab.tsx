@@ -97,10 +97,24 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
     const unrealizedByBuyYear: Record<string, number> = {}
     Object.keys(inventory).forEach(sym => {
-      const currentPrice = quotes[sym]?.price || 0
+      const q = quotes[sym]
+      const currentPrice = q?.bid_price || q?.price || 0
+      const totalShares = inventory[sym].reduce((s, l) => s + l.shares, 0)
+      if (totalShares <= 0) return
+
+      // Calculate Net Market Value for this stock
+      const grossMV = Math.floor(currentPrice * totalShares)
+      const sellFee = calcFee(grossMV, settings, true)
+      const sellTax = calcTax(grossMV, sym, settings)
+      const netMV = grossMV - sellFee - sellTax
+      const totalActualCost = inventory[sym].reduce((s, l) => s + (l.unitCost * l.shares), 0)
+      
+      // Distribute net unrealized PnL proportionally to buy years of held lots
+      const totalNetPnL = netMV - totalActualCost
       inventory[sym].forEach(lot => {
-        const uPnL = (currentPrice - lot.unitCost) * lot.shares
-        unrealizedByBuyYear[lot.buyYear] = (unrealizedByBuyYear[lot.buyYear] || 0) + uPnL
+        const lotRatio = (lot.unitCost * lot.shares) / totalActualCost
+        const lotNetPnL = totalNetPnL * lotRatio
+        unrealizedByBuyYear[lot.buyYear] = (unrealizedByBuyYear[lot.buyYear] || 0) + lotNetPnL
       })
     })
 
@@ -331,7 +345,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       </div>
 
       {/* 3. 損益月曆 */}
-      <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} holdings={holdings} quotes={quotes} />
+      <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} holdings={holdings} quotes={quotes} settings={settings} />
 
       {/* 4. 各股列表 */}
       <div className="space-y-4">
@@ -516,7 +530,7 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
   )
 }
 
-function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes }: any) {
+function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes, settings }: any) {
   const [viewDate, setViewDate] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1))
   const [selectedDate, setSelectedDate] = useState<string | null>(null)
   const [view, setView] = useState<any>('CALENDAR')
@@ -616,8 +630,11 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
         const actualCost = lots.reduce((sum, lot) => sum + lot.cost, 0)
         const q = quotesData[sym] || {}
         const price = Number(q.price) || 0
-        const marketValue = Math.round(price * totalShares)
-        const pnl = marketValue - actualCost
+        const grossMV = Math.floor(price * totalShares)
+        const sellFee = calcFee(grossMV, settings, true)
+        const sellTax = calcTax(grossMV, sym, settings)
+        const netMV = grossMV - sellFee - sellTax
+        const pnl = netMV - actualCost
         return {
           symbol: sym,
           name_zh: q.name_zh || getStockName(sym),
@@ -626,7 +643,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
           prev: q.prev,
           change: q.change,
           change_pct: q.change_pct,
-          market_value: marketValue,
+          market_value: netMV,       // Using Net Value (matches brokerage)
           total_cost: actualCost,
           pnl,
           pnl_pct: actualCost > 0 ? (pnl / actualCost) * 100 : 0
@@ -789,8 +806,18 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                 <div className="space-y-3">
                   {dayTxs.map((tx: Transaction) => (
                     <div key={tx.id} className="flex justify-between items-center text-sm">
-                      <div className="flex items-center gap-2"><span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${tx.action==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='BUY'?'買入':'賣出'}</span><span className="font-black text-[var(--t1)] truncate max-w-[100px]">{tx.name_zh}</span></div>
-                      <div className="text-right"><div className={`font-mono font-black ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div><div className="text-[9px] text-[var(--t3)] font-bold">{(tx.shares ?? 0).toLocaleString()} 股 @ {(tx.price ?? 0).toFixed(2)}</div></div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded border ${
+                          (tx.action==='BUY' || tx.action==='DCA') ? 'bg-red-400/10 text-red-400 border-red-400/20' : 'bg-green-400/10 text-green-400 border-green-400/20'
+                        }`}>
+                          {tx.action==='BUY' ? '買入' : tx.action==='DCA' ? '定期' : '賣出'}
+                        </span>
+                        <span className="font-black text-[var(--t1)] truncate max-w-[100px]">{tx.name_zh || tx.symbol}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className={`font-mono font-black ${tx.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.net_amount >= 0 ? '+' : ''}{fmtMoney(tx.net_amount)}</div>
+                        <div className="text-[9px] text-[var(--t3)] font-bold">{(tx.shares ?? 0).toLocaleString()} 股 @ {(tx.price ?? 0).toFixed(2)}</div>
+                      </div>
                     </div>
                   ))}
                 </div>

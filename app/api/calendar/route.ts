@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { Transaction, DEFAULT_SETTINGS, UserSettings, STOCK_NAMES } from '@/types'
+import { Transaction, DEFAULT_SETTINGS, UserSettings, STOCK_NAMES, calcFee, calcTax } from '@/types'
 
 async function fetchHistory(symbol: string, startTs: number, endTs: number) {
   try {
@@ -36,8 +36,13 @@ export async function GET(req: NextRequest) {
   const month = parseInt(url.searchParams.get('month') || '')
   if (!year || !month) return NextResponse.json({ error: 'Missing date' }, { status: 400 })
 
-  const { data: txs } = await supabase.from('transactions')
-    .select('*').eq('user_id', user.id).order('trade_date', { ascending: true })
+  const [txsRes, setRes] = await Promise.all([
+    supabase.from('transactions').select('*').eq('user_id', user.id).order('trade_date', { ascending: true }),
+    supabase.from('settings').select('*').eq('user_id', user.id).single()
+  ])
+  
+  const txs = txsRes.data
+  const settings: UserSettings = { ...DEFAULT_SETTINGS, ...(setRes.data || {}) }
   
   if (!txs || txs.length === 0) return NextResponse.json([])
 
@@ -120,42 +125,56 @@ export async function GET(req: NextRequest) {
     })
 
     Object.entries(endOfDayHoldings).forEach(([sym, endShares]) => {
+      const getNetVal = (p: number, sh: number, s: string) => {
+        const gross = Math.floor(p * sh)
+        const fee = calcFee(gross, settings, true) // Standard SELL fee for valuation
+        const tax = calcTax(gross, s, settings)
+        return gross - fee - tax
+      }
+
       const todayPrice = histories[sym]?.[date]
       const yesterdayPrice = getPrevPrice(sym, date)
-      if (todayPrice === undefined) return
+      if (todayPrice !== undefined && Math.abs(endShares) > 0) {
+        const bought = boughtToday[sym] || { shares: 0, cost: 0 }
+        const originalSharesInEnd = Math.max(0, endShares - bought.shares)
+        
+        let stockPnl = 0
+        // 1. 原本持有部分的損益 (Net End Value - Net Start Value)
+        if (originalSharesInEnd > 0 && yesterdayPrice !== null) {
+          const netToday = getNetVal(todayPrice, originalSharesInEnd, sym)
+          const netYesterday = getNetVal(yesterdayPrice, originalSharesInEnd, sym)
+          stockPnl += (netToday - netYesterday)
+        }
+        // 2. 今日買入部分的損益 (以今日收盤價的淨市值 - 買入總成本)
+        if (bought.shares > 0) {
+          const netTodayOfBought = getNetVal(todayPrice, bought.shares, sym)
+          stockPnl += (netTodayOfBought - bought.cost)
+        }
 
-      const bought = boughtToday[sym] || { shares: 0, cost: 0 }
-      const originalSharesInEnd = Math.max(0, endShares - bought.shares)
-      
-      let stockPnl = 0
-      // 1. 原本持有部分的損益 (以昨日收盤價計)
-      if (yesterdayPrice !== null) {
-        stockPnl += originalSharesInEnd * (todayPrice - yesterdayPrice)
-      }
-      // 2. 今日買入部分的損益 (以買入成本計)
-      if (bought.shares > 0) {
-        const avgBuyCost = bought.cost / bought.shares
-        stockPnl += bought.shares * (todayPrice - avgBuyCost)
-      }
-
-      if (Math.abs(stockPnl) > 0.01) {
-        dailyMarketPnl += stockPnl
-        details.push({
-          symbol: sym,
-          name: STOCK_NAMES[sym] || sym,
-          price: todayPrice,
-          pnl: Math.round(stockPnl),
-          shares: endShares
-        })
+        if (Math.abs(stockPnl) > 0.01) {
+          dailyMarketPnl += stockPnl
+          details.push({
+            symbol: sym,
+            name: STOCK_NAMES[sym] || sym,
+            price: todayPrice,
+            pnl: Math.round(stockPnl),
+            shares: endShares
+          })
+        }
       }
     })
 
     if (isCurrentMonth) {
-      // 投報率分母 = 昨日市值 + 今日買入
+      // 投報率分母 = 昨日淨市值 + 今日買入
       let prevMV = 0
       Object.entries(startOfDayHoldings).forEach(([sym, shares]) => {
         const yp = getPrevPrice(sym, date)
-        if (yp !== null) prevMV += shares * yp
+        if (yp !== null) {
+          const gross = Math.floor(yp * shares)
+          const fee = calcFee(gross, settings, true) // Standard SELL fee
+          const tax = calcTax(gross, sym, settings)
+          prevMV += (gross - fee - tax)
+        }
       })
       const denominator = prevMV + capitalInToday
       const pnlPct = denominator > 0 ? (dailyMarketPnl / denominator) * 100 : 0
