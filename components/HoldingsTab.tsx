@@ -128,9 +128,10 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     return { totalRealized, realizedCostBasis, closedHoldings, yearPnl }
   }, [transactions, currentYear, quotes])
 
-  const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
+  const currentNetMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
+  const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)  // gross, for reference
   const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
-  const unrealizedPnl = currentMV - currentCost
+  const unrealizedPnl = currentNetMV - currentCost
   const unrealizedPct = currentCost ? (unrealizedPnl / currentCost) * 100 : 0
   const realizedPct = realizedCostBasis ? (totalRealized / realizedCostBasis) * 100 : 0
   
@@ -209,7 +210,13 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         <div className="space-y-6">
           <div className="flex items-center">
             <StatBox label="持有成本" value={showData ? fmtMoney(currentCost) : "••••••"} className="w-1/2 text-center" large />
-            <StatBox label="目前市值" value={showData ? fmtMoney(currentMV) : "••••••"} className="w-1/2 text-center border-l border-white/5" large upDown={currentMV > currentCost ? 1 : -1} />
+            <div className="w-1/2 flex flex-col items-center border-l border-white/5 px-3">
+              <div className="flex items-center gap-1 mb-1.5">
+                <span className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest">預估淨市值</span>
+                <span title="已扣除預估賣出手續費及證交稅，與券商 App 顯示一致" className="text-[9px] text-accent/60 border border-accent/30 rounded-full w-3.5 h-3.5 flex items-center justify-center font-black cursor-help flex-shrink-0">i</span>
+              </div>
+              <span className={`font-black font-mono leading-none text-[22px] ${currentNetMV >= currentCost ? 'text-red-400' : 'text-green-400'}`}>{showData ? fmtMoney(currentNetMV) : "••••••"}</span>
+            </div>
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
             <StatBox label="未實現損益" value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}` : "••••••"} className="w-1/2 text-center" upDown={unrealizedPnl} />
@@ -309,7 +316,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                 <DetailBox label="持股數量" value={`${selectedHolding.shares.toLocaleString()} 股`} />
                 <DetailBox label="平均成本" value={selectedHolding.avg_cost.toFixed(2)} />
                 <DetailBox label="持有成本" value={fmtMoney(selectedHolding.total_cost)} />
-                <DetailBox label="目前市值" value={fmtMoney(selectedHolding.market_value)} />
+                <DetailBox label="預估淨市值" value={fmtMoney(selectedHolding.net_market_value)} />
               </div>
 
               <div className="pt-2 border-t border-white/5 flex justify-between items-end">
@@ -466,9 +473,9 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
 
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">持有成本 / 市值</div>
+            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">持有成本 / 預估淨市值</div>
             <div className="text-sm font-bold text-[var(--t1)] font-mono">
-              {fmtMoney(Math.round(h.total_cost))} / <span className="text-[var(--t1)]">{fmtMoney(Math.round(h.market_value))}</span>
+              {fmtMoney(Math.round(h.total_cost))} / <span className="text-[var(--t1)]">{fmtMoney(Math.round(h.net_market_value))}</span>
             </div>
           </div>
           <div className="text-right">

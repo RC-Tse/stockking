@@ -69,9 +69,12 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       const cp = q?.bid_price || q?.price || 0
       // Floor each holding's market value individually (Taiwan brokerage standard)
       const mv = Math.floor(cp * netShares)
-      const fee = calcFee(mv, settings, true)
-      const tax = calcTax(mv, sym, settings)
-      const upnl = mv - fee - tax - totalCost
+      // Deduct estimated sell costs (matches brokerage '預估淨市值')
+      // ETF: codes starting with '00' use 0.1% tax; stocks use 0.3%
+      const sell_fee = calcFee(mv, settings, false)  // SELL fee rate + discount
+      const sell_tax = calcTax(mv, sym, settings)
+      const net_mv = mv - sell_fee - sell_tax
+      const upnl = net_mv - totalCost
       return {
         symbol: sym,
         shares: netShares,
@@ -79,6 +82,9 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
         total_cost: Math.round(totalCost),
         current_price: cp,
         market_value: mv,
+        net_market_value: net_mv,
+        sell_fee,
+        sell_tax,
         unrealized_pnl: Math.round(upnl),
         pnl_pct: totalCost ? Math.round(upnl / totalCost * 10000) / 100 : 0,
       }

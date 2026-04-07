@@ -42,7 +42,10 @@ export interface Holding {
   avg_cost: number
   total_cost: number
   current_price: number
-  market_value: number
+  market_value: number        // gross: price × shares (floor)
+  net_market_value: number    // market_value minus estimated sell fee + tax (= brokerage '預估淨市值')
+  sell_fee: number            // estimated sell brokerage fee
+  sell_tax: number            // estimated sell securities transaction tax
   unrealized_pnl: number
   pnl_pct: number
 }
