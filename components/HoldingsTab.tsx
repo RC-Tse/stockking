@@ -592,7 +592,8 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
         if (!tx.symbol) continue
         if (!inventory[tx.symbol]) inventory[tx.symbol] = []
         if (tx.action !== 'SELL') {
-          inventory[tx.symbol].push({ shares: Number(tx.shares) || 0, cost: (Number(tx.amount) || 0) + (Number(tx.fee) || 0) })
+          const cost = Math.floor(Number(tx.amount) || 0) + Math.floor(Number(tx.fee) || 0)
+          inventory[tx.symbol].push({ shares: Number(tx.shares) || 0, cost })
         } else {
           let rem = Number(tx.shares) || 0
           while (rem > 0 && inventory[tx.symbol].length) {
@@ -617,11 +618,20 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
         return
       }
 
-      const res = await fetch(`/api/stocks?symbols=${held.join(',')}&date=${dateStr}`)
-      if (!res.ok) throw new Error('API fetch error')
-      const quotesData = await res.json() || {}
+      const todayStr = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+      const isToday = dateStr === todayStr
+      let results: Record<string, any> = {}
 
-      if (Object.keys(quotesData).length === 0 || Object.values(quotesData).some((q: any) => q.trade_date && q.trade_date !== dateStr)) {
+      if (isToday && quotes) {
+        // Use live quotes for Today to ensure parity with main page
+        results = quotes
+      } else {
+        const res = await fetch(`/api/stocks?symbols=${held.join(',')}&date=${dateStr}`)
+        if (!res.ok) throw new Error('API fetch error')
+        results = await res.json() || {}
+      }
+
+      if (Object.keys(results).length === 0 || (!isToday && Object.values(results).some((q: any) => q.trade_date && q.trade_date !== dateStr))) {
         setIsHoliday(true)
         setDayDetails([])
         return
@@ -631,8 +641,9 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
         const lots = inventory[sym] || []
         const totalShares = lots.reduce((s, l) => s + l.shares, 0)
         const actualCost = lots.reduce((sum, lot) => sum + lot.cost, 0)
-        const q = quotesData[sym] || {}
-        const price = Number(q.price) || 0
+        const q = results[sym] || {}
+        // Prefer bid_price for conservative valuation (matches brokerage standard)
+        const price = Number(q.bid_price || q.price) || 0
         const grossMV = Math.floor(price * totalShares)
         const sellFee = calcFee(grossMV, settings, true)
         const sellTax = calcTax(grossMV, sym, settings)
@@ -646,7 +657,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
           prev: q.prev,
           change: q.change,
           change_pct: q.change_pct,
-          market_value: netMV,       // Using Net Value (matches brokerage)
+          market_value: netMV,
           total_cost: actualCost,
           pnl,
           pnl_pct: actualCost > 0 ? (pnl / actualCost) * 100 : 0

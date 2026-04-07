@@ -96,7 +96,7 @@ export async function GET(req: NextRequest) {
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         if (!boughtToday[tx.symbol]) boughtToday[tx.symbol] = { shares: 0, cost: 0 }
-        const txTotalCost = (Number(tx.amount) || 0) + (Number(tx.fee) || 0)
+        const txTotalCost = Math.floor(Number(tx.amount) || 0) + Math.floor(Number(tx.fee) || 0)
         lots.push({ shares: tx.shares, cost: txTotalCost })
         capitalInToday += txTotalCost
         boughtToday[tx.symbol].shares += tx.shares
