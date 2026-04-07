@@ -16,10 +16,9 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
   const payload = { ...body, user_id: user.id, updated_at: new Date().toISOString() }
-  // 排除 Supabase 庫存中可能不存在的欄位，改用 localStorage 同步
+  // year_goal_type 是前端新增欄位，實際 Supabase DB 蕪未建該欄，改用 localStorage 儲存
+  // dca_fee_min / dca_fee_rate 是 DB 原有欄位，維持儲存到 Supabase
   delete payload.year_goal_type
-  delete payload.dca_fee_min
-  delete payload.dca_fee_rate
 
   const { data, error } = await supabase.from('settings')
     .upsert(payload).select().single()
