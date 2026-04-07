@@ -801,17 +801,25 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   const [date, setDate] = useState(t.trade_date), [shares, setShares] = useState<number|''>(t.shares), [price, setPrice] = useState<number|''>(t.price), [note, setNote] = useState(t.note || '')
   const [tradeType, setTradeType] = useState(t.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
   const [lots, setLots] = useState<number | ''>(Math.floor(t.shares / 1000) || 1)
+  const [isDcaOpt, setIsDcaOpt] = useState(t.action === 'DCA')
   const isBuy = t.action === 'BUY' || t.action === 'DCA'
   const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = Number(price) || 0
   const amount = finalShares * safePrice
-  const fee = calcFee(amount, settings, t.action === 'SELL', t.action === 'DCA')
+  const actionToSave = isBuy ? (isDcaOpt ? 'DCA' : 'BUY') : 'SELL'
+  const fee = calcFee(amount, settings, !isBuy, actionToSave === 'DCA')
   const tax = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
   const net = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
-  const isValid = finalShares > 0 && safePrice > 0 && (date !== t.trade_date || finalShares !== t.shares || safePrice !== t.price || note !== (t.note||''))
+  const isValid = finalShares > 0 && safePrice > 0 && (
+    date !== t.trade_date || 
+    finalShares !== t.shares || 
+    safePrice !== t.price || 
+    note !== (t.note||'') ||
+    isDcaOpt !== (t.action === 'DCA')
+  )
   
   const handleSave = async () => {
-    setLoading(true); await fetch('/api/transactions', { method: 'PUT', body: JSON.stringify({ id: t.id, trade_date: date, shares: finalShares, price: safePrice, note }) })
+    setLoading(true); await fetch('/api/transactions', { method: 'PUT', body: JSON.stringify({ id: t.id, trade_date: date, shares: finalShares, price: safePrice, note, action: actionToSave }) })
     setIsEditing(false); setLoading(false); onUpdated()
   }
   
@@ -822,6 +830,19 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
         <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>整張 (1000股)</button>
         <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>零股</button>
       </div>
+
+      {isBuy && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/5">
+          <span className="text-[11px] font-black text-[var(--t2)] tracking-widest uppercase">定期定額</span>
+          <button 
+            onClick={() => setIsDcaOpt(!isDcaOpt)}
+            className={`w-12 h-6 rounded-full relative transition-colors ${isDcaOpt ? 'bg-yellow-500' : 'bg-white/10'}`}
+          >
+            <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${isDcaOpt ? 'left-7' : 'left-1'}`} />
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v):setShares(v)}} className="input-base text-center font-black py-3" /></div>
         <div className="space-y-1.5"><Label>成交價</Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>

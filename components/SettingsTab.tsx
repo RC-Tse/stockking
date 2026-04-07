@@ -311,7 +311,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <h4 className="text-[11px] font-black text-accent/50 uppercase tracking-widest border-b border-accent/10 pb-2">定期定額</h4>
               <div className="space-y-2">
                 <Label>定期定額手續費 (每筆 TWD)</Label>
-                <input type="number" inputMode="decimal" value={localSettings.dca_fee_min} onChange={e => setLocalSettings(p => ({ ...p, dca_fee_min: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
+                <input type="number" inputMode="decimal" value={localSettings.dca_fee_min} onChange={e => handleSave({ dca_fee_min: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
               </div>
             </div>
           </div>

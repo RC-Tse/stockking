@@ -240,31 +240,52 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
 function DetailItem({ label, value }: any) { return <div><div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-tighter mb-1">{label}</div><div className="text-sm font-black text-[var(--t1)] font-mono">{value}</div></div> }
 
 function EditForm({ tx, settings, onCancel, onSaved }: any) {
+  const [loading, setLoading] = useState(false)
   const [date, setDate] = useState(tx.trade_date), [shares, setShares] = useState<number|''>(tx.shares), [price, setPrice] = useState<number|''>(tx.price), [note, setNote] = useState(tx.note || '')
   const [tradeType, setTradeType] = useState(tx.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
-  const [lots, setLots]     = useState<number | ''>(Math.floor(tx.shares / 1000) || 1)
-  
+  const [lots, setLots] = useState<number | ''>(Math.floor(tx.shares / 1000) || 1)
+  const [isDcaOpt, setIsDcaOpt] = useState(tx.action === 'DCA')
   const isBuy = tx.action === 'BUY' || tx.action === 'DCA'
   const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = Number(price) || 0
   const amount = finalShares * safePrice
-  const fee = calcFee(amount, settings, tx.action === 'SELL', tx.action === 'DCA')
+  const actionToSave = isBuy ? (isDcaOpt ? 'DCA' : 'BUY') : 'SELL'
+  const fee = calcFee(amount, settings, !isBuy, actionToSave === 'DCA')
   const tax = tx.action === 'SELL' ? calcTax(amount, tx.symbol, settings) : 0
   const net = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
   
-  const isValid = finalShares > 0 && safePrice > 0 && (date !== tx.trade_date || finalShares !== tx.shares || safePrice !== tx.price || note !== (tx.note||''))
+  const isValid = finalShares > 0 && safePrice > 0 && (
+    date !== tx.trade_date || 
+    finalShares !== tx.shares || 
+    safePrice !== tx.price || 
+    note !== (tx.note||'') ||
+    isDcaOpt !== (tx.action === 'DCA')
+  )
   
   const handleSave = async () => {
-    await fetch('/api/transactions', { method: 'PUT', body: JSON.stringify({ id: tx.id, trade_date: date, shares: finalShares, price: safePrice, note }) })
+    setLoading(true); await fetch('/api/transactions', { method: 'PUT', body: JSON.stringify({ id: tx.id, trade_date: date, shares: finalShares, price: safePrice, note, action: actionToSave }) })
     onSaved()
   }
   return (
     <div className="space-y-5">
       <div className="text-center pb-3 border-b border-white/5"><h4 className="font-black text-sm text-accent">編輯：{isBuy?'買入':'賣出'} {tx.name_zh || tx.symbol}</h4></div>
       <div className="flex gap-2 p-1 bg-black/20 rounded-xl">
-        <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t2)]'}`}>整張 (1000股)</button>
-        <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t2)]'}`}>零股</button>
+        <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>整張 (1000股)</button>
+        <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>零股</button>
       </div>
+
+      {isBuy && (
+        <div className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/5">
+          <span className="text-[11px] font-black text-[var(--t2)] tracking-widest uppercase">定期定額</span>
+          <button 
+            onClick={() => setIsDcaOpt(!isDcaOpt)}
+            className={`w-12 h-6 rounded-full relative transition-colors ${isDcaOpt ? 'bg-yellow-500' : 'bg-white/10'}`}
+          >
+            <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${isDcaOpt ? 'left-7' : 'left-1'}`} />
+          </button>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v as any):setShares(v as any)}} className="input-base text-center font-black py-3" /></div>
         <div className="space-y-1.5"><Label>成交價</Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>

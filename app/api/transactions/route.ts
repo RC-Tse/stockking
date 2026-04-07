@@ -72,7 +72,7 @@ export async function PUT(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   const body = await req.json()
-  const { id, trade_date, shares, price, note = '' } = body
+  const { id, trade_date, shares, price, note = '', action: newAction } = body
 
   // Fetch current to keep action/symbol for recalculation
   const { data: current } = await supabase.from('transactions').select('*').eq('id', id).single()
@@ -83,7 +83,10 @@ export async function PUT(req: NextRequest) {
   const s: UserSettings = sr ?? DEFAULT_SETTINGS
 
   const sym = current.symbol
-  const action = current.action
+  // Allow switching between BUY and DCA, otherwise keep current.action
+  const action = (newAction === 'BUY' || newAction === 'DCA') && (current.action === 'BUY' || current.action === 'DCA') 
+    ? newAction 
+    : current.action
   const amount = Number(shares) * Number(price)
   const fee = calcFee(amount, s, action === 'SELL', action === 'DCA')
   const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
@@ -94,7 +97,7 @@ export async function PUT(req: NextRequest) {
     : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
   const { data, error } = await supabase.from('transactions').update({
-    trade_date, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, note
+    trade_date, action, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, note
   }).eq('id', id).eq('user_id', user.id).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

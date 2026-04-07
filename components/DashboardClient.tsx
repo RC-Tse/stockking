@@ -94,6 +94,20 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const router = useRouter()
   const supabase = createClient()
 
+  const handleSaveSettings = async (updates: UserSettings) => {
+    if (updates.year_goal_type !== undefined) {
+      localStorage.setItem('year_goal_type', updates.year_goal_type.toString())
+    }
+    if (updates.dca_fee_min !== undefined) {
+      localStorage.setItem('dca_fee_min', updates.dca_fee_min.toString())
+    }
+    if (updates.dca_fee_rate !== undefined) {
+      localStorage.setItem('dca_fee_rate', updates.dca_fee_rate.toString())
+    }
+    await fetch('/api/settings', { method: 'POST', body: JSON.stringify(updates) })
+    setSettings(updates)
+  }
+
   useEffect(() => {
     const t = settings.theme || 'dark'
     document.documentElement.setAttribute('data-theme', t)
@@ -109,7 +123,16 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       fetch('/api/transactions'), fetch('/api/settings'),
     ])
     const txData: Transaction[]  = txRes.ok  ? await txRes.json()  : []
-    const setData: UserSettings  = setRes.ok ? await setRes.json() : DEFAULT_SETTINGS
+    let setData: UserSettings  = setRes.ok ? await setRes.json() : DEFAULT_SETTINGS
+    
+    const localType = localStorage.getItem('year_goal_type')
+    const localMin = localStorage.getItem('dca_fee_min')
+    const localRate = localStorage.getItem('dca_fee_rate')
+    
+    if (localType) setData.year_goal_type = Number(localType) as 1 | 2 | 3
+    if (localMin)  setData.dca_fee_min = Number(localMin)
+    if (localRate) setData.dca_fee_rate = Number(localRate)
+    
     setTxs(txData)
     setSettings(setData)
     setLoading(false)
