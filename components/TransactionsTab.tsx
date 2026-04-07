@@ -41,7 +41,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
 
   const filtered = useMemo(() => {
     let result = txs
-    if (tab === 'SELF') result = result.filter(t => t.trade_type !== 'DCA')
+    // SELF tab shows all manual transactions (DCA is just a subtype of BUY)
     if (filter.trim() && tab !== 'REALIZED') {
       result = result.filter(t => codeOnly(t.symbol).includes(filter.toUpperCase()) || t.symbol.includes(filter.toUpperCase()) || (t.name_zh || getStockName(t.symbol)).includes(filter))
     }
@@ -186,7 +186,11 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
           {s.history.map((tx:any) => (
             <div key={tx.id} className="space-y-2 animate-in fade-in slide-in-from-left-2">
               <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2"><span className={`px-2 py-0.5 rounded-md font-black text-[9px] border ${tx.type==='BUY'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.type==='BUY'?'買入':'賣出'}</span><span className="opacity-40 text-[11px] font-mono">{tx.trade_date}</span></div>
+                <div className="flex items-center gap-2">
+                  <span className={`px-2 py-0.5 rounded-md font-black text-[9px] border ${tx.action==='BUY'||tx.action==='DCA'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='SELL'?'賣出':'買入'}</span>
+                  <span className="opacity-40 text-[11px] font-mono">{tx.trade_date}</span>
+                  {(tx.action === 'DCA' || tx.trade_type === 'DCA') && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black text-[9px] leading-none">定期定額</span>}
+                </div>
                 <span className="font-black text-[var(--t1)] text-[12px]">{(tx.shares ?? 0).toLocaleString()} 股 @ {(tx.price ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center pl-1"><span className="opacity-20 text-[10px] font-bold">費 {fmtMoney(tx.fee)}{tx.tax>0&&` 稅 ${fmtMoney(tx.tax)}`}</span><span className={`font-mono font-black text-[12px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>{tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}</span></div>
@@ -215,7 +219,7 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
           </div>
           <div className="text-[11px] font-bold text-[var(--t3)] mt-1 flex items-center gap-2">
             <span>{tx.trade_date} · {(tx.shares ?? 0).toLocaleString()} 股</span>
-            {tx.action === 'DCA' && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black tracking-widest text-[9px] leading-none mb-px">定期定額</span>}
+            {(tx.action === 'DCA' || tx.trade_type === 'DCA') && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black tracking-widest text-[9px] leading-none mb-px">定期定額</span>}
           </div>
         </div>
         <div className={`text-right font-black font-mono text-[16px] shrink-0 ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>

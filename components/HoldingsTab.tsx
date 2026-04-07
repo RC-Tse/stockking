@@ -858,7 +858,7 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   )
   return (
     <div className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0">
-      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.action === 'DCA' && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black tracking-widest leading-none mt-0.5">定期定額</span>}</div><div className="text-sm font-bold text-[var(--t1)]">{(t.shares ?? 0).toLocaleString()} 股 @ {(t.price ?? 0).toFixed(2)}</div></div>
+      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black tracking-widest leading-none mt-0.5">定期定額</span>}</div><div className="text-sm font-bold text-[var(--t1)]">{(t.shares ?? 0).toLocaleString()} 股 @ {(t.price ?? 0).toFixed(2)}</div></div>
       <div className="text-right">
         <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
         <div className="flex gap-3 justify-end mt-1">

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { UserSettings } from '@/types'
 import { 
   Settings as SettingsIcon, 
@@ -36,6 +36,9 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [showGoalTypeInfo, setShowGoalTypeInfo] = useState(false)
+
+  // Sync with parent settings when they update (e.g. after localStorage load)
+  useEffect(() => { setLocalSettings(settings) }, [settings])
 
   const handleSave = async (updates: Partial<UserSettings>) => {
     const next = { ...localSettings, ...updates }
@@ -279,7 +282,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
                   <input type="number" step="0.000001" value={localSettings.buy_fee_rate} onChange={e => setLocalSettings(p => ({ ...p, buy_fee_rate: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
                 <div className="space-y-2">
-                  <Label>買入折扣 (0.1 = 1折)</Label>
+                  <Label>買入折扣</Label>
                   <input type="number" step="0.05" value={localSettings.buy_discount} onChange={e => setLocalSettings(p => ({ ...p, buy_discount: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
                 </div>
               </div>
@@ -311,7 +314,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <h4 className="text-[11px] font-black text-accent/50 uppercase tracking-widest border-b border-accent/10 pb-2">定期定額</h4>
               <div className="space-y-2">
                 <Label>定期定額手續費 (每筆 TWD)</Label>
-                <input type="number" inputMode="decimal" value={localSettings.dca_fee_min} onChange={e => handleSave({ dca_fee_min: Number(e.target.value) })} className="input-base font-mono text-[16px] md:text-sm" />
+                <input type="number" inputMode="decimal" value={localSettings.dca_fee_min ?? ''} onChange={e => setLocalSettings(p => ({ ...p, dca_fee_min: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
               </div>
             </div>
           </div>

@@ -95,15 +95,13 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const supabase = createClient()
 
   const handleSaveSettings = async (updates: UserSettings) => {
-    if (updates.year_goal_type !== undefined) {
-      localStorage.setItem('year_goal_type', updates.year_goal_type.toString())
-    }
-    if (updates.dca_fee_min !== undefined) {
-      localStorage.setItem('dca_fee_min', updates.dca_fee_min.toString())
-    }
-    if (updates.dca_fee_rate !== undefined) {
-      localStorage.setItem('dca_fee_rate', updates.dca_fee_rate.toString())
-    }
+    // Persist fields not in Supabase to localStorage as one JSON object
+    const ext: any = {}
+    if (updates.year_goal_type !== undefined) ext.year_goal_type = updates.year_goal_type
+    if (updates.dca_fee_min !== undefined) ext.dca_fee_min = updates.dca_fee_min
+    if (updates.dca_fee_rate !== undefined) ext.dca_fee_rate = updates.dca_fee_rate
+    const prev = JSON.parse(localStorage.getItem('stockking_ext') || '{}')
+    localStorage.setItem('stockking_ext', JSON.stringify({ ...prev, ...ext }))
     await fetch('/api/settings', { method: 'POST', body: JSON.stringify(updates) })
     setSettings(updates)
   }
@@ -125,13 +123,18 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     const txData: Transaction[]  = txRes.ok  ? await txRes.json()  : []
     let setData: UserSettings  = setRes.ok ? await setRes.json() : DEFAULT_SETTINGS
     
-    const localType = localStorage.getItem('year_goal_type')
-    const localMin = localStorage.getItem('dca_fee_min')
-    const localRate = localStorage.getItem('dca_fee_rate')
-    
-    if (localType) setData.year_goal_type = Number(localType) as 1 | 2 | 3
-    if (localMin)  setData.dca_fee_min = Number(localMin)
-    if (localRate) setData.dca_fee_rate = Number(localRate)
+    // Restore extra settings from localStorage
+    try {
+      const ext = JSON.parse(localStorage.getItem('stockking_ext') || '{}')
+      if (ext.year_goal_type !== undefined) setData.year_goal_type = ext.year_goal_type as 1 | 2 | 3
+      if (ext.dca_fee_min !== undefined) setData.dca_fee_min = Number(ext.dca_fee_min)
+      if (ext.dca_fee_rate !== undefined) setData.dca_fee_rate = Number(ext.dca_fee_rate)
+      // Also migrate old individual keys
+      const oldType = localStorage.getItem('year_goal_type')
+      const oldMin = localStorage.getItem('dca_fee_min')
+      if (oldType && ext.year_goal_type === undefined) setData.year_goal_type = Number(oldType) as 1 | 2 | 3
+      if (oldMin && ext.dca_fee_min === undefined) setData.dca_fee_min = Number(oldMin)
+    } catch {}
     
     setTxs(txData)
     setSettings(setData)
