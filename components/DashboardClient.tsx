@@ -163,7 +163,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       if (t.action === 'BUY' || t.action === 'DCA') buyTotal += (t.amount + t.fee)
       if (t.action === 'SELL') sellTotal += t.net_amount
     }
-    const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)
+    // Correct MVP: Use net_market_value for top-level summary
+    const currentMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
+    // PnL = (Global Realized Sell Amount) + (Current Net Market Value) - (Global Asset Cost)
     const tp = sellTotal + currentMV - buyTotal
     return { totalPnl: tp, totalMV: currentMV, pnlPct: buyTotal ? (tp / buyTotal) * 100 : 0 }
   }, [txs, holdings])

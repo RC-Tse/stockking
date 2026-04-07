@@ -218,9 +218,12 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             <div className="w-1/2 flex flex-col items-center border-l border-white/5 px-3">
               <div className="flex items-center gap-1 mb-1.5">
                 <span className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest">預估淨市值</span>
-                <span title="已扣除預估賣出手續費及證交稅，與券商 App 顯示一致" className="text-[9px] text-accent/60 border border-accent/30 rounded-full w-3.5 h-3.5 flex items-center justify-center font-black cursor-help flex-shrink-0">i</span>
+                <span 
+                  onClick={() => alert("預估淨市值 = (庫存股數 * 市價) - 預估賣出手續費 - 預估證交稅\n此數值與各大券商 App 之「損益試算」或「淨市值」顯示一致。")}
+                  className="text-[9px] text-accent/60 border border-accent/30 rounded-full w-3.5 h-3.5 flex items-center justify-center font-black cursor-pointer flex-shrink-0 active:scale-90 transition-all"
+                >i</span>
               </div>
-              <span className={`font-black font-mono leading-none text-[22px] ${currentNetMV >= currentCost ? 'text-red-400' : 'text-green-400'}`}>{showData ? fmtMoney(currentNetMV) : "••••••"}</span>
+              <span className={`font-black font-mono leading-none text-[22px] ${!showData ? 'text-white' : (currentNetMV >= currentCost ? 'text-red-400' : 'text-green-400')}`}>{showData ? fmtMoney(currentNetMV) : "••••••"}</span>
             </div>
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">

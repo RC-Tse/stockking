@@ -205,33 +205,31 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
           </h3>
           
           <div className="flex flex-col gap-3">
-            <div className="flex items-center justify-between gap-4">
-              <select 
-                value={selSym} 
-                onChange={e => setSelSym(e.target.value)}
-                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
-              >
-                {holdings.map(h => (
-                  <option key={h.symbol} value={h.symbol}>{h.symbol} {getStockName(h.symbol)}</option>
-                ))}
-              </select>
+            <select 
+              value={selSym} 
+              onChange={e => setSelSym(e.target.value)}
+              className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
+            >
+              {holdings.map(h => (
+                <option key={h.symbol} value={h.symbol}>{quotes[h.symbol]?.name_zh || getStockName(h.symbol)}</option>
+              ))}
+            </select>
 
-              <div className="flex gap-1.5 scrollbar-hide">
-                {(['1M', '3M', '1Y', 'ALL'] as StockRange[]).map(r => (
-                  <button 
-                    key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
-                    className={`px-3 py-2 rounded-xl text-[10px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-                  >
-                    {r === 'ALL' ? '全部' : r}
-                  </button>
-                ))}
+            <div className="flex w-full gap-1.5 scrollbar-hide">
+              {(['1M', '3M', '1Y', 'ALL'] as StockRange[]).map(r => (
                 <button 
-                  onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
-                  className={`px-3 py-2 flex items-center gap-1.5 rounded-xl text-[10px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                  key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
+                  className={`flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
                 >
-                  <CalendarIcon size={12} />
+                  {r === 'ALL' ? '全部' : r}
                 </button>
-              </div>
+              ))}
+              <button 
+                onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
+                className={`px-4 py-2.5 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+              >
+                <CalendarIcon size={14} />
+              </button>
             </div>
           </div>
         </div>
