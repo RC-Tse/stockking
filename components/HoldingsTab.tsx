@@ -55,6 +55,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     let totalRealized = 0
     let realizedCostBasis = 0
     const realizedByBuyYear: Record<string, number> = {}
+    const realizedBySellYear: Record<string, number> = {}
     const inventory: Record<string, { shares: number, unitCost: number, buyYear: string }[]> = {}
     const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
 
@@ -76,6 +77,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         stockHistory[tx.symbol].sellRev += tx.net_amount
         let sellRemaining = tx.shares
         const sellUnitNet = tx.net_amount / tx.shares
+        const sellYear = tx.trade_date.split('-')[0]
         while (sellRemaining > 0 && inventory[tx.symbol].length > 0) {
           const lot = inventory[tx.symbol][0]
           const sharesFromLot = Math.min(lot.shares, sellRemaining)
@@ -84,6 +86,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           
           realizedCostBasis += lotCostBasis
           realizedByBuyYear[lot.buyYear] = (realizedByBuyYear[lot.buyYear] || 0) + portionProfit
+          realizedBySellYear[sellYear] = (realizedBySellYear[sellYear] || 0) + portionProfit
           totalRealized += portionProfit
           sellRemaining -= sharesFromLot
           lot.shares -= sharesFromLot
@@ -111,7 +114,17 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         pnlPct: data.buyCost > 0 ? (data.sellRev - data.buyCost) / data.buyCost * 100 : 0
       })).sort((a, b) => b.pnl - a.pnl)
 
-    const yearPnl = (realizedByBuyYear[currentYear] || 0) + (unrealizedByBuyYear[currentYear] || 0)
+    let yearPnl = 0
+    const goalType = settings.year_goal_type || 1
+    if (goalType === 1) {
+      yearPnl = (realizedByBuyYear[currentYear] || 0) + (unrealizedByBuyYear[currentYear] || 0)
+    } else if (goalType === 2) {
+      yearPnl = (realizedBySellYear[currentYear] || 0) + (unrealizedByBuyYear[currentYear] || 0)
+    } else {
+      const allUnrealized = Object.values(unrealizedByBuyYear).reduce((s, a) => s + a, 0)
+      yearPnl = (realizedBySellYear[currentYear] || 0) + allUnrealized
+    }
+
     return { totalRealized, realizedCostBasis, closedHoldings, yearPnl }
   }, [transactions, currentYear, quotes])
 
@@ -824,7 +837,7 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   )
   return (
     <div className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0">
-      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.trade_type === 'DCA' && <span className="text-accent font-black">定期定額</span>}</div><div className="text-sm font-bold text-[var(--t1)]">{(t.shares ?? 0).toLocaleString()} 股 @ {(t.price ?? 0).toFixed(2)}</div></div>
+      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {t.action === 'DCA' && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black tracking-widest leading-none mt-0.5">定期定額</span>}</div><div className="text-sm font-bold text-[var(--t1)]">{(t.shares ?? 0).toLocaleString()} 股 @ {(t.price ?? 0).toFixed(2)}</div></div>
       <div className="text-right">
         <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
         <div className="flex gap-3 justify-end mt-1">

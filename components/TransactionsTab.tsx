@@ -213,7 +213,10 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
             <span className="font-black text-[var(--t1)] text-[16px] truncate">{tx.name_zh || getStockName(tx.symbol)}</span>
             <span className="text-[10px] font-mono opacity-20">{codeOnly(tx.symbol)}</span>
           </div>
-          <div className="text-[11px] font-bold text-[var(--t3)] mt-1">{tx.trade_date} · {(tx.shares ?? 0).toLocaleString()} 股</div>
+          <div className="text-[11px] font-bold text-[var(--t3)] mt-1 flex items-center gap-2">
+            <span>{tx.trade_date} · {(tx.shares ?? 0).toLocaleString()} 股</span>
+            {tx.action === 'DCA' && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black tracking-widest text-[9px] leading-none mb-px">定期定額</span>}
+          </div>
         </div>
         <div className={`text-right font-black font-mono text-[16px] shrink-0 ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
           {tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}

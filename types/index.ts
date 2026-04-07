@@ -94,6 +94,7 @@ export interface UserSettings {
   total_goal: number
   total_goal_start_date: string
   theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
+  year_goal_type: 1 | 2 | 3
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -112,7 +113,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   year_goal: 0,
   total_goal: 0,
   total_goal_start_date: new Date().toISOString().split('T')[0],
-  theme: 'dark'
+  theme: 'dark',
+  year_goal_type: 1
 }
 
 // ETF codes for tax calculation
