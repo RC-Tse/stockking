@@ -31,8 +31,9 @@ const TABS: { id: Tab; icon: any; label: string }[] = [
   { id: 'settings',     icon: Settings2, label: '設定'  },
 ]
 
-function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settings: UserSettings): Holding[] {
+function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settings: UserSettings): { holdings: Holding[], allTimeRealized: number } {
   const inventory: Record<string, { shares: number; cost: number }[]> = {}
+  let allTimeRealized = 0
   const sorted = [...txs].sort((a, b) => {
     if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
     return a.id - b.id
@@ -44,33 +45,29 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       lots.push({ shares: tx.shares, cost: Math.floor(tx.amount) + Math.floor(tx.fee) })
     } else if (tx.action === 'SELL') {
       let sellRemaining = tx.shares
+      let costBasis = 0
       while (sellRemaining > 0 && lots.length > 0) {
-        if (lots[0].shares <= sellRemaining) {
-          sellRemaining -= lots[0].shares
-          lots.shift()
-        } else {
-          const unitCost = lots[0].cost / lots[0].shares
-          lots[0].shares -= sellRemaining
-          lots[0].cost = lots[0].shares * unitCost
-          sellRemaining = 0
-        }
+        const take = Math.min(lots[0].shares, sellRemaining)
+        const unitCost = lots[0].cost / lots[0].shares
+        const pCost = Math.floor(take * unitCost)
+        costBasis += pCost
+        lots[0].shares -= take
+        lots[0].cost -= pCost
+        sellRemaining -= take
+        if (lots[0].shares <= 0) lots.shift()
       }
+      allTimeRealized += Math.floor(tx.net_amount - costBasis)
     }
   }
-  return Object.entries(inventory)
+  const hList = Object.entries(inventory)
     .map(([sym, lots]) => {
       const netShares = lots.reduce((s, l) => s + l.shares, 0)
       if (netShares <= 0) return null
       const totalCost = lots.reduce((s, l) => s + l.cost, 0)
       const avgCost = totalCost / netShares
       const q = quotes[sym]
-      // Use bid_price if available (matches brokerage conservative valuation)
-      // Otherwise fall back to last traded price
       const cp = q?.bid_price || q?.price || 0
-      // Floor each holding's market value individually (Taiwan brokerage standard)
       const mv = Math.floor(cp * netShares)
-      // Deduct estimated sell costs (matches brokerage '預估淨市值')
-      // ETF: codes starting with '00' use 0.1% tax; stocks use 0.3%
       const sell_fee = calcFee(mv, settings, true)
       const sell_tax = calcTax(mv, sym, settings)
       const net_mv = mv - sell_fee - sell_tax
@@ -90,6 +87,8 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       }
     })
     .filter((h): h is Holding => h !== null)
+  
+  return { holdings: hList, allTimeRealized }
 }
 
 export default function DashboardClient({ user }: { user: AppUser }) {
@@ -99,6 +98,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [settings, setSettings]   = useState<UserSettings>(DEFAULT_SETTINGS)
   const [calEntries, setCalEntries] = useState<CalendarEntry[]>([])
   const [holdings, setHoldings]   = useState<Holding[]>([])
+  const [allTimeRealized, setAllTimeRealized] = useState(0)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [loading, setLoading]     = useState(true)
   const router = useRouter()
@@ -136,10 +136,13 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       if (qRes.ok) {
         const q: Record<string, Quote> = await qRes.json()
         setQuotes(q)
-        setHoldings(buildHoldings(txData, q, setData))
+        const { holdings: newHoldings, allTimeRealized: realized } = buildHoldings(txData, q, setData)
+        setHoldings(newHoldings)
+        setAllTimeRealized(realized)
       }
     } else {
       setHoldings([])
+      setAllTimeRealized(0)
     }
   }, [])
 
@@ -158,17 +161,15 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   }, [refresh, refreshCal])
 
   const { totalPnl, pnlPct, totalMV } = useMemo(() => {
-    let buyTotal = 0, sellTotal = 0
+    let buyTotal = 0
     for (const t of txs) {
       if (t.action === 'BUY' || t.action === 'DCA') buyTotal += (t.amount + t.fee)
-      if (t.action === 'SELL') sellTotal += t.net_amount
     }
-    // Correct MVP: Use net_market_value for top-level summary
     const currentMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
-    // PnL = (Global Realized Sell Amount) + (Current Net Market Value) - (Global Asset Cost)
-    const tp = sellTotal + currentMV - buyTotal
+    const unrealizedPnl = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
+    const tp = allTimeRealized + unrealizedPnl
     return { totalPnl: tp, totalMV: currentMV, pnlPct: buyTotal ? (tp / buyTotal) * 100 : 0 }
-  }, [txs, holdings])
+  }, [holdings, allTimeRealized, txs])
 
   const signOut = async () => {
     await supabase.auth.signOut()

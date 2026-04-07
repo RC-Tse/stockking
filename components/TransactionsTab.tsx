@@ -78,13 +78,14 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
       } else {
         let rem = tx.shares, costBasis = 0, matches = []
         while (rem > 0 && inventory[tx.symbol].length) {
-          const lot = inventory[tx.symbol][0], take = Math.min(lot.shares, rem), unit = lot.cost / lot.shares, pCost = take * unit
+          const lot = inventory[tx.symbol][0], take = Math.min(lot.shares, rem), unit = lot.cost / lot.shares
+          const pCost = Math.floor(take * unit)
           costBasis += pCost; matches.push({ date: lot.date, shares: take })
           lot.shares -= take; lot.cost -= pCost; rem -= take
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
         const profit = Math.floor(tx.net_amount - costBasis)
-        if (inRange) { totalSell += tx.amount; totalFee += tx.fee; totalTax += tx.tax; totalRealized += profit; sellCount++; stock.sell += tx.net_amount; stock.realized += profit; stock.count++ }
+        if (inRange) { totalSell += tx.amount; totalFee += tx.fee; totalTax += tx.tax; totalRealized += profit; totalBuy += costBasis; sellCount++; stock.sell += tx.net_amount; stock.realized += profit; stock.count++ }
         stock.history.push({ ...tx, type: 'SELL', matches, profit })
       }
     }

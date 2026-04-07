@@ -54,7 +54,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   } = useMemo(() => {
     let totalRealized = 0
     let realizedCostBasis = 0
-    const realizedByBuyYear: Record<string, number> = {}
     const realizedBySellYear: Record<string, number> = {}
     const inventory: Record<string, { shares: number, cost: number, buyYear: string }[]> = {}
     const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
@@ -76,24 +75,24 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       } else {
         stockHistory[tx.symbol].sellRev += tx.net_amount
         let sellRemaining = tx.shares
-        const sellUnitNet = tx.net_amount / tx.shares
+        let costBasisForTx = 0
         const sellYear = tx.trade_date.split('-')[0]
         while (sellRemaining > 0 && inventory[tx.symbol].length > 0) {
           const lot = inventory[tx.symbol][0]
           const sharesFromLot = Math.min(lot.shares, sellRemaining)
-          const lotCostBasis = (sharesFromLot / lot.shares) * lot.cost
-          const portionProfit = (sellUnitNet * sharesFromLot) - lotCostBasis
+          const lotCostBasis = Math.floor((sharesFromLot / lot.shares) * lot.cost)
           
           realizedCostBasis += lotCostBasis
-          realizedByBuyYear[lot.buyYear] = (realizedByBuyYear[lot.buyYear] || 0) + portionProfit
-          realizedBySellYear[sellYear] = (realizedBySellYear[sellYear] || 0) + portionProfit
-          totalRealized += portionProfit
+          costBasisForTx += lotCostBasis
           
           sellRemaining -= sharesFromLot
           lot.cost -= lotCostBasis
           lot.shares -= sharesFromLot
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
+        const profit = Math.floor(tx.net_amount - costBasisForTx)
+        totalRealized += profit
+        realizedBySellYear[sellYear] = (realizedBySellYear[sellYear] || 0) + profit
       }
     }
 
