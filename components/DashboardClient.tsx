@@ -68,8 +68,8 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       const q = quotes[sym]
       const cp = q?.bid_price || q?.price || 0
       const mv = Math.floor(cp * netShares)
-      const sell_fee = calcFee(mv, settings, true)
-      const sell_tax = calcTax(mv, sym, settings)
+      const sell_fee = Math.floor(calcFee(mv, settings, true))
+      const sell_tax = Math.floor(calcTax(mv, sym, settings))
       const net_mv = mv - sell_fee - sell_tax
       const upnl = net_mv - totalCost
       return {

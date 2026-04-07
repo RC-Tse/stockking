@@ -71,9 +71,9 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
       const stock = stats[tx.symbol]
 
       if (tx.action !== 'SELL') {
-        const cost = tx.amount + tx.fee
+        const cost = Math.floor(tx.amount) + Math.floor(tx.fee)
         inventory[tx.symbol].push({ shares: tx.shares, cost, date: tx.trade_date, id: tx.id })
-        if (inRange) { totalBuy += tx.amount; totalFee += tx.fee; buyCount++; stock.buy += tx.amount; stock.count++ }
+        if (inRange) { totalBuy += Math.floor(tx.amount); totalFee += Math.floor(tx.fee); buyCount++; stock.buy += Math.floor(tx.amount); stock.count++ }
         stock.history.push({ ...tx, type: 'BUY' })
       } else {
         let rem = tx.shares, costBasis = 0, matches = []
@@ -85,7 +85,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
         const profit = Math.floor(tx.net_amount - costBasis)
-        if (inRange) { totalSell += tx.amount; totalFee += tx.fee; totalTax += tx.tax; totalRealized += profit; totalBuy += costBasis; sellCount++; stock.sell += tx.net_amount; stock.realized += profit; stock.count++ }
+        if (inRange) { totalSell += Math.floor(tx.amount); totalFee += Math.floor(tx.fee); totalTax += Math.floor(tx.tax); totalRealized += profit; totalBuy += costBasis; sellCount++; stock.sell += tx.net_amount; stock.realized += profit; stock.count++ }
         stock.history.push({ ...tx, type: 'SELL', matches, profit })
       }
     }
@@ -195,7 +195,7 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
                 </div>
                 <span className="font-black text-[var(--t1)] text-[12px]">{(tx.shares ?? 0).toLocaleString()} 股 @ {(tx.price ?? 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between items-center pl-1"><span className="opacity-20 text-[10px] font-bold">費 {fmtMoney(tx.fee)}{tx.tax>0&&` 稅 ${fmtMoney(tx.tax)}`}</span><span className={`font-mono font-black text-[12px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>{tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}</span></div>
+              <div className="flex justify-between items-center pl-1"><span className="opacity-20 text-[10px] font-bold">費 {fmtMoney(Math.floor(tx.fee))}{tx.tax>0&&` 稅 ${fmtMoney(Math.floor(tx.tax))}`}</span><span className={`font-mono font-black text-[12px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>{tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}</span></div>
               {tx.matches?.map((m:any,i:number)=><div key={i} className="pl-4 border-l-2 border-white/10 text-[10px] text-[var(--t3)] italic py-0.5 ml-1">沖銷 {m.date} 買入 ({m.shares} 股)</div>)}
               {tx.type==='SELL' && <div className={`text-right font-black text-[11px] pt-1.5 border-t border-white/5 ${tx.profit>=0?'text-red-400/60':'text-green-400/60'}`}>此筆損益 {tx.profit>=0?'+':''}{fmtMoney(Math.round(tx.profit))}</div>}
             </div>
@@ -233,7 +233,7 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
           <div className="grid grid-cols-3 gap-4 pt-5">
             <DetailItem label="股數" value={(tx.shares ?? 0).toLocaleString()}/>
             <DetailItem label="價格" value={(tx.price ?? 0).toFixed(2)}/>
-            <DetailItem label="費用" value={fmtMoney(Math.floor(tx.fee+tx.tax))}/>
+            <DetailItem label="費用" value={fmtMoney(Math.floor(tx.fee) + Math.floor(tx.tax))}/>
           </div>
           {tx.note && <div className="p-3 rounded-xl bg-white/5 text-[11px] text-[var(--t2)] italic leading-relaxed border border-white/5">"{tx.note}"</div>}
           <div className="flex gap-3 pt-1"><button onClick={()=>setIsEditing(true)} className="flex-[3] btn-primary py-3 flex items-center justify-center gap-2 text-sm"><Pencil size={16}/>編輯</button><button onClick={()=>onDelete(tx.id)} className="flex-1 btn-danger py-3 flex items-center justify-center active:scale-95 transition-all"><Trash2 size={18}/></button></div>

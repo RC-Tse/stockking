@@ -104,8 +104,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       if (totalShares <= 0) return
 
       const grossMV = Math.floor(currentPrice * totalShares)
-      const sellFee = calcFee(grossMV, settings, true)
-      const sellTax = calcTax(grossMV, sym, settings)
+      const sellFee = Math.floor(calcFee(grossMV, settings, true))
+      const sellTax = Math.floor(calcTax(grossMV, sym, settings))
       const netMV = grossMV - sellFee - sellTax
       const totalActualCost = inventory[sym].reduce((s, l) => s + l.cost, 0)
       
