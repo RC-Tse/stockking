@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { Holding, Transaction, UserSettings, Quote, fmtMoney, codeOnly, getStockName, calcFee, calcTax } from '@/types'
+import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName } from '@/types'
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, AreaChart, Area, Legend
+  ResponsiveContainer, Legend
 } from 'recharts'
-import { ChevronDown, TrendingUp, Target, Trophy, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
+import { TrendingUp, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker from './DatePicker'
 
 interface Props {
@@ -17,9 +17,8 @@ interface Props {
 }
 
 type StockRange = '1M' | '3M' | '1Y' | 'ALL' | 'CUSTOM'
-type GoalRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
 
-export default function AnalyticsTab({ holdings, transactions, settings, quotes }: Props) {
+export default function AnalyticsTab({ holdings, transactions, quotes }: Props) {
   // ── Stock Chart States ──
   const [selSym, setSelSym] = useState(holdings[0]?.symbol || '')
   const [stockRange, setStockRange] = useState<StockRange>('1M')
@@ -30,20 +29,6 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
   const [customStockEnd, setCustomStockEnd] = useState(() => new Date().toISOString().split('T')[0])
   const [stockHistory, setStockHistory] = useState<any[]>([])
   const [loadingStock, setLoading] = useState(false)
-
-  // ── Goal Chart States ──
-  const [yearRange, setYearRange] = useState<GoalRange>('1Y')
-  const [showCustomYear, setShowCustomYear] = useState(false)
-  const [customYearStart, setCustomYearStart] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
-  })
-  const [customYearEnd, setCustomYearEnd] = useState(() => new Date().toISOString().split('T')[0])
-  const [totalRange, setTotalRange] = useState<GoalRange>('ALL')
-  const [showCustomTotal, setShowCustomTotal] = useState(false)
-  const [customStart, setCustomStart] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
-  })
-  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
 
   // Fetch Stock History
   useEffect(() => {
@@ -88,12 +73,6 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     }
 
     const processed = stockHistory.map((h, i) => {
-      // 計算當日「持倉狀態」(基於收盤持股與其成本)
-      let totalNetMV = 0
-      let totalActualCost = 0
-      const details = [] as { shares: number, cost: number }[]
-      const prevDateStr = i > 0 ? stockHistory[i-1].date : firstDate
-
       let isBuy = false
       let txPrice = 0
       let txShares = 0
@@ -137,225 +116,20 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     return finalData.map(d => ({...d, timestamp: new Date(d.date).getTime()}))
   }, [stockHistory, transactions, selSym, stockRange, customStockStart, customStockEnd])
 
-  // ── Goal Calculation Logic ──
-  const calculateGoalData = (isTotal: boolean, range: GoalRange, customS?: string, customE?: string) => {
-    const today = new Date()
-    const currentYear = today.getFullYear()
-    
-    // Sort tx to find first date safely
-    const sortedTxs = [...transactions].sort((a,b) => a.trade_date.localeCompare(b.trade_date))
-    const firstTxDate = sortedTxs.length > 0 ? new Date(sortedTxs[0].trade_date) : today
-
-    const startDate = isTotal 
-      ? new Date(settings.total_goal_start_date || firstTxDate)
-      : new Date(currentYear, 0, 1)
-    
-    const endDate = isTotal ? today : new Date(currentYear, 11, 31)
-    const goalValue = isTotal ? settings.total_goal : settings.year_goal
-    const todayStr = today.toISOString().split('T')[0]
-
-    const fullData = []
-    const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (86400 * 1000))
-
-    let realized = 0 
-    let total_cumulative_realized = 0 // For Total Progress Chart
-    const inventory: Record<string, {shares: number, cost: number, buyDate: Date}[]> = {}
-    let lastTxIdx = 0
-
-    // PRE-CALCULATE Total Realized PnL up to the start of the year/range for Total Progress
-    if (isTotal) {
-      sortedTxs.forEach(tx => {
-        if (tx.trade_date < startDate.toISOString().split('T')[0]) {
-          if (tx.action !== 'SELL') {
-            if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-            inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee, buyDate: new Date(tx.trade_date) })
-          } else {
-             let rem = tx.shares
-             const unitNet = tx.net_amount / tx.shares
-             while (rem > 0 && inventory[tx.symbol]?.length) {
-               const lot = inventory[tx.symbol][0]
-               const take = Math.min(lot.shares, rem)
-               total_cumulative_realized += (unitNet - (lot.cost/lot.shares)) * take
-               rem -= take; lot.shares -= take
-               if (lot.shares <= 0) inventory[tx.symbol].shift()
-             }
-          }
-        }
-      })
-    }
-
-    for (let i = 0; i <= Math.max(0, dayCount); i++) {
-      const d = new Date(startDate)
-      d.setDate(startDate.getDate() + i)
-      const dateStr = d.toISOString().split('T')[0]
-      const ideal = dayCount > 0 ? Math.round((goalValue / dayCount) * i) : 0
-      
-      if (isTotal && dateStr > todayStr) break
-      
-      while (lastTxIdx < sortedTxs.length && sortedTxs[lastTxIdx].trade_date <= dateStr) {
-        const tx = sortedTxs[lastTxIdx]
-        if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-        
-        if (tx.action !== 'SELL') {
-          inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee, buyDate: new Date(tx.trade_date) })
-        } else {
-          let rem = tx.shares
-          const unitNet = tx.net_amount / tx.shares
-          while (rem > 0 && inventory[tx.symbol]?.length) {
-            const lot = inventory[tx.symbol][0]
-            const take = Math.min(lot.shares, rem)
-            const profit = (unitNet - (lot.cost/lot.shares)) * take
-            
-            if (dateStr.startsWith(currentYear.toString())) {
-               realized += profit
-            }
-            total_cumulative_realized += profit
-            
-            rem -= take; lot.shares -= take
-            if (lot.shares <= 0) inventory[tx.symbol].shift()
-          }
-        }
-        lastTxIdx++
-      }
-
-      let pnlValue = 0
-      if (isTotal) {
-        let currentUnrealized = 0
-        Object.keys(inventory).forEach(sym => {
-          const q = quotes[sym]
-          const currentPrice = q?.bid_price || q?.price || 0
-          inventory[sym].forEach(lot => {
-            const daysSinceBuy = Math.max(1, (d.getTime() - lot.buyDate.getTime()) / 86400000)
-            const daysTotal = Math.max(1, (today.getTime() - lot.buyDate.getTime()) / 86400000)
-            const fraction = Math.min(1, Math.max(0, daysSinceBuy / daysTotal))
-            const gross = Math.floor(currentPrice * lot.shares)
-            const fee = calcFee(gross, settings, true)
-            const tax = calcTax(gross, sym, settings)
-            const netMV = gross - fee - tax
-            currentUnrealized += (netMV - lot.cost) * fraction
-          })
-        })
-        pnlValue = total_cumulative_realized + currentUnrealized
-      } else {
-        // Year Goal = (Total Status Unrealized today) + (Realized this year)
-        let total_u = 0
-        Object.keys(inventory).forEach(sym => {
-          const q = quotes[sym]
-          const currentPrice = q?.bid_price || q?.price || 0
-          inventory[sym].forEach(lot => {
-            const daysSinceBuy = Math.max(1, (d.getTime() - lot.buyDate.getTime()) / 86400000)
-            const daysTotal = Math.max(1, (today.getTime() - lot.buyDate.getTime()) / 86400000)
-            const fraction = Math.min(1, Math.max(0, daysSinceBuy / daysTotal))
-            const gross = Math.floor(currentPrice * lot.shares)
-            const fee = calcFee(gross, settings, true)
-            const tax = calcTax(gross, sym, settings)
-            const netMV = gross - fee - tax
-            total_u += (netMV - lot.cost) * fraction
-          })
-        })
-        pnlValue = total_u + realized
-      }
-
-      fullData.push({
-        date: dateStr.substring(5),
-        fullDate: dateStr,
-        ideal,
-        actual: Math.round(pnlValue)
-      })
-    }
-
-    let result = fullData
-    if (range !== 'ALL') {
-      if (range === 'CUSTOM' && customS && customE) {
-        if (!isTotal) {
-          const cy = currentYear.toString()
-          const cS = customS < `${cy}-01-01` ? `${cy}-01-01` : customS
-          const cE = customE > `${cy}-12-31` ? `${cy}-12-31` : customE
-          result = fullData.filter(d => d.fullDate >= cS && d.fullDate <= cE)
-        } else {
-          result = fullData.filter(d => d.fullDate >= customS && d.fullDate <= customE)
-        }
-      } else if (!isTotal) {
-        const cy = currentYear.toString()
-        let cutoff = `${cy}-12-31`
-        if (range === '1M') cutoff = `${cy}-01-31`
-        else if (range === '3M') cutoff = `${cy}-03-31`
-        else if (range === '6M') cutoff = `${cy}-06-30`
-        else if (range === '9M') cutoff = `${cy}-09-30`
-        result = fullData.filter(d => d.fullDate >= `${cy}-01-01` && d.fullDate <= cutoff)
-      } else {
-        let viewportDays = 0
-        if (range === '1M') viewportDays = 30
-        else if (range === '3M') viewportDays = 90
-        else if (range === '6M') viewportDays = 180
-        else if (range === '1Y') viewportDays = 365
-
-        let todayIdx = fullData.findIndex(d => d.fullDate === todayStr)
-        if (todayIdx === -1) todayIdx = fullData.length - 1
-
-        let right = todayIdx
-        let left = Math.max(0, right - viewportDays)
-
-        result = fullData.slice(left, right + 1)
-      }
-    }
-
-    return result.map(d => ({ ...d, timestamp: new Date(d.fullDate).getTime() }))
-  }
-
-  const yearGoalData = useMemo(() => calculateGoalData(false, yearRange, customYearStart, customYearEnd), [transactions, settings, yearRange, customYearStart, customYearEnd, holdings, quotes])
-  const totalGoalData = useMemo(() => calculateGoalData(true, totalRange, customStart, customEnd), [transactions, settings, totalRange, customStart, customEnd, holdings, quotes])
-
   const formatTick = (ts: number) => {
     const d = new Date(ts)
     return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
-  const generateTicks = (data: any[], dateField: string) => {
-    if (!data || !data.length) return []
-    const startStr = data[0][dateField]
-    const endStr = data[data.length - 1][dateField]
-    const startTime = new Date(startStr).getTime()
-    const endTime = new Date(endStr).getTime()
-    const days = Math.ceil((endTime - startTime) / 86400000)
-
-    let stepMonths = 1
-    if (days >= 365) stepMonths = 3
-    else if (days >= 180) stepMonths = 2
-
-    const ticks = [startTime, endTime]
-    const startObj = new Date(startStr)
-    const endObj = new Date(endStr)
-
-    let curr = new Date(startObj.getFullYear(), startObj.getMonth(), 1)
-    
-    while(curr <= endObj) {
-        const checkAndAdd = (d: Date) => {
-          if (d > startObj && d < endObj) {
-            const dt = d.getTime()
-            const distStart = (dt - startTime) / 86400000
-            const distEnd = (endTime - dt) / 86400000
-            if (distStart > 5 && distEnd > 5) {
-               ticks.push(dt)
-            }
-          }
-        }
-
-        checkAndAdd(curr)
-        if (days <= 45) {
-           checkAndAdd(new Date(curr.getFullYear(), curr.getMonth(), 10))
-           checkAndAdd(new Date(curr.getFullYear(), curr.getMonth(), 20))
-           checkAndAdd(new Date(curr.getFullYear(), curr.getMonth(), 30))
-        }
-        curr.setMonth(curr.getMonth() + stepMonths)
-    }
-
-    return Array.from(new Set(ticks)).sort((a,b) => a - b)
-  }
-
-  const stockTicks = useMemo(() => generateTicks(enrichedStockHistory, 'date'), [enrichedStockHistory])
-  const yearTicks = useMemo(() => generateTicks(yearGoalData, 'fullDate'), [yearGoalData])
-  const totalTicks = useMemo(() => generateTicks(totalGoalData, 'fullDate'), [totalGoalData])
+  const stockTicks = useMemo(() => {
+    if (!enrichedStockHistory.length) return []
+    const start = enrichedStockHistory[0].timestamp
+    const end = enrichedStockHistory[enrichedStockHistory.length - 1].timestamp
+    const ticks = [start, end]
+    const mid = start + (end - start) / 2
+    ticks.push(mid)
+    return ticks.sort((a,b) => a - b)
+  }, [enrichedStockHistory])
 
   const renderBuyDot = (props: any) => {
     const { cx, cy, payload } = props
@@ -421,82 +195,54 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     return null
   }
 
-  const finalYearPnl = yearGoalData.filter(d => d.actual !== null).pop()?.actual || 0
-  const finalTotalPnl = totalGoalData.filter(d => d.actual !== null).pop()?.actual || 0
-
-  const getDynamicYMin = (val: number) => {
-    if (val >= 0) return 0
-    const abs = Math.abs(val)
-    if (abs <= 1000) return -1000
-    if (abs <= 10000) return -Math.ceil(abs / 1000) * 1000
-    return -Math.ceil(abs / 10000) * 10000
-  }
-
-  const generateYTicks = (data: any[], key: string, targetGoal: number) => {
-    const minVal = Math.min(0, ...data.map(d => d[key] || 0))
-    const minBound = getDynamicYMin(minVal)
-    const maxVal = Math.max(targetGoal, ...data.map(d => d[key] || 0))
-    
-    // 確保包含最小值、0、以及最大值
-    const ticks = [minBound, 0]
-    if (maxVal > 0) {
-      ticks.push(Math.round(maxVal * 0.33))
-      ticks.push(Math.round(maxVal * 0.66))
-      ticks.push(Math.round(maxVal))
-    }
-    return Array.from(new Set(ticks)).sort((a, b) => a - b)
-  }
-
-  const yearYTicks = useMemo(() => generateYTicks(yearGoalData, 'actual', settings.year_goal), [yearGoalData, settings.year_goal])
-  const totalYTicks = useMemo(() => generateYTicks(totalGoalData, 'actual', settings.total_goal), [totalGoalData, settings.total_goal])
-
   return (
     <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
       {/* ── 1. 各股分析 ── */}
       <section className="space-y-4">
         <div className="flex flex-col space-y-3 px-1">
           <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
-            <TrendingUp size={16} className="text-accent inline mr-1" /> 單一個股走勢與點位分析
+            <TrendingUp size={16} className="text-accent inline mr-1" /> 單一個股走勢分析
           </h3>
-          <div className="relative w-[60%]">
-            <select 
-              value={selSym} 
-              onChange={e => setSelSym(e.target.value)}
-              className="w-full appearance-none bg-white/5 border border-white/10 rounded-xl px-4 py-2 pr-10 font-black text-sm text-[var(--t1)] focus:outline-none focus:border-accent transition-all truncate"
-            >
-              {holdings.map(h => (
-                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})</option>
-              ))}
-            </select>
-            <ChevronDown size={14} className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--t3)] pointer-events-none" />
-          </div>
-          <div className="flex justify-end w-full">
-            <div className="flex gap-1.5 flex-wrap">
-              {(['1M', '3M', '1Y', 'ALL'] as (StockRange)[]).map(r => (
-                <button 
-                  key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-                >
-                  {r === 'ALL' ? '全部' : r}
-                </button>
-              ))}
-              <button 
-                onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
-                className={`px-3 py-1.5 flex items-center gap-1 rounded-lg text-[10px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+          
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-4">
+              <select 
+                value={selSym} 
+                onChange={e => setSelSym(e.target.value)}
+                className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2.5 text-sm font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
               >
-                <CalendarIcon size={10} /> 自訂
-              </button>
+                {holdings.map(h => (
+                  <option key={h.symbol} value={h.symbol}>{h.symbol} {getStockName(h.symbol)}</option>
+                ))}
+              </select>
+
+              <div className="flex gap-1.5 scrollbar-hide">
+                {(['1M', '3M', '1Y', 'ALL'] as StockRange[]).map(r => (
+                  <button 
+                    key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
+                    className={`px-3 py-2 rounded-xl text-[10px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                  >
+                    {r === 'ALL' ? '全部' : r}
+                  </button>
+                ))}
+                <button 
+                  onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
+                  className={`px-3 py-2 flex items-center gap-1.5 rounded-xl text-[10px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
+                >
+                  <CalendarIcon size={12} />
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {showCustomStock && (
-          <div className="flex items-center justify-end gap-3 mt-2 animate-slide-up px-1">
+          <div className="flex items-center justify-end gap-3 px-1 py-1 animate-slide-up bg-white/5 rounded-2xl border border-white/5">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-[var(--t3)]">起</span>
               <DatePicker value={customStockStart} onChange={(v: string) => setCustomStockStart(v)} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 pr-2">
               <span className="text-[10px] font-black text-[var(--t3)]">迄</span>
               <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} />
             </div>
@@ -533,129 +279,6 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
             </div>
           </div>
         )}
-      </section>
-
-      {/* ── 2. 年度目標分析 ── */}
-      <section className="space-y-4 pt-4 border-t border-white/5">
-        <div className="flex flex-col space-y-3 px-1">
-          <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
-            <Target size={16} className="text-accent" /> 年度損益累積進度
-          </h3>
-          <div className="flex justify-end w-full">
-            <div className="flex gap-1.5 flex-wrap">
-              {(['1M', '3M', '6M', '9M', '1Y'] as GoalRange[]).map(r => (
-                <button 
-                  key={r} onClick={() => { setYearRange(r); setShowCustomYear(false); }}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === r && !showCustomYear ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-                >
-                  {r}
-                </button>
-              ))}
-              <button 
-                onClick={() => { setYearRange('CUSTOM'); setShowCustomYear(!showCustomYear); }}
-                className={`px-2.5 py-1 flex items-center gap-1 rounded-lg text-[9px] font-black transition-all border ${yearRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-              >
-                <CalendarIcon size={10} /> 自訂
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {showCustomYear && (
-          <div className="flex items-center justify-end gap-3 mt-2 animate-slide-up px-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-[var(--t3)]">起</span>
-              <DatePicker value={customYearStart} onChange={(v: string) => {
-                 const cy = new Date().getFullYear().toString()
-                 setCustomYearStart(v < `${cy}-01-01` ? `${cy}-01-01` : v)
-              }} />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-[var(--t3)]">迄</span>
-              <DatePicker value={customYearEnd} onChange={(v: string) => {
-                 const cy = new Date().getFullYear().toString()
-                 setCustomYearEnd(v > `${cy}-12-31` ? `${cy}-12-31` : v)
-              }} />
-            </div>
-          </div>
-        )}
-
-        <div className="card-base pt-4 pb-4 pl-4 pr-0 h-64 border-white/10 bg-black/20">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={yearGoalData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-              <defs>
-                <linearGradient id="colorIdeal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="var(--accent)" stopOpacity={0.1}/>
-                  <stop offset="95%" stopColor="var(--accent)" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={yearTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={[yearYTicks[0], 'auto']} ticks={yearYTicks} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
-              <Tooltip 
-                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
-                labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
-              />
-              <Area type="monotone" dataKey="ideal" stroke="var(--accent)" strokeDasharray="5 5" fillOpacity={1} fill="url(#colorIdeal)" name="理想進度" />
-              <Line type="monotone" dataKey="actual" stroke={finalYearPnl >= 0 ? '#e05050' : '#42b07a'} strokeWidth={3} dot={false} name="累積損益" connectNulls={false} />
-            </AreaChart>
-          </ResponsiveContainer>
-        </div>
-      </section>
-
-      {/* ── 3. 總損益目標分析 ── */}
-      <section className="space-y-4 pt-4 border-t border-white/5">
-        <div className="flex flex-col space-y-3 px-1">
-          <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
-            <Trophy size={16} className="text-accent inline mr-1" /> 總損益累積進度
-          </h3>
-          <div className="flex justify-end w-full">
-            <div className="flex gap-1.5 flex-wrap items-center">
-              {(['1M', '3M', '6M', '1Y', 'ALL'] as GoalRange[]).map(r => (
-                <button 
-                  key={r} onClick={() => { setTotalRange(r); setShowCustomTotal(false); }}
-                  className={`px-2.5 py-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === r && !showCustomTotal ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-                >
-                  {r === 'ALL' ? '全部' : r}
-                </button>
-              ))}
-              <button 
-                onClick={() => { setTotalRange('CUSTOM'); setShowCustomTotal(!showCustomTotal); }}
-                className={`px-2.5 py-1 flex items-center gap-1 rounded-lg text-[9px] font-black transition-all border ${totalRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent' : 'bg-white/5 text-[var(--t3)] border-transparent'}`}
-              >
-                <CalendarIcon size={10} /> 自訂
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {showCustomTotal && (
-          <div className="flex items-center justify-end gap-3 mt-2 animate-slide-up">
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-[var(--t3)]">開始</span>
-              <DatePicker value={customStart} onChange={(v: string) => setCustomStart(v)} />
-            </div>
-            <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-[var(--t3)]">結束</span>
-              <DatePicker value={customEnd} onChange={(v: string) => setCustomEnd(v)} />
-            </div>
-          </div>
-        )}
-
-        <div className="card-base pt-4 pb-4 pl-4 pr-0 h-64 border-white/10 bg-black/20 mt-4">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={totalGoalData} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={totalTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={[totalYTicks[0], 'auto']} ticks={totalYTicks} orientation="right" tickFormatter={(v) => Math.abs(v)>=10000 ? Math.round(v/10000)+'萬' : (Math.abs(v)>=1000 ? Math.round(v/1000)+'K' : v)} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
-              <Tooltip 
-                contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', fontSize: '11px' }}
-                labelFormatter={(label) => typeof label === 'number' ? new Date(label).toISOString().substring(0, 10) : label}
-              />
-              <Line type="monotone" dataKey="actual" stroke={finalTotalPnl >= 0 ? '#e05050' : '#42b07a'} strokeWidth={3} dot={false} name="累積損益" connectNulls={false} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
       </section>
     </div>
   )

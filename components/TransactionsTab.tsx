@@ -53,7 +53,8 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     if (rangeMode === 'all') return { start: '2000-01-01', end: today }
     if (rangeMode === 'year') return { start: `${now.getFullYear()}-01-01`, end: today }
     if (rangeMode === 'month') return { start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0], end: today }
-    if (rangeMode === '3months') return { start: new Date(now.getFullYear(), now.getMonth() - 3, 1).toISOString().split('T')[0], end: today }
+    // User requested "Last 3 months" to be: April 7 -> Feb 1. (Month - 2)
+    if (rangeMode === '3months') return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().split('T')[0], end: today }
     return { start: customStart, end: customEnd }
   }, [rangeMode, customStart, customEnd])
 
@@ -82,7 +83,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
           lot.shares -= take; lot.cost -= pCost; rem -= take
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
-        const profit = tx.net_amount - costBasis
+        const profit = Math.floor(tx.net_amount - costBasis)
         if (inRange) { totalSell += tx.amount; totalFee += tx.fee; totalTax += tx.tax; totalRealized += profit; sellCount++; stock.sell += tx.net_amount; stock.realized += profit; stock.count++ }
         stock.history.push({ ...tx, type: 'SELL', matches, profit })
       }
@@ -126,7 +127,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
         <div className="space-y-6 animate-slide-up">
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {['all','year','3months', 'month', 'custom'].map(opt => (
-              <button key={opt} onClick={()=>setRangeMode(opt as any)} className={`px-4 py-2 rounded-full text-xs font-black border transition-all ${rangeMode===opt?'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20':'bg-bg-hover text-[var(--t2)] border-transparent'}`}>{opt==='all'?'全部':opt==='year'?'今年':opt==='3months'?'三個月':opt==='month'?'本月':'自訂'}</button>
+              <button key={opt} onClick={()=>setRangeMode(opt as any)} className={`px-4 py-2 rounded-full text-xs font-black border transition-all ${rangeMode===opt?'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20':'bg-bg-hover text-[var(--t2)] border-transparent'}`}>{opt==='all'?'全部':opt==='year'?'今年':opt==='3months'?'近三個月':opt==='month'?'本月':'自訂'}</button>
             ))}
           </div>
           {rangeMode === 'custom' && <div className="flex items-center gap-2 animate-slide-up"><DatePicker value={customStart} onChange={setCustomStart} className="flex-1"/><span className="opacity-20">~</span><DatePicker value={customEnd} onChange={setCustomEnd} className="flex-1"/></div>}
@@ -140,7 +141,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
             </div>
             <div className="pt-6 border-t border-white/5 flex justify-between items-end">
               <span className="text-[11px] font-black text-[var(--t3)] uppercase tracking-widest">已實現損益合計</span>
-              <span className={`font-black font-mono text-2xl ${realizedData!.summary.totalRealized>=0?'text-red-400':'text-green-400'}`}>{realizedData!.summary.totalRealized>=0?'+':''}{fmtMoney(Math.round(realizedData!.summary.totalRealized))}</span>
+              <span className={`font-black font-mono text-2xl ${realizedData!.summary.totalRealized>=0?'text-red-400':'text-green-400'}`}>{realizedData!.summary.totalRealized>=0?'+':''}{fmtMoney(realizedData!.summary.totalRealized)}</span>
             </div>
           </div>
 
