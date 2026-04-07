@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect } from 'react'
-import { Holding, Transaction, UserSettings, Quote, fmtMoney, codeOnly, getStockName } from '@/types'
+import { Holding, Transaction, UserSettings, Quote, fmtMoney, codeOnly, getStockName, calcFee, calcTax } from '@/types'
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, AreaChart, Area, Legend
@@ -88,11 +88,15 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     }
 
     const processed = stockHistory.map((h, i) => {
+      // 計算當日「持倉狀態」(基於收盤持股與其成本)
+      let totalNetMV = 0
+      let totalActualCost = 0
+      const details = [] as { shares: number, cost: number }[]
+      const prevDateStr = i > 0 ? stockHistory[i-1].date : firstDate
+
       let isBuy = false
       let txPrice = 0
       let txShares = 0
-      
-      const prevDateStr = i > 0 ? stockHistory[i-1].date : firstDate
 
       while (txIdx < txs.length && txs[txIdx].trade_date <= h.date) {
         const tx = txs[txIdx]
@@ -153,9 +157,33 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     const fullData = []
     const dayCount = Math.ceil((endDate.getTime() - startDate.getTime()) / (86400 * 1000))
 
-    let realized = 0
+    let realized = 0 // Total realized this year (Standard)
+    let realized_this_year_buy_sell = 0 // Specialized realized (Strict)
+    let total_cumulative_realized = 0 // For Total Progress Chart
     const inventory: Record<string, {shares: number, cost: number, buyDate: Date}[]> = {}
     let lastTxIdx = 0
+
+    // PRE-CALCULATE Total Realized PnL up to the start of the year/range for Total Progress
+    if (isTotal) {
+      sortedTxs.forEach(tx => {
+        if (tx.trade_date < startDate.toISOString().split('T')[0]) {
+          if (tx.action !== 'SELL') {
+            if (!inventory[tx.symbol]) inventory[tx.symbol] = []
+            inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee, buyDate: new Date(tx.trade_date) })
+          } else {
+             let rem = tx.shares
+             const unitNet = tx.net_amount / tx.shares
+             while (rem > 0 && inventory[tx.symbol]?.length) {
+               const lot = inventory[tx.symbol][0]
+               const take = Math.min(lot.shares, rem)
+               total_cumulative_realized += (unitNet - (lot.cost/lot.shares)) * take
+               rem -= take; lot.shares -= take
+               if (lot.shares <= 0) inventory[tx.symbol].shift()
+             }
+          }
+        }
+      })
+    }
 
     for (let i = 0; i <= Math.max(0, dayCount); i++) {
       const d = new Date(startDate)
@@ -171,16 +199,23 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
         if (!inventory[tx.symbol]) inventory[tx.symbol] = []
         
         if (tx.action !== 'SELL') {
-          if (isTotal || buyYear === currentYear.toString()) {
-            inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee, buyDate: new Date(tx.trade_date) })
-          }
+          inventory[tx.symbol].push({ shares: tx.shares, cost: tx.amount + tx.fee, buyDate: new Date(tx.trade_date) })
         } else {
           let rem = tx.shares
           const unitNet = tx.net_amount / tx.shares
           while (rem > 0 && inventory[tx.symbol]?.length) {
             const lot = inventory[tx.symbol][0]
             const take = Math.min(lot.shares, rem)
-            realized += (unitNet - (lot.cost/lot.shares)) * take
+            const profit = (unitNet - (lot.cost/lot.shares)) * take
+            
+            if (dateStr.startsWith(currentYear.toString())) {
+               realized += profit
+               if (lot.buyDate.getFullYear() === currentYear) {
+                 realized_this_year_buy_sell += profit
+               }
+            }
+            total_cumulative_realized += profit
+            
             rem -= take; lot.shares -= take
             if (lot.shares <= 0) inventory[tx.symbol].shift()
           }
@@ -188,28 +223,66 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
         lastTxIdx++
       }
 
-      if (dateStr > todayStr) {
-        fullData.push({ date: dateStr.substring(5), fullDate: dateStr, ideal, actual: null })
-        continue
-      }
+      let pnlValue = 0
+      const type = settings.year_goal_type || 1
 
-      let estimatedUnrealized = 0
-      Object.keys(inventory).forEach(sym => {
-         const currentPrice = quotes[sym]?.price || 0
-         inventory[sym].forEach(lot => {
+      if (isTotal) {
+        let currentUnrealized = 0
+        Object.keys(inventory).forEach(sym => {
+          const q = quotes[sym]
+          const currentPrice = q?.bid_price || q?.price || 0
+          inventory[sym].forEach(lot => {
             const daysSinceBuy = Math.max(1, (d.getTime() - lot.buyDate.getTime()) / 86400000)
             const daysTotal = Math.max(1, (today.getTime() - lot.buyDate.getTime()) / 86400000)
             const fraction = Math.min(1, Math.max(0, daysSinceBuy / daysTotal))
-            const uPnl = (currentPrice - (lot.cost/lot.shares)) * lot.shares
-            estimatedUnrealized += uPnl * fraction
-         })
-      })
+            
+            const gross = Math.floor(currentPrice * lot.shares)
+            const fee = calcFee(gross, settings, true)
+            const tax = calcTax(gross, sym, settings)
+            const netMV = gross - fee - tax
+            const uPnl = netMV - lot.cost
+            currentUnrealized += uPnl * fraction
+          })
+        })
+        pnlValue = total_cumulative_realized + currentUnrealized
+      } else {
+        let u_this_year = 0
+        let u_prev_year = 0
+        
+        Object.keys(inventory).forEach(sym => {
+          const q = quotes[sym]
+          const currentPrice = q?.bid_price || q?.price || 0
+          inventory[sym].forEach(lot => {
+            const isBuyThisYear = lot.buyDate.getFullYear() === currentYear
+            const daysSinceBuy = Math.max(1, (d.getTime() - lot.buyDate.getTime()) / 86400000)
+            const daysTotal = Math.max(1, (today.getTime() - lot.buyDate.getTime()) / 86400000)
+            const fraction = Math.min(1, Math.max(0, daysSinceBuy / daysTotal))
+
+            const gross = Math.floor(currentPrice * lot.shares)
+            const fee = calcFee(gross, settings, true)
+            const tax = calcTax(gross, sym, settings)
+            const netMV = gross - fee - tax
+            const uPnl = netMV - lot.cost
+
+            if (isBuyThisYear) u_this_year += uPnl * fraction
+            else u_prev_year += uPnl * fraction
+          })
+        })
+
+        if (type === 1) {
+          pnlValue = u_this_year + realized_this_year_buy_sell
+        } else if (type === 2) {
+          pnlValue = u_this_year + realized
+        } else {
+          pnlValue = u_this_year + u_prev_year + realized
+        }
+      }
 
       fullData.push({
         date: dateStr.substring(5),
         fullDate: dateStr,
         ideal,
-        actual: Math.round(realized + estimatedUnrealized)
+        actual: Math.round(pnlValue)
       })
     }
 
@@ -252,8 +325,8 @@ export default function AnalyticsTab({ holdings, transactions, settings, quotes 
     return result.map(d => ({ ...d, timestamp: new Date(d.fullDate).getTime() }))
   }
 
-  const yearGoalData = useMemo(() => calculateGoalData(false, yearRange, customYearStart, customYearEnd), [transactions, settings, yearRange, customYearStart, customYearEnd, holdings, quotes])
-  const totalGoalData = useMemo(() => calculateGoalData(true, totalRange, customStart, customEnd), [transactions, settings, totalRange, customStart, customEnd, holdings, quotes])
+  const yearGoalData = useMemo(() => calculateGoalData(false, yearRange, customYearStart, customYearEnd), [transactions, settings, yearRange, customYearStart, customYearEnd, settings.year_goal_type, holdings, quotes])
+  const totalGoalData = useMemo(() => calculateGoalData(true, totalRange, customStart, customEnd), [transactions, settings, totalRange, customStart, customEnd, settings.year_goal_type, holdings, quotes])
 
   const formatTick = (ts: number) => {
     const d = new Date(ts)

@@ -116,8 +116,18 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // 計算當日市值變動 (基於收盤持股)
+    // 計算當日「持倉狀態」(基於收盤持股與其成本)
+    let totalNetMV = 0
+    let totalActualCost = 0
     const details: any[] = []
+
+    const getNetVal = (p: number, sh: number, s: string) => {
+      const gross = Math.floor(p * sh)
+      const fee = calcFee(gross, settings, true) // Standard SELL fee for valuation
+      const tax = calcTax(gross, s, settings)
+      return gross - fee - tax
+    }
+
     const endOfDayHoldings: Record<string, number> = {}
     Object.entries(inventory).forEach(([sym, lots]) => {
       const total = lots.reduce((s, l) => s + l.shares, 0)
@@ -125,67 +135,37 @@ export async function GET(req: NextRequest) {
     })
 
     Object.entries(endOfDayHoldings).forEach(([sym, endShares]) => {
-      const getNetVal = (p: number, sh: number, s: string) => {
-        const gross = Math.floor(p * sh)
-        const fee = calcFee(gross, settings, true) // Standard SELL fee for valuation
-        const tax = calcTax(gross, s, settings)
-        return gross - fee - tax
-      }
-
       const todayPrice = histories[sym]?.[date]
-      const yesterdayPrice = getPrevPrice(sym, date)
-      if (todayPrice !== undefined && Math.abs(endShares) > 0) {
-        const bought = boughtToday[sym] || { shares: 0, cost: 0 }
-        const originalSharesInEnd = Math.max(0, endShares - bought.shares)
+      if (todayPrice !== undefined && endShares > 0) {
+        const netMV = getNetVal(todayPrice, endShares, sym)
+        const costVal = inventory[sym].reduce((s, l) => s + l.unitCost * l.shares, 0)
         
-        let stockPnl = 0
-        // 1. 原本持有部分的損益 (Net End Value - Net Start Value)
-        if (originalSharesInEnd > 0 && yesterdayPrice !== null) {
-          const netToday = getNetVal(todayPrice, originalSharesInEnd, sym)
-          const netYesterday = getNetVal(yesterdayPrice, originalSharesInEnd, sym)
-          stockPnl += (netToday - netYesterday)
-        }
-        // 2. 今日買入部分的損益 (以今日收盤價的淨市值 - 買入總成本)
-        if (bought.shares > 0) {
-          const netTodayOfBought = getNetVal(todayPrice, bought.shares, sym)
-          stockPnl += (netTodayOfBought - bought.cost)
-        }
-
-        if (Math.abs(stockPnl) > 0.01) {
-          dailyMarketPnl += stockPnl
-          details.push({
-            symbol: sym,
-            name: STOCK_NAMES[sym] || sym,
-            price: todayPrice,
-            pnl: Math.round(stockPnl),
-            shares: endShares
-          })
-        }
+        totalNetMV += netMV
+        totalActualCost += costVal
+        
+        details.push({
+          symbol: sym,
+          name: STOCK_NAMES[sym] || sym,
+          price: todayPrice,
+          market_value: netMV,
+          total_cost: costVal,
+          pnl: netMV - costVal,
+          shares: endShares
+        })
       }
     })
 
     if (isCurrentMonth) {
-      // 投報率分母 = 昨日淨市值 + 今日買入
-      let prevMV = 0
-      Object.entries(startOfDayHoldings).forEach(([sym, shares]) => {
-        const yp = getPrevPrice(sym, date)
-        if (yp !== null) {
-          const gross = Math.floor(yp * shares)
-          const fee = calcFee(gross, settings, true) // Standard SELL fee
-          const tax = calcTax(gross, sym, settings)
-          prevMV += (gross - fee - tax)
-        }
-      })
-      const denominator = prevMV + capitalInToday
-      const pnlPct = denominator > 0 ? (dailyMarketPnl / denominator) * 100 : 0
+      const unrealizedPnL = totalNetMV - totalActualCost
+      const pnlPct = totalActualCost > 0 ? (unrealizedPnL / totalActualCost) * 100 : 0
 
-      if (Math.abs(dailyMarketPnl) > 0.01 || Math.abs(dailyRealizedPnl) > 0.01 || todaysTxs.length > 0) {
+      if (Math.abs(unrealizedPnL) > 0.01 || Math.abs(dailyRealizedPnl) > 0.01 || todaysTxs.length > 0) {
         dailyStats[date] = {
           entry_date: date,
-          pnl: Math.round(dailyMarketPnl),
-          pnl_pct: Math.round(pnlPct * 100) / 100,
-          realized_pnl: Math.round(dailyRealizedPnl),
-          details,
+          pnl: Math.round(unrealizedPnL),          // 目前已改為「當前部位總未實現損益」
+          pnl_pct: Math.round(pnlPct * 100) / 100,  // (未實現損益 / 總成本)
+          realized_pnl: Math.round(dailyRealizedPnl), // 當日已實現
+          details: details as any[],
           note: todaysTxs.length > 0 ? `交易: ${todaysTxs.map(t => `${t.action} ${t.symbol}`).join(', ')}` : ''
         }
       }

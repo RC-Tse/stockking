@@ -703,16 +703,21 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
 
                   {!isWeekend && entry && (
                     <div className="flex flex-col items-center justify-center mt-4 space-y-1">
+                      {/* Line 1: Unrealized PnL Status */}
                       <div className={`text-[12px] font-[700] leading-none ${isSel ? 'text-bg-base' : 'text-[var(--t1)]'}`}>
                         {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
                       </div>
+                      {/* Line 2: Unrealized PnL % */}
                       <div className={`text-[11px] font-[600] leading-none ${isSel ? 'text-bg-base/60' : 'text-white/85'}`}>
                         {entry.pnl > 0 ? '+' : ''}{pnlPct.toFixed(1)}%
                       </div>
-                      {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
+                      {/* Line 3: Daily Realized PnL */}
+                      {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined ? (
                         <div className={`text-[9px] font-black leading-none mt-0.5 ${isSel ? 'text-bg-base' : 'text-accent'}`}>
                           {entry.realized_pnl > 0 ? '+' : ''}{shortMoney(entry.realized_pnl)}
                         </div>
+                      ) : (
+                        <div className="h-[9px]" /> // Maintain height for grid consistency
                       )}
                     </div>
                   )}
@@ -737,7 +742,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                 return (
                   <div className="flex flex-col gap-0.5 mt-1">
                     <span className={`text-[10px] font-black font-mono ${entry.pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                      當日市值變動 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({(entry.pnl_pct ?? 0).toFixed(2)}%)
+                      未實現損益狀態 {entry.pnl >= 0 ? '+' : ''}{fmtMoney(entry.pnl)} ({(entry.pnl_pct ?? 0).toFixed(2)}%)
                     </span>
                     {entry.realized_pnl !== 0 && entry.realized_pnl !== undefined && (
                       <span className="text-[10px] font-black font-mono text-accent">
