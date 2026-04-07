@@ -19,7 +19,7 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
     const indicators = result.indicators?.quote?.[0] || {}
 
     const price = meta.regularMarketPrice || 0
-    const prev = meta.previousClose || price || 0
+    const prev = meta.previousClose || meta.chartPreviousClose || price || 0
     const open = (indicators.open?.[0]) || price || 0
     const high = (indicators.high?.[0]) || price || 0
     const low = (indicators.low?.[0]) || price || 0
@@ -38,7 +38,8 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
       low,
       change,
       change_pct,
-      volume
+      volume,
+      trade_date: new Date(meta.regularMarketTime * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
     }
   } catch (err) {
     console.error(`Error fetching ${symbol}:`, err)
@@ -81,10 +82,12 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
     const prevPrice = targetIdx > 0 ? closes[targetIdx - 1] : null
     const change = prevPrice !== null ? Math.round((price - prevPrice) * 100) / 100 : 0
     const change_pct = (prevPrice !== null && prevPrice !== 0) ? Math.round(change / prevPrice * 10000) / 100 : 0
+    const trade_date = new Date(timestamps[targetIdx] * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 
     return {
       symbol,
       name_zh: nameZh,
+      trade_date,
       price: Math.round(price * 100) / 100,
       prev: prevPrice !== null ? Math.round(prevPrice * 100) / 100 : null,
       change,

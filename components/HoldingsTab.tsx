@@ -69,7 +69,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       const buyYear = tx.trade_date.split('-')[0]
 
       if (tx.action !== 'SELL') {
-        const cost = tx.amount + tx.fee
+        const cost = Math.floor(tx.amount) + Math.floor(tx.fee)
         inventory[tx.symbol].push({ shares: tx.shares, unitCost: cost / tx.shares, buyYear })
         stockHistory[tx.symbol].buyCost += cost
       } else {
@@ -139,6 +139,31 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
   const [expanded, setExpanded] = useState<string | null>(null)
   const [closedExpanded, setClosedExpanded] = useState(false)
+
+  const [sortField, setSortField] = useState<'COST' | 'SYMBOL' | 'SHARES' | 'PNL'>('COST')
+  const [sortDir, setSortDir] = useState<'DESC' | 'ASC'>('DESC')
+
+  const sortedHoldings = useMemo(() => {
+    return [...holdings].sort((a, b) => {
+      let cmp = 0
+      switch (sortField) {
+        case 'SYMBOL': cmp = a.symbol.localeCompare(b.symbol); break
+        case 'SHARES': cmp = a.shares - b.shares; break
+        case 'PNL': cmp = a.unrealized_pnl - b.unrealized_pnl; break
+        case 'COST': cmp = a.total_cost - b.total_cost; break
+      }
+      return sortDir === 'DESC' ? -cmp : cmp
+    })
+  }, [holdings, sortField, sortDir])
+
+  const toggleSort = (field: 'COST' | 'SYMBOL' | 'SHARES' | 'PNL') => {
+    if (sortField === field) {
+      setSortDir(sortDir === 'DESC' ? 'ASC' : 'DESC')
+    } else {
+      setSortField(field)
+      setSortDir('DESC')
+    }
+  }
 
   const confirmDelete = async () => {
     if (!deletingId) return
@@ -290,7 +315,32 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
       {/* 4. 各股列表 */}
       <div className="space-y-4">
-        {holdings.sort((a, b) => b.market_value - a.market_value).map(h => (
+        <div className="flex gap-2 px-1 text-xs justify-end">
+          {(
+            [
+              { id: 'SYMBOL', label: '代號' },
+              { id: 'SHARES', label: '股數' },
+              { id: 'PNL', label: '損益' },
+              { id: 'COST', label: '成本' },
+            ] as const
+          ).map(opt => (
+            <button
+              key={opt.id}
+              onClick={() => toggleSort(opt.id)}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 ${
+                sortField === opt.id 
+                  ? 'bg-accent/20 text-accent border border-accent/30 shadow-md' 
+                  : 'bg-black/20 text-[var(--t2)] border border-white/5 active:bg-white/5'
+              }`}
+            >
+              {opt.label}
+              {sortField === opt.id && (
+                <span className="text-[10px] leading-none mb-0.5">{sortDir === 'DESC' ? '↓' : '↑'}</span>
+              )}
+            </button>
+          ))}
+        </div>
+        {sortedHoldings.map(h => (
           <HoldingItem key={h.symbol} h={h} q={quotes[h.symbol]} settings={settings} txs={transactions.filter(t => t.symbol === h.symbol)} isExpanded={expanded === h.symbol} onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)} onUpdated={onRefresh} onDelete={(id:number)=>setDeletingId(id)} />
         ))}
 
@@ -388,11 +438,15 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
         
         <div className="text-[11px] font-bold text-[var(--t2)]">
           {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
-          {q?.change !== undefined && (
-            <span className={`ml-2 ${q.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-              {q.change >= 0 ? '▲' : '▼'} {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
-            </span>
-          )}
+          {q?.change !== undefined && (() => {
+            const isUp = q.change > 0, isDown = q.change < 0
+            const changeClass = isUp ? (q.change_pct >= 9.8 ? 'text-red-900 bg-red-500 font-black px-1.5 py-0.5 rounded-md' : 'text-red-400 bg-red-400/20 px-1.5 py-0.5 rounded-md') : isDown ? (q.change_pct <= -9.8 ? 'text-green-900 bg-green-500 font-black px-1.5 py-0.5 rounded-md' : 'text-green-400 bg-green-400/20 px-1.5 py-0.5 rounded-md') : 'text-white'
+            return (
+              <span className={`ml-2 ${changeClass}`}>
+                {isUp ? '▲' : isDown ? '▼' : ''} {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
+              </span>
+            )
+          })()}
         </div>
 
         <div className="h-px bg-white/5" />
@@ -490,8 +544,9 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
 
       const d = new Date(dateStr)
       const isWeekend = d.getDay() === 0 || d.getDay() === 6
+      const twseClosedDates = ['2023-01-01', '2023-01-02', '2023-01-20', '2023-01-23', '2023-01-24', '2023-01-25', '2023-01-26', '2023-01-27', '2023-02-27', '2023-02-28', '2023-04-03', '2023-04-04', '2023-04-05', '2023-05-01', '2023-06-22', '2023-06-23', '2023-09-29', '2023-10-09', '2023-10-10', '2024-01-01', '2024-02-08', '2024-02-09', '2024-02-12', '2024-02-13', '2024-02-14', '2024-02-28', '2024-04-04', '2024-04-05', '2024-05-01', '2024-06-10', '2024-09-17', '2024-10-10', '2025-01-01', '2025-01-27', '2025-01-28', '2025-01-29', '2025-01-30', '2025-01-31', '2025-02-28', '2025-04-04', '2025-05-01', '2025-05-30', '2025-10-06']
       
-      if (isWeekend) {
+      if (isWeekend || twseClosedDates.includes(dateStr)) {
         setIsHoliday(true)
         setDayDetails([])
         setLoading(false)
@@ -529,7 +584,7 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
       if (!res.ok) throw new Error('API fetch error')
       const quotesData = await res.json() || {}
 
-      if (Object.keys(quotesData).length === 0) {
+      if (Object.keys(quotesData).length === 0 || Object.values(quotesData).some((q: any) => q.trade_date && q.trade_date !== dateStr)) {
         setIsHoliday(true)
         setDayDetails([])
         return
@@ -673,11 +728,15 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
                       <div className="font-black text-[var(--t1)] text-base">{det.name_zh} <span className="text-xs text-[var(--t3)] font-mono">{codeOnly(det.symbol)}</span></div>
                       <div className="text-[11px] font-bold text-[var(--t2)] mt-1">
                         {(det.shares ?? 0).toLocaleString()} 股 · 收盤 {det.price.toFixed(2)}
-                        {det.change !== undefined && (
-                          <span className={`ml-2 ${det.change >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                            {det.change >= 0 ? '▲' : '▼'} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
-                          </span>
-                        )}
+                        {det.change !== undefined && (() => {
+                          const isUp = det.change > 0, isDown = det.change < 0
+                          const changeClass = isUp ? (det.change_pct >= 9.8 ? 'text-red-900 bg-red-500 font-black px-1.5 py-0.5 rounded-md' : 'text-red-400 bg-red-400/20 px-1.5 py-0.5 rounded-md') : isDown ? (det.change_pct <= -9.8 ? 'text-green-900 bg-green-500 font-black px-1.5 py-0.5 rounded-md' : 'text-green-400 bg-green-400/20 px-1.5 py-0.5 rounded-md') : 'text-white'
+                          return (
+                            <span className={`ml-2 ${changeClass}`}>
+                              {isUp ? '▲' : isDown ? '▼' : ''} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
+                            </span>
+                          )
+                        })()}
                       </div>
                     </div>
                   </div>

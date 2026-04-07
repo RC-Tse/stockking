@@ -41,7 +41,7 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
     if (!inventory[tx.symbol]) inventory[tx.symbol] = []
     const lots = inventory[tx.symbol]
     if (tx.action === 'BUY' || tx.action === 'DCA') {
-      lots.push({ shares: tx.shares, cost: tx.amount + tx.fee })
+      lots.push({ shares: tx.shares, cost: Math.floor(tx.amount) + Math.floor(tx.fee) })
     } else if (tx.action === 'SELL') {
       let sellRemaining = tx.shares
       while (sellRemaining > 0 && lots.length > 0) {

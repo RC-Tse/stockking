@@ -272,14 +272,9 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
             <div className="space-y-4">
               <h4 className="text-[11px] font-black text-accent/50 uppercase tracking-widest border-b border-accent/10 pb-2">定期定額</h4>
               <div className="space-y-2">
-                <Label>定期定額手續費</Label>
-                <input type="number" inputMode="decimal" step="0.000001" value={localSettings.dca_fee_rate} onChange={e => setLocalSettings(p => ({ ...p, dca_fee_rate: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
+                <Label>定期定額手續費 (每筆 TWD)</Label>
+                <input type="number" inputMode="decimal" value={localSettings.dca_fee_min} onChange={e => setLocalSettings(p => ({ ...p, dca_fee_min: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
               </div>
-            </div>
-
-            <div className="space-y-2 pt-2">
-              <Label>最低手續費 (TWD)</Label>
-              <input type="number" value={localSettings.fee_min} onChange={e => setLocalSettings(p => ({ ...p, fee_min: Number(e.target.value) }))} className="input-base font-mono text-[16px] md:text-sm" />
             </div>
           </div>
 

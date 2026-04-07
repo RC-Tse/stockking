@@ -132,7 +132,7 @@ export function codeOnly(symbol: string): string {
 
 export function calcFee(amount: number, s: UserSettings, isSell = false, isDca = false): number {
   if (isDca) {
-    return Math.max(Math.floor(amount * s.dca_fee_rate), s.dca_fee_min)
+    return s.dca_fee_min
   }
   const rate = isSell
     ? s.sell_fee_rate * s.sell_discount
