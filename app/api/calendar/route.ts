@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
   }
 
   const dailyStats: Record<string, any> = {}
-  const inventory: Record<string, { shares: number; unitCost: number }[]> = {}
+  const inventory: Record<string, { shares: number; cost: number }[]> = {}
   
   const startD = new Date(startDate)
   const endD = new Date(endDate)
@@ -95,23 +95,28 @@ export async function GET(req: NextRequest) {
       const lots = inventory[tx.symbol]
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
-        const unitCost = (tx.amount + tx.fee) / tx.shares
-        lots.push({ shares: tx.shares, unitCost })
-        capitalInToday += (tx.amount + tx.fee)
         if (!boughtToday[tx.symbol]) boughtToday[tx.symbol] = { shares: 0, cost: 0 }
+        const txTotalCost = (Number(tx.amount) || 0) + (Number(tx.fee) || 0)
+        lots.push({ shares: tx.shares, cost: txTotalCost })
+        capitalInToday += txTotalCost
         boughtToday[tx.symbol].shares += tx.shares
-        boughtToday[tx.symbol].cost += (tx.amount + tx.fee)
+        boughtToday[tx.symbol].cost += txTotalCost
       } else if (tx.action === 'SELL') {
         soldToday[tx.symbol] = (soldToday[tx.symbol] || 0) + tx.shares
         let sellRem = tx.shares
         const sellUnitNet = tx.net_amount / tx.shares
         while (sellRem > 0 && lots.length > 0) {
-          const lot = lots[0]
-          const take = Math.min(lot.shares, sellRem)
-          dailyRealizedPnl += (sellUnitNet - lot.unitCost) * take
-          sellRem -= take
-          lot.shares -= take
-          if (lot.shares <= 0) lots.shift()
+        const lot = lots[0]
+        const take = Math.min(lot.shares, sellRem)
+        const lotCostBasis = (take / lot.shares) * lot.cost
+        const portionProfit = (sellUnitNet * take) - lotCostBasis
+        dailyRealizedPnl += portionProfit
+        
+        sellRem -= take
+        lot.cost -= lotCostBasis
+        lot.shares -= take
+        
+        if (lot.shares <= 0) lots.shift()
         }
       }
     })
@@ -138,7 +143,7 @@ export async function GET(req: NextRequest) {
       const todayPrice = histories[sym]?.[date]
       if (todayPrice !== undefined && endShares > 0) {
         const netMV = getNetVal(todayPrice, endShares, sym)
-        const costVal = inventory[sym].reduce((s, l) => s + l.unitCost * l.shares, 0)
+        const costVal = inventory[sym].reduce((s, l) => s + l.cost, 0)
         
         totalNetMV += netMV
         totalActualCost += costVal

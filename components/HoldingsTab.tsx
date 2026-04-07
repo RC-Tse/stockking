@@ -56,7 +56,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     let realizedCostBasis = 0
     const realizedByBuyYear: Record<string, number> = {}
     const realizedBySellYear: Record<string, number> = {}
-    const inventory: Record<string, { shares: number, unitCost: number, buyYear: string }[]> = {}
+    const inventory: Record<string, { shares: number, cost: number, buyYear: string }[]> = {}
     const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
 
     const sorted = [...transactions].sort((a, b) => {
@@ -71,7 +71,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
       if (tx.action !== 'SELL') {
         const cost = Math.floor(tx.amount) + Math.floor(tx.fee)
-        inventory[tx.symbol].push({ shares: tx.shares, unitCost: cost / tx.shares, buyYear })
+        inventory[tx.symbol].push({ shares: tx.shares, cost, buyYear })
         stockHistory[tx.symbol].buyCost += cost
       } else {
         stockHistory[tx.symbol].sellRev += tx.net_amount
@@ -81,14 +81,16 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         while (sellRemaining > 0 && inventory[tx.symbol].length > 0) {
           const lot = inventory[tx.symbol][0]
           const sharesFromLot = Math.min(lot.shares, sellRemaining)
-          const lotCostBasis = sharesFromLot * lot.unitCost
-          const portionProfit = (sellUnitNet - lot.unitCost) * sharesFromLot
+          const lotCostBasis = (sharesFromLot / lot.shares) * lot.cost
+          const portionProfit = (sellUnitNet * sharesFromLot) - lotCostBasis
           
           realizedCostBasis += lotCostBasis
           realizedByBuyYear[lot.buyYear] = (realizedByBuyYear[lot.buyYear] || 0) + portionProfit
           realizedBySellYear[sellYear] = (realizedBySellYear[sellYear] || 0) + portionProfit
           totalRealized += portionProfit
+          
           sellRemaining -= sharesFromLot
+          lot.cost -= lotCostBasis
           lot.shares -= sharesFromLot
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
@@ -102,17 +104,16 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       const totalShares = inventory[sym].reduce((s, l) => s + l.shares, 0)
       if (totalShares <= 0) return
 
-      // Calculate Net Market Value for this stock
       const grossMV = Math.floor(currentPrice * totalShares)
       const sellFee = calcFee(grossMV, settings, true)
       const sellTax = calcTax(grossMV, sym, settings)
       const netMV = grossMV - sellFee - sellTax
-      const totalActualCost = inventory[sym].reduce((s, l) => s + (l.unitCost * l.shares), 0)
+      const totalActualCost = inventory[sym].reduce((s, l) => s + l.cost, 0)
       
-      // Distribute net unrealized PnL proportionally to buy years of held lots
       const totalNetPnL = netMV - totalActualCost
       inventory[sym].forEach(lot => {
-        const lotRatio = (lot.unitCost * lot.shares) / totalActualCost
+        if (totalActualCost === 0) return
+        const lotRatio = lot.cost / totalActualCost
         const lotNetPnL = totalNetPnL * lotRatio
         unrealizedByBuyYear[lot.buyYear] = (unrealizedByBuyYear[lot.buyYear] || 0) + lotNetPnL
       })
@@ -140,10 +141,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     }
 
     return { totalRealized, realizedCostBasis, closedHoldings, yearPnl }
-  }, [transactions, currentYear, quotes])
+  }, [transactions, currentYear, quotes, settings])
 
   const currentNetMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
-  const currentMV = holdings.reduce((s, h) => s + h.market_value, 0)  // gross, for reference
   const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
   const unrealizedPnl = currentNetMV - currentCost
   const unrealizedPct = currentCost ? (unrealizedPnl / currentCost) * 100 : 0
@@ -207,7 +207,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
   return (
     <div className="p-4 space-y-6 tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
-      {/* 1. 持股概覽卡片 */}
       <div className="glass p-5 relative overflow-hidden animate-slide-up border border-white/10 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
           <span className="text-base font-black text-[var(--t3)] uppercase tracking-[0.2em]">持股概覽 · {holdings.length} 檔</span>
@@ -247,7 +246,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         </div>
       </div>
 
-      {/* 2. 圓餅圖 */}
       <div className="card-base p-6 space-y-6 border-white/10 shadow-xl bg-black/20">
         <div className="flex items-center justify-between px-1">
           <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider flex items-center gap-2">
@@ -307,7 +305,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
                 <span className={`text-[11px] font-bold truncate ${selectedPieSym === entry.symbol ? 'text-accent' : 'text-[var(--t2)]'}`}>{entry.name}</span>
               </div>
-              <span className="text-[10px] font-mono text-[var(--t3)] ml-2">{((entry.value / currentCost) * 100).toFixed(1)}%</span>
+              <span className="text-[10px] font-mono text-[var(--t3)] ml-2">{currentCost > 0 ? ((entry.value / currentCost) * 100).toFixed(1) : 0}%</span>
             </button>
           ))}
         </div>
@@ -322,7 +320,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                 </div>
                 <div className="text-right">
                   <div className="text-[10px] font-black text-[var(--t3)] uppercase mb-0.5">佔總投入比例</div>
-                  <div className="text-sm font-black text-accent font-mono">{((selectedHolding.total_cost / currentCost) * 100).toFixed(1)}%</div>
+                  <div className="text-sm font-black text-accent font-mono">{currentCost > 0 ? ((selectedHolding.total_cost / currentCost) * 100).toFixed(1) : 0}%</div>
                 </div>
               </div>
               
@@ -344,10 +342,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         )}
       </div>
 
-      {/* 3. 損益月曆 */}
       <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} holdings={holdings} quotes={quotes} settings={settings} />
 
-      {/* 4. 各股列表 */}
       <div className="space-y-4">
         <div className="flex gap-2 px-1 text-xs justify-end">
           {(
@@ -601,8 +597,15 @@ function IntegratedCalendar({ entries, transactions, onRefresh, holdings, quotes
           let rem = Number(tx.shares) || 0
           while (rem > 0 && inventory[tx.symbol].length) {
             const lot = inventory[tx.symbol][0]
-            if (lot.shares <= rem) { rem -= lot.shares; inventory[tx.symbol].shift() }
-            else { lot.shares -= rem; rem = 0 }
+            if (lot.shares <= rem) {
+              rem -= lot.shares
+              inventory[tx.symbol].shift()
+            } else {
+              const lotCostBasis = (rem / lot.shares) * lot.cost
+              lot.shares -= rem
+              lot.cost -= lotCostBasis
+              rem = 0
+            }
           }
         }
       }
