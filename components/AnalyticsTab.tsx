@@ -148,6 +148,22 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
     return results.sort((a,b) => a - b)
   }, [enrichedStockHistory])
 
+  // 計算全域價格極值與固定刻度
+  const yAxisMetrics = useMemo(() => {
+    if (!enrichedStockHistory.length) return { min: 0, max: 0, ticks: [] }
+    const prices = enrichedStockHistory.map(d => d.price)
+    const avgCosts = enrichedStockHistory.filter(d => d.avgCost !== null).map(d => d.avgCost as number)
+    const allVals = [...prices, ...avgCosts]
+    const min = Math.min(...allVals) * 0.98
+    const max = Math.max(...allVals) * 1.02
+    
+    const count = 5
+    const step = (max - min) / (count - 1)
+    const ticks = Array.from({ length: count }, (_, i) => max - i * step)
+    
+    return { min, max, ticks }
+  }, [enrichedStockHistory])
+
   const renderBuyDot = (props: any) => {
     const { cx, cy, payload } = props
     if (payload.isBuy) {
@@ -345,13 +361,13 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart 
                   data={enrichedStockHistory} 
-                  margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                  margin={{ top: 10, right: 60, left: 0, bottom: 5 }}
                   onMouseMove={handleMouseMove}
                   onMouseLeave={() => setActivePoint(null)}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                   <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval={0} />
-                  <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={false} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
+                  <YAxis domain={[yAxisMetrics.min, yAxisMetrics.max]} orientation="right" tick={false} axisLine={false} tickLine={false} hide />
                   <Tooltip 
                     content={<StockTooltip />} 
                     active={isScrubbing}
@@ -364,32 +380,47 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
             </div>
           </div>
 
+          {/* 右側固定 Y 軸遮罩面板 - 包含固定刻度 */}
+          <div 
+            className="absolute right-0 top-0 bottom-0 w-[55px] z-20 pointer-events-none border-l border-white/5 flex flex-col justify-between py-[46px] px-1"
+            style={{ 
+              backgroundColor: '#161618', // 配合 card-base 的深色背景
+              boxShadow: '-10px 0 20px rgba(0,0,0,0.5)' 
+            }}
+          >
+            {yAxisMetrics.ticks.map((t, i) => (
+              <div key={i} className="text-[9px] font-black text-[var(--t3)] text-right font-mono">
+                {t.toFixed(1)}
+              </div>
+            ))}
+          </div>
+
           {/* 右側固定 Y 軸價格標籤 - 查價模式 */}
           {isScrubbing && activePoint && (
             <div 
               className="absolute right-0 pointer-events-none z-50 flex items-center transition-transform duration-75"
               style={{ 
                 top: 0,
-                transform: `translateY(${activePoint.y + 16}px)` // +16 是因為 card-base 有 pt-4
+                transform: `translateY(${activePoint.y + 16}px)` 
               }}
             >
-              <div className="bg-[#e05050] text-white text-[10px] font-black px-2 py-1 rounded-l shadow-lg border-y border-l border-white/20 whitespace-nowrap">
+              <div className="bg-[#e05050] text-white text-[10px] font-black px-2 py-1 rounded-l shadow-xl border-y border-l border-white/20 whitespace-nowrap">
                 {activePoint.price.toFixed(2)}
               </div>
               <div className="w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[4px] border-l-[#e05050]" />
             </div>
           )}
 
-          {/* 右側固定 Y 軸價格標籤 - 預設顯示最新價 */}
+          {/* 最新價格標記 - 位於遮罩板上 */}
           {!isScrubbing && enrichedStockHistory.length > 0 && (
             <div 
-              className="absolute right-0 pointer-events-none z-40 flex items-center opacity-70"
+              className="absolute right-0 pointer-events-none z-30 flex items-center pr-[55px]"
               style={{ 
-                bottom: '40px' // 預設靠下方顯示，因為沒有座標轉換函數，先固定在此
+                bottom: '12px' 
               }}
             >
-              <div className="bg-white/10 text-white/50 text-[10px] font-black px-2 py-1 rounded-l border border-white/10 whitespace-nowrap">
-                最新: {enrichedStockHistory[enrichedStockHistory.length - 1].price.toFixed(2)}
+              <div className="bg-white/5 text-white/30 text-[9px] font-black px-1.5 py-0.5 rounded border border-white/5 whitespace-nowrap mr-1">
+                LIVE
               </div>
             </div>
           )}
