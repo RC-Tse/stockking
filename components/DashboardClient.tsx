@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Transaction, Holding, CalendarEntry, UserSettings, Quote,
+  Transaction, Holding, UserSettings, Quote,
   DEFAULT_SETTINGS, calcFee, calcTax, fmtMoney,
 } from '@/types'
 import { 
@@ -109,10 +109,8 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [txs, setTxs]             = useState<Transaction[]>([])
   const [quotes, setQuotes]       = useState<Record<string, Quote>>({})
   const [settings, setSettings]   = useState<UserSettings>(DEFAULT_SETTINGS)
-  const [calEntries, setCalEntries] = useState<CalendarEntry[]>([])
   const [holdings, setHoldings]   = useState<Holding[]>([])
   const [allTimeRealized, setAllTimeRealized] = useState(0)
-  const [calLoading, setCalLoading] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [loading, setLoading]     = useState(true)
   const router = useRouter()
@@ -160,25 +158,11 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     }
   }, [])
 
-  const refreshCal = useCallback(async (year: number, month: number) => {
-    setCalLoading(true)
-    try {
-      const r = await fetch(`/api/calendar?year=${year}&month=${month}`)
-      if (r.ok) setCalEntries(await r.json())
-    } finally {
-      setCalLoading(false)
-    }
-  }, [])
-
-
   useEffect(() => {
     refresh()
-    const now = new Date()
-    refreshCal(now.getFullYear(), now.getMonth() + 1)
-    
     // 背景靜默更新股票名稱資料庫
     fetch('/api/stockname/refresh').catch(console.error)
-  }, [refresh, refreshCal])
+  }, [refresh])
 
   const { totalPnl, pnlPct, totalMV } = useMemo(() => {
     let buyTotal = 0
@@ -221,7 +205,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       <main className="flex-1 overflow-y-auto pb-32">
         {loading ? <div className="p-10 text-center opacity-20 animate-pulse text-[var(--t1)]">載入中...</div> : (
           <>
-            {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} calLoading={calLoading} onRefresh={refresh} onRefreshCal={refreshCal} />}
+            {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} onRefresh={refresh} />}
             {tab === 'analytics' && <AnalyticsTab holdings={holdings} transactions={txs} settings={settings} quotes={quotes} />}
             {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSignOut={signOut} onSave={async s => {
