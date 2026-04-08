@@ -46,6 +46,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showData, setShowData] = useState(true)
   const [selectedPieSym, setSelectedPieSym] = useState<string | null>(null)
+  const [chartMode, setChartMode] = useState<'cost' | 'market'>('cost')
 
   // FIFO Metrics
   const { 
@@ -162,9 +163,13 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     return holdings.map(h => ({
       name: quotes[h.symbol]?.name_zh || getStockName(h.symbol),
       symbol: h.symbol,
-      value: h.total_cost
+      value: chartMode === 'cost' ? h.total_cost : h.net_market_value
     })).sort((a, b) => b.value - a.value)
-  }, [holdings, quotes])
+  }, [holdings, quotes, chartMode])
+
+  const chartTotal = useMemo(() => {
+    return chartMode === 'cost' ? currentCost : currentNetMV
+  }, [chartMode, currentCost, currentNetMV])
 
   const selectedHolding = useMemo(() => {
     return holdings.find(h => h.symbol === selectedPieSym)
@@ -255,10 +260,31 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       </div>
 
       <div className="card-base p-6 space-y-6 border-white/10 shadow-xl bg-black/20">
-        <div className="flex items-center justify-between px-1">
-          <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider flex items-center gap-2">
-            <PieChartIcon size={14} className="text-accent" /> 資產分佈 (成本)
-          </span>
+        <div className="flex flex-col gap-4 px-1">
+          <div className="flex items-center justify-between">
+            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider flex items-center gap-2">
+              <PieChartIcon size={14} className="text-accent" /> 資產分佈 ({chartMode === 'cost' ? '成本' : '市值'})
+            </span>
+          </div>
+
+          {/* 模式切換器 */}
+          <div className="flex p-1 bg-black/40 rounded-xl border border-white/5 relative">
+            <div 
+              className={`absolute top-1 bottom-1 w-[calc(50%-4px)] bg-accent rounded-lg transition-all duration-300 ease-out z-0 ${chartMode === 'market' ? 'left-[calc(50%+2px)]' : 'left-1'}`} 
+            />
+            <button 
+              onClick={() => setChartMode('cost')}
+              className={`flex-1 py-1.5 text-[11px] font-black rounded-lg transition-colors z-10 ${chartMode === 'cost' ? 'text-bg-base' : 'text-[var(--t3)]'}`}
+            >
+              投入成本
+            </button>
+            <button 
+              onClick={() => setChartMode('market')}
+              className={`flex-1 py-1.5 text-[11px] font-black rounded-lg transition-colors z-10 ${chartMode === 'market' ? 'text-bg-base' : 'text-[var(--t3)]'}`}
+            >
+              現實市值
+            </button>
+          </div>
         </div>
 
         <div className="h-64 w-full relative">
@@ -297,8 +323,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-black text-[var(--t3)] uppercase">持股分布</span>
-            <span className="text-lg font-black text-[var(--t1)] font-mono">{fmtMoney(Math.round(currentCost))}</span>
+            <span className="text-[10px] font-black text-[var(--t3)] uppercase">{chartMode === 'cost' ? '總投入' : '合計市值'}</span>
+            <span className="text-lg font-black text-[var(--t1)] font-mono">{fmtMoney(Math.round(chartTotal))}</span>
           </div>
         </div>
 
@@ -313,7 +339,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
                 <span className={`text-[11px] font-bold truncate ${selectedPieSym === entry.symbol ? 'text-accent' : 'text-[var(--t2)]'}`}>{entry.name}</span>
               </div>
-              <span className="text-[10px] font-mono text-[var(--t3)] ml-2">{currentCost > 0 ? ((entry.value / currentCost) * 100).toFixed(1) : 0}%</span>
+              <span className="text-[10px] font-mono text-[var(--t3)] ml-2">{chartTotal > 0 ? ((entry.value / chartTotal) * 100).toFixed(1) : 0}%</span>
             </button>
           ))}
         </div>
@@ -327,8 +353,8 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
                   <p className="text-[10px] font-mono text-[var(--t3)]">{codeOnly(selectedHolding.symbol)}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] font-black text-[var(--t3)] uppercase mb-0.5">佔總投入比例</div>
-                  <div className="text-sm font-black text-accent font-mono">{currentCost > 0 ? ((selectedHolding.total_cost / currentCost) * 100).toFixed(1) : 0}%</div>
+                  <div className="text-[10px] font-black text-[var(--t3)] uppercase mb-0.5">{chartMode === 'cost' ? '佔投入比例' : '佔市值比例'}</div>
+                  <div className="text-sm font-black text-accent font-mono">{chartTotal > 0 ? (( (chartMode === 'cost' ? selectedHolding.total_cost : selectedHolding.net_market_value) / chartTotal) * 100).toFixed(1) : 0}%</div>
                 </div>
               </div>
               
