@@ -1,11 +1,9 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, useRef } from 'react'
 import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName } from '@/types'
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Legend
-} from 'recharts'
+import ReactECharts from 'echarts-for-react'
+import * as echarts from 'echarts'
 import { TrendingUp, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker from './DatePicker'
 
@@ -103,6 +101,7 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
         isBuy,
         txPrice,
         txShares,
+        totalShares, // Added this
         avgCost: currentAvgCost,
         pnlDiff: currentAvgCost !== null ? (h.price - currentAvgCost) * totalShares : 0,
         pnlPct: currentAvgCost !== null && currentAvgCost !== 0 ? ((h.price - currentAvgCost) / currentAvgCost) * 100 : 0
@@ -116,83 +115,200 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
     return finalData.map(d => ({...d, timestamp: new Date(d.date).getTime()}))
   }, [stockHistory, transactions, selSym, stockRange, customStockStart, customStockEnd])
 
-  const formatTick = (ts: number) => {
-    const d = new Date(ts)
-    return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
+  const chartRef = useRef<any>(null)
+  const longPressTimer = useRef<any>(null)
 
-  const stockTicks = useMemo(() => {
-    if (!enrichedStockHistory.length) return []
-    const start = enrichedStockHistory[0].timestamp
-    const end = enrichedStockHistory[enrichedStockHistory.length - 1].timestamp
-    const ticks = [start, end]
-    const mid = start + (end - start) / 2
-    ticks.push(mid)
-    return ticks.sort((a,b) => a - b)
-  }, [enrichedStockHistory])
+  const getOption = () => {
+    if (!enrichedStockHistory.length) return {}
 
-  const renderBuyDot = (props: any) => {
-    const { cx, cy, payload } = props
-    if (payload.isBuy) {
-      return (
-        <circle 
-          key={`dot-${payload.date}`} 
-          cx={cx} cy={cy} r={5} 
-          fill="#e05050" stroke="#fff" strokeWidth={2} 
-          style={{filter: 'drop-shadow(0 0 4px #e05050)'}} 
-        />
-      )
+    // Prepare MarkLine data for safety lines
+    const buyEvents = enrichedStockHistory.filter(d => d.isBuy)
+    const lastIdx = enrichedStockHistory.length - 1
+    
+    // Safety lines: from buy date to the end of the chart
+    const markLineData = buyEvents.map(event => {
+      const startIdx = enrichedStockHistory.findIndex(d => d.date === event.date)
+      return [
+        { coord: [startIdx, event.avgCost], lineStyle: { type: 'dashed', color: 'rgba(255,255,255,0.4)', width: 1 } },
+        { coord: [lastIdx, event.avgCost] }
+      ]
+    })
+
+    // Latest safety line: stronger visibility
+    const latest = enrichedStockHistory[lastIdx]
+    if (latest && latest.avgCost !== null) {
+      const latestBuyIdx = [...enrichedStockHistory].reverse().findIndex(d => d.isBuy)
+      const startIdx = latestBuyIdx !== -1 ? (enrichedStockHistory.length - 1 - latestBuyIdx) : 0
+      markLineData.push([
+        { coord: [startIdx, latest.avgCost], lineStyle: { type: 'dashed', color: 'rgba(255,255,255,0.8)', width: 1.5 } },
+        { coord: [lastIdx, latest.avgCost] }
+      ])
     }
-    return null
-  }
 
-  const StockTooltip = ({ active, payload }: any) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload
-      return (
-        <div className="glass p-3 border-white/10 text-sm font-bold shadow-2xl z-50">
-          <div className="text-[11px] text-[var(--t3)] mb-2 uppercase tracking-widest">{data.date}</div>
-          <div className="flex justify-between gap-4 mb-1">
-            <span className="text-[12px] text-[var(--t2)] flex-1">收盤價</span>
-            <span className="font-mono text-accent">{data.price.toFixed(2)}</span>
-          </div>
-          {data.avgCost !== null && (
-            <>
-              <div className="flex justify-between gap-4 mb-1">
-                <span className="text-[12px] text-[var(--t2)] flex-1">對應均價</span>
-                <span className="font-mono text-[rgba(255,255,255,0.8)]">{data.avgCost.toFixed(2)}</span>
+    return {
+      backgroundColor: 'transparent',
+      grid: { top: 40, bottom: 30, left: 10, right: 50, containLabel: false },
+      tooltip: {
+        trigger: 'axis',
+        triggerOn: 'none', // Managed by long-press
+        backgroundColor: 'rgba(15, 23, 42, 0.9)',
+        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderWidth: 1,
+        textStyle: { color: '#fff', fontWeight: 'bold', fontSize: 12 },
+        formatter: (params: any) => {
+          const data = params[0].payload
+          return `
+            <div style="padding: 4px">
+              <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px;">${data.date}</div>
+              <div style="display: flex; justify-content: space-between; gap: 20px;">
+                <span style="color: #cbd5e1">收盤價</span>
+                <span style="color: #d4af37">${data.price.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between gap-4 mb-1">
-                <span className="text-[12px] text-[var(--t2)] flex-1">差距金額</span>
-                <span className={`font-mono ${data.pnlDiff >= 0 ? 'text-red-400' : 'text-green-400'}`}>{data.pnlDiff >= 0 ? '+' : ''}{fmtMoney(Math.round(data.pnlDiff))}</span>
+              ${data.avgCost !== null ? `
+              <div style="display: flex; justify-content: space-between; gap: 20px; margin-top: 2px;">
+                <span style="color: #cbd5e1">對應均價</span>
+                <span style="color: rgba(255,255,255,0.8)">${data.avgCost.toFixed(2)}</span>
               </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[12px] text-[var(--t2)] flex-1">損益%</span>
-                <span className={`font-mono ${data.pnlPct >= 0 ? 'text-red-400' : 'text-green-400'}`}>{data.pnlPct >= 0 ? '+' : ''}{data.pnlPct.toFixed(2)}%</span>
+              <div style="display: flex; justify-content: space-between; gap: 20px; margin-top: 2px;">
+                <span style="color: #cbd5e1">目前持股</span>
+                <span style="color: #fff">${data.totalShares.toLocaleString()} 股</span>
               </div>
-            </>
-          )}
-          {data.isBuy && (
-            <div className="mt-2 pt-2 border-t border-[#e05050]/20">
-              <div className="text-[11px] font-black text-[#e05050] mb-0.5">買入紀錄</div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[11px] text-[#e05050]/70">價格:</span>
-                <span className="text-[11px] text-[#e05050]">{data.txPrice.toFixed(2)} 元</span>
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-[11px] text-[#e05050]/70">數量:</span>
-                <span className="text-[11px] text-[#e05050]">{data.txShares.toLocaleString()} 股</span>
-              </div>
-              <div className="flex justify-between gap-4 mt-1 border-t border-[#e05050]/20 pt-1">
-                <span className="text-[11px] text-[#e05050]/70">買入後新均價:</span>
-                <span className="text-[11px] font-black text-[#e05050]">{data.avgCost.toFixed(2)}</span>
-              </div>
+              ` : ''}
             </div>
-          )}
-        </div>
-      )
+          `
+        },
+        axisPointer: {
+          type: 'cross',
+          label: { show: false },
+          lineStyle: { color: 'rgba(255,255,255,0.3)', type: 'dashed' },
+          crossStyle: { color: 'rgba(255,255,255,0.3)', type: 'dashed' }
+        }
+      },
+      xAxis: {
+        type: 'category',
+        data: enrichedStockHistory.map(d => d.date),
+        axisLine: { show: false },
+        axisTick: { show: false },
+        axisLabel: {
+          fontSize: 9,
+          color: '#94a3b8',
+          formatter: (value: string) => {
+            const parts = value.split('-')
+            return `${parts[1]}-${parts[2]}`
+          }
+        },
+        boundaryGap: false
+      },
+      yAxis: {
+        type: 'value',
+        position: 'right',
+        splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } },
+        axisLabel: { fontSize: 10, color: '#d4af37', formatter: '{value}' },
+        axisLine: { show: false },
+        axisTick: { show: false },
+        scale: true
+      },
+      dataZoom: [
+        { type: 'inside', xAxisIndex: [0], filterMode: 'none', zoomOnMouseWheel: true, moveOnMouseMove: true, panByMouseMove: true },
+        { type: 'inside', yAxisIndex: [0], filterMode: 'none' }
+      ],
+      series: [
+        {
+          name: '股價',
+          type: 'line',
+          data: enrichedStockHistory.map(d => ({ value: d.price, payload: d })),
+          smooth: true,
+          showSymbol: false,
+          lineStyle: { color: '#d4af37', width: 2 },
+          areaStyle: {
+            color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+              { offset: 0, color: 'rgba(212, 175, 55, 0.1)' },
+              { offset: 1, color: 'rgba(212, 175, 55, 0)' }
+            ])
+          },
+          markLine: {
+            silent: true,
+            symbol: 'none',
+            data: markLineData
+          }
+        },
+        {
+          name: '買入點',
+          type: 'scatter',
+          data: enrichedStockHistory.map((d, i) => d.isBuy ? [i, d.price] : null).filter(d => d !== null),
+          symbolSize: 8,
+          itemStyle: {
+            color: '#fff',
+            borderColor: '#d4af37',
+            borderWidth: 2,
+            shadowBlur: 10,
+            shadowColor: 'rgba(212, 175, 55, 0.8)'
+          },
+          z: 10
+        }
+      ]
     }
-    return null
+  }
+
+  // Handle Long Press
+  const onChartReady = (instance: any) => {
+    chartRef.current = instance
+    const zr = instance.getZr()
+
+    zr.on('mousedown', (params: any) => {
+      longPressTimer.current = setTimeout(() => {
+        instance.dispatchAction({
+          type: 'showTip',
+          x: params.event.zrX,
+          y: params.event.zrY
+        })
+      }, 300)
+    })
+
+    zr.on('mousemove', (params: any) => {
+      // If we are already showing tip (long pressed), update it
+      // How to know if tip is showing? ECharts doesn't explicitly expose this easily, 
+      // but we can track it or just clear timer if moving before 300ms.
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    })
+
+    zr.on('mouseup', () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+      instance.dispatchAction({ type: 'hideTip' })
+    })
+
+    // Touch events for mobile
+    zr.on('touchstart', (params: any) => {
+      longPressTimer.current = setTimeout(() => {
+        instance.dispatchAction({
+          type: 'showTip',
+          x: params.event.touches[0].zrX,
+          y: params.event.touches[0].zrY
+        })
+      }, 300)
+    })
+
+    zr.on('touchmove', (params: any) => {
+      // If dragging/panning, clear long press
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+    })
+
+    zr.on('touchend', () => {
+      if (longPressTimer.current) {
+        clearTimeout(longPressTimer.current)
+        longPressTimer.current = null
+      }
+      instance.dispatchAction({ type: 'hideTip' })
+    })
   }
 
   return (
@@ -247,20 +363,14 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
           </div>
         )}
 
-        <div className="card-base pt-4 pb-4 pl-4 pr-0 h-80 border-white/10 bg-black/20 relative">
+        <div className="card-base pt-4 pb-4 pl-4 pr-0 h-80 border-white/10 bg-black/20 relative overflow-hidden">
           {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={enrichedStockHistory} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-              <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={stockTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
-              <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--accent)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
-              <Tooltip content={<StockTooltip />} />
-              <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
-              <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" />
-              <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" />
-              <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" />
-            </LineChart>
-          </ResponsiveContainer>
+          <ReactECharts 
+            option={getOption()} 
+            style={{ height: '100%', width: '100%' }} 
+            onChartReady={onChartReady}
+            theme="dark"
+          />
         </div>
 
         {selectedHolding && (
