@@ -55,7 +55,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
     let totalRealized = 0
     let realizedCostBasis = 0
     const realizedBySellYear: Record<string, number> = {}
-    const inventory: Record<string, { shares: number, cost: number, buyYear: string }[]> = {}
+    const inventory: Record<string, { shares: number; principal: number; fee: number; origShares: number; buyYear: string }[]> = {}
     const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
 
     const sorted = [...transactions].sort((a, b) => {
@@ -71,31 +71,37 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       if (tx.action !== 'SELL') {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.amount, settings, false, isDca)
-        const cost = Math.floor(tx.amount + f)
-        inventory[tx.symbol].push({ shares: tx.shares, cost, buyYear })
-        stockHistory[tx.symbol].buyCost += cost
+        inventory[tx.symbol].push({ shares: tx.shares, principal: tx.amount, fee: f, origShares: tx.shares, buyYear })
       } else {
         const f = calcFee(tx.amount, settings, true)
         const t = calcTax(tx.amount, tx.symbol, settings)
-        const singleNet = Math.floor(tx.amount - f - t)
-        stockHistory[tx.symbol].sellRev += singleNet
+        const sellProceeds = Math.floor(tx.amount - f - t)
+        stockHistory[tx.symbol].sellRev += sellProceeds
+        
         let sellRemaining = tx.shares
-        let costBasisForTx = 0
+        let matchedCostTotal = 0
         const sellYear = tx.trade_date.split('-')[0]
+        
         while (sellRemaining > 0 && inventory[tx.symbol].length > 0) {
           const lot = inventory[tx.symbol][0]
-          const sharesFromLot = Math.min(lot.shares, sellRemaining)
-          const lotCostBasis = Math.floor((sharesFromLot / lot.shares) * lot.cost)
+          const take = Math.min(lot.shares, sellRemaining)
+          const ratio = take / lot.origShares
           
-          realizedCostBasis += lotCostBasis
-          costBasisForTx += lotCostBasis
+          const matchedPrincipal = (take / lot.shares) * lot.principal
+          const matchedFee = ratio * lot.fee
+          const matchedCost = (matchedPrincipal + matchedFee)
           
-          sellRemaining -= sharesFromLot
-          lot.cost -= lotCostBasis
-          lot.shares -= sharesFromLot
+          matchedCostTotal += matchedCost
+          
+          sellRemaining -= take
+          lot.shares -= take
+          lot.principal -= matchedPrincipal
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
-        const profit = Math.floor(singleNet - costBasisForTx)
+        
+        const finalMatchedCost = Math.floor(matchedCostTotal)
+        stockHistory[tx.symbol].buyCost += finalMatchedCost
+        const profit = sellProceeds - finalMatchedCost
         totalRealized += profit
         realizedBySellYear[sellYear] = (realizedBySellYear[sellYear] || 0) + profit
       }
@@ -112,12 +118,13 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       const sellFee = Math.floor(calcFee(grossMV, settings, true))
       const sellTax = Math.floor(calcTax(grossMV, sym, settings))
       const netMV = grossMV - sellFee - sellTax
-      const totalActualCost = inventory[sym].reduce((s, l) => s + l.cost, 0)
+      const totalActualCost = inventory[sym].reduce((s, l) => s + (l.principal + l.fee * (l.shares/l.origShares)), 0)
       
       const totalNetPnL = netMV - totalActualCost
       inventory[sym].forEach(lot => {
         if (totalActualCost === 0) return
-        const lotRatio = lot.cost / totalActualCost
+        const currentLotCost = lot.principal + lot.fee * (lot.shares/lot.origShares)
+        const lotRatio = currentLotCost / totalActualCost
         const lotNetPnL = totalNetPnL * lotRatio
         unrealizedByBuyYear[lot.buyYear] = (unrealizedByBuyYear[lot.buyYear] || 0) + lotNetPnL
       })

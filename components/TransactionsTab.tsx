@@ -65,37 +65,85 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     let totalBuy = 0, totalSell = 0, totalFee = 0, totalTax = 0, totalRealized = 0, buyCount = 0, sellCount = 0
 
     for (const tx of sorted) {
+      const isSell = tx.action === 'SELL'
       const inRange = tx.trade_date >= realizedRange.start && tx.trade_date <= realizedRange.end
+      
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
       if (!stats[tx.symbol]) stats[tx.symbol] = { buy: 0, sell: 0, realized: 0, count: 0, history: [] }
       const stock = stats[tx.symbol]
 
-      if (tx.action !== 'SELL') {
+      if (!isSell) {
+        // Buy / DCA: Record in inventory
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.amount, settings, false, isDca)
-        const singleNet = Math.floor(tx.amount + f)
-        inventory[tx.symbol].push({ shares: tx.shares, cost: singleNet, date: tx.trade_date, id: tx.id })
-        if (inRange) { totalBuy += singleNet; totalFee += f; buyCount++; stock.buy += singleNet; stock.count++ }
-        stock.history.push({ ...tx, type: 'BUY', net: singleNet })
+        const principal = tx.amount // shares * price
+        inventory[tx.symbol].push({ 
+          shares: tx.shares, 
+          principal, 
+          fee: f, 
+          origShares: tx.shares,
+          date: tx.trade_date, 
+          id: tx.id 
+        })
+        stock.history.push({ ...tx, type: 'BUY', net: -Math.floor(principal + f) })
       } else {
-        let rem = tx.shares, costBasis = 0, matches = []
-        while (rem > 0 && inventory[tx.symbol].length) {
-          const lot = inventory[tx.symbol][0], take = Math.min(lot.shares, rem), unit = lot.cost / lot.shares
-          const pCost = Math.floor(take * unit)
-          costBasis += pCost; matches.push({ date: lot.date, shares: take })
-          lot.shares -= take; lot.cost -= pCost; rem -= take
-          if (lot.shares <= 0) inventory[tx.symbol].shift()
-        }
+        // Sell: Match against FIFO inventory
         const f = calcFee(tx.amount, settings, true)
         const t = calcTax(tx.amount, tx.symbol, settings)
-        const singleNet = Math.floor(tx.amount - f - t)
-        const profit = Math.floor(singleNet - costBasis)
-        if (inRange) { totalSell += singleNet; totalFee += f; totalTax += t; totalRealized += profit; totalBuy += costBasis; sellCount++; stock.sell += singleNet; stock.realized += profit; stock.count++ }
-        stock.history.push({ ...tx, type: 'SELL', matches, profit, net: singleNet })
+        const sellProceeds = Math.floor(tx.amount - f - t)
+        
+        let rem = tx.shares
+        let matchedBuyCostTotal = 0
+        let matchedBuyFeeTotal = 0
+        const matches = []
+        
+        while (rem > 0 && inventory[tx.symbol].length) {
+          const lot = inventory[tx.symbol][0]
+          const take = Math.min(lot.shares, rem)
+          const ratio = take / lot.origShares
+          
+          const matchedPrincipal = (take / lot.shares) * lot.principal
+          const matchedFee = ratio * lot.fee
+          
+          matchedBuyCostTotal += (matchedPrincipal + matchedFee)
+          matchedBuyFeeTotal += matchedFee
+          
+          matches.push({ date: lot.date, shares: take })
+          lot.shares -= take; lot.principal -= matchedPrincipal; rem -= take
+          if (lot.shares <= 0) inventory[tx.symbol].shift()
+        }
+        
+        const finalMatchedCost = Math.floor(matchedBuyCostTotal)
+        const profit = sellProceeds - finalMatchedCost
+        
+        if (inRange) {
+          totalSell += sellProceeds
+          totalBuy += finalMatchedCost
+          totalFee += (matchedBuyFeeTotal + f)
+          totalTax += t
+          totalRealized += profit
+          sellCount++
+          stock.sell += sellProceeds
+          stock.realized += profit
+          stock.count++
+        }
+        stock.history.push({ ...tx, type: 'SELL', matches, profit, net: sellProceeds })
       }
     }
-    return { summary: { totalBuy, totalSell, totalFee, totalTax, totalRealized, buyCount, sellCount }, stocks: Object.entries(stats).filter(([,s])=>s.count>0).map(([sym,s])=>({symbol:sym, ...s})).sort((a,b)=>b.realized-a.realized) }
-  }, [txs, tab, realizedRange])
+    // Final rounding for UI
+    return { 
+      summary: { 
+        totalBuy: Math.round(totalBuy), 
+        totalSell: Math.round(totalSell), 
+        totalFee: Math.floor(totalFee), 
+        totalTax: Math.floor(totalTax), 
+        totalRealized: Math.round(totalRealized), 
+        buyCount, 
+        sellCount 
+      }, 
+      stocks: Object.entries(stats).filter(([,s])=>s.count>0).map(([sym,s])=>({symbol:sym, ...s})).sort((a,b)=>b.realized-a.realized) 
+    }
+  }, [txs, tab, realizedRange, settings])
 
   const groupedData = useMemo(() => {
     const groups: any = {}, today = new Date()

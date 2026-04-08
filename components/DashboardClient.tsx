@@ -32,7 +32,7 @@ const TABS: { id: Tab; icon: any; label: string }[] = [
 ]
 
 function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settings: UserSettings): { holdings: Holding[], allTimeRealized: number } {
-  const inventory: Record<string, { shares: number; cost: number }[]> = {}
+  const inventory: Record<string, { shares: number; principal: number; fee: number; origShares: number }[]> = {}
   let allTimeRealized = 0
   const sorted = [...txs].sort((a, b) => {
     if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
@@ -41,34 +41,42 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
   for (const tx of sorted) {
     if (!inventory[tx.symbol]) inventory[tx.symbol] = []
     const lots = inventory[tx.symbol]
+    
     if (tx.action === 'BUY' || tx.action === 'DCA') {
       const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
       const f = calcFee(tx.amount, settings, false, isDca)
-      lots.push({ shares: tx.shares, cost: Math.floor(tx.amount + f) })
+      lots.push({ shares: tx.shares, principal: tx.amount, fee: f, origShares: tx.shares })
     } else if (tx.action === 'SELL') {
       let sellRemaining = tx.shares
-      let costBasis = 0
+      let matchedBuyCostTotal = 0
+      
       while (sellRemaining > 0 && lots.length > 0) {
-        const take = Math.min(lots[0].shares, sellRemaining)
-        const unitCost = lots[0].cost / lots[0].shares
-        const pCost = Math.floor(take * unitCost)
-        costBasis += pCost
-        lots[0].shares -= take
-        lots[0].cost -= pCost
+        const lot = lots[0]
+        const take = Math.min(lot.shares, sellRemaining)
+        const ratio = take / lot.origShares
+        
+        const matchedPrincipal = (take / lot.shares) * lot.principal
+        const matchedFee = ratio * lot.fee
+        
+        matchedBuyCostTotal += (matchedPrincipal + matchedFee)
+        
+        lot.shares -= take
+        lot.principal -= matchedPrincipal
         sellRemaining -= take
-        if (lots[0].shares <= 0) lots.shift()
+        if (lot.shares <= 0) lots.shift()
       }
+      
       const f = calcFee(tx.amount, settings, true)
       const t = calcTax(tx.amount, tx.symbol, settings)
-      const net = Math.floor(tx.amount - f - t)
-      allTimeRealized += Math.floor(net - costBasis)
+      const sellProceeds = Math.floor(tx.amount - f - t)
+      allTimeRealized += Math.floor(sellProceeds - Math.floor(matchedBuyCostTotal))
     }
   }
   const hList = Object.entries(inventory)
     .map(([sym, lots]) => {
       const netShares = lots.reduce((s, l) => s + l.shares, 0)
       if (netShares <= 0) return null
-      const totalCost = lots.reduce((s, l) => s + l.cost, 0)
+      const totalCost = lots.reduce((s, l) => s + (l.principal + l.fee * (l.shares/l.origShares)), 0)
       const avgCost = totalCost / netShares
       const q = quotes[sym]
       const cp = q?.bid_price || q?.price || 0
