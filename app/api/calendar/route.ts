@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { DEFAULT_SETTINGS, UserSettings, STOCK_NAMES, calcFee, calcTax } from '@/types'
+import { DEFAULT_SETTINGS, UserSettings, STOCK_NAMES } from '@/types'
 
-// ─── Fetch price history from Yahoo Finance ───────────────────────────────────
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 async function fetchHistory(symbol: string, startTs: number, endTs: number): Promise<Record<string, number> | null> {
   try {
-    const period1 = startTs - 86400 * 14 // fetch 2 weeks before to get prev-day prices
+    const period1 = startTs - 86400 * 14
     const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${period1}&period2=${endTs}&interval=1d`
     const res = await fetch(url, { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } })
     if (!res.ok) return null
@@ -26,14 +28,13 @@ async function fetchHistory(symbol: string, startTs: number, endTs: number): Pro
   }
 }
 
-// ─── Main handler ─────────────────────────────────────────────────────────────
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
   const url = new URL(req.url)
-  const year  = parseInt(url.searchParams.get('year')  || '')
+  const year = parseInt(url.searchParams.get('year') || '')
   const month = parseInt(url.searchParams.get('month') || '')
   if (!year || !month) return NextResponse.json({ error: 'Missing date' }, { status: 400 })
 
@@ -42,18 +43,15 @@ export async function GET(req: NextRequest) {
     supabase.from('settings').select('*').eq('user_id', user.id).single(),
   ])
 
-  const txs = txsRes.data
-  const settings: UserSettings = { ...DEFAULT_SETTINGS, ...(setRes.data || {}) }
-  if (!txs || txs.length === 0) return NextResponse.json([])
+  const txs = txsRes.data || []
+  if (txs.length === 0) return NextResponse.json([])
 
-  // Replay from the very first transaction to today
   const lastDayOfMonth = new Date(year, month, 0).getDate()
   const historyStartDate = txs[0].trade_date
-  const replayEndDate   = `${year}-${String(month).padStart(2,'0')}-${String(lastDayOfMonth).padStart(2,'0')}`
+  const replayEndDate = `${year}-${String(month).padStart(2, '0')}-${String(lastDayOfMonth).padStart(2, '0')}`
 
-  // Fetch price data for all symbols
   const startTs = Math.floor(new Date(historyStartDate).getTime() / 1000)
-  const endTs   = Math.floor(new Date(replayEndDate).getTime()    / 1000) + 86400
+  const endTs = Math.floor(new Date(replayEndDate).getTime() / 1000) + 86400
   const symbols = Array.from(new Set(txs.map(t => t.symbol)))
   const histories: Record<string, Record<string, number>> = {}
   await Promise.all(symbols.map(async sym => {
@@ -61,152 +59,127 @@ export async function GET(req: NextRequest) {
     if (h) histories[sym] = h
   }))
 
-  // ─── FIFO Inventory ───────────────────────────────────────────────────────
-  // Each lot: { shares, origCost, allocatedCost }
-  type Lot = { shares: number; origCost: number; allocatedCost: number }
+  // FIFO Lot Tracking
+  type Lot = { shares: number; costBasis: number }
   const inventory: Record<string, Lot[]> = {}
-
-  // Price persistence: last known close price per symbol (handles weekends / holidays)
   const lastPrice: Record<string, number> = {}
 
-  // Running totals carried across iterations
-  let prevGrossMV   = 0  // yesterday's gross market value
-  let prevCostBasis = 0  // yesterday's total cost basis
-
+  let prevTotalMV = 0
+  let prevTotalCost = 0
   const output: Record<string, any> = {}
 
   const startD = new Date(historyStartDate)
-  const endD   = new Date(replayEndDate)
+  const endD = new Date(replayEndDate)
 
-  for (let cur = new Date(startD); cur <= endD; cur.setDate(cur.getDate() + 1)) {
-    const date = cur.toISOString().split('T')[0]
-    const isTargetMonth = date.startsWith(`${year}-${String(month).padStart(2,'0')}`)
-
-    // ── 1. Process today's transactions ───────────────────────────────────
+  for (let d = new Date(startD); d <= endD; d.setDate(d.getDate() + 1)) {
+    const date = d.toISOString().split('T')[0]
     const todaysTxs = txs.filter(t => t.trade_date === date)
     let realizedToday = 0
 
+    // 1. Process Transactions
     for (const tx of todaysTxs) {
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
       const lots = inventory[tx.symbol]
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
-        const cost = Math.floor(Number(tx.amount)) + Math.floor(Number(tx.fee))
-        lots.push({ shares: tx.shares, origCost: cost, allocatedCost: 0 })
-
+        // Cost = Amount + Fee ( Principal + Buying Fee )
+        const buyCost = Number(tx.amount || 0) + Number(tx.fee || 0)
+        lots.push({ shares: tx.shares, costBasis: buyCost })
       } else if (tx.action === 'SELL') {
-        let rem = tx.shares
-        const netPerShare = tx.net_amount / tx.shares
+        let sharesToSell = tx.shares
+        // Net Realized Calculation: Net Amount - FIFO Cost
+        // Net Amount usually already has fees/tax deducted from brokerage output
+        const netProceeds = Number(tx.net_amount || 0)
+        let totalLotCost = 0
 
-        while (rem > 0 && lots.length > 0) {
+        while (sharesToSell > 0 && lots.length > 0) {
           const lot = lots[0]
-          const take = Math.min(lot.shares, rem)
-          const remaining = lot.origCost - lot.allocatedCost
-
-          // Final match: use exact remaining cost to eliminate rounding drift
-          const costBasis = (take === lot.shares)
-            ? remaining
-            : Math.floor((take / lot.shares) * remaining)
-
-          realizedToday += (netPerShare * take) - costBasis
-
-          lot.shares        -= take
-          lot.allocatedCost += costBasis
-          rem               -= take
+          const take = Math.min(lot.shares, sharesToSell)
+          const lotCostTaken = (take === lot.shares) ? lot.costBasis : (lot.costBasis * (take / lot.shares))
+          
+          totalLotCost += lotCostTaken
+          lot.shares -= take
+          lot.costBasis -= lotCostTaken
+          sharesToSell -= take
           if (lot.shares <= 0) lots.shift()
         }
+        realizedToday += (netProceeds - totalLotCost)
       }
     }
 
-    // ── 2. Update price cache ──────────────────────────────────────────────
+    // 2. Update Prices
     for (const sym of symbols) {
       const p = histories[sym]?.[date]
       if (p != null) lastPrice[sym] = p
     }
 
-    // ── 3. Calculate end-of-day snapshot ─────────────────────────────────
-    let curGrossMV   = 0
-    let curNetMV     = 0
-    let curCostBasis = 0
-    const details: any[] = []
+    // 3. Snapshot
+    let curTotalMV = 0
+    let curTotalCost = 0
+    const details = []
 
     for (const [sym, lots] of Object.entries(inventory)) {
-      const shares = lots.reduce((s, l) => s + l.shares, 0)
+      const shares = lots.reduce((acc, l) => acc + l.shares, 0)
       if (shares <= 0) continue
 
       const price = lastPrice[sym]
-      if (price == null) continue  // no price data at all yet → skip
+      if (price == null) continue
 
-      const gross    = Math.floor(price * shares)
-      const fee      = calcFee(gross, settings, true)
-      const tax      = calcTax(gross, sym, settings)
-      const net      = gross - fee - tax
-      const costBasis = lots.reduce((s, l) => s + (l.origCost - l.allocatedCost), 0)
-
-      curGrossMV   += gross
-      curNetMV     += net
-      curCostBasis += costBasis
+      const cost = lots.reduce((acc, l) => acc + l.costBasis, 0)
+      const mv = Math.floor(price * shares)
+      
+      curTotalMV += mv
+      curTotalCost += cost
 
       details.push({
         symbol: sym,
         name: STOCK_NAMES[sym] || sym,
         price,
-        market_value: net,
-        total_cost:   costBasis,
-        pnl:          net - costBasis,
         shares,
+        total_cost: cost,
+        market_value: mv,
+        pnl: mv - cost,
+        pnl_pct: cost > 0 ? ((mv - cost) / cost * 100) : 0
       })
     }
 
-    // ── 4. Daily PnL formula ───────────────────────────────────────────────
-    // Organic daily PnL = market movement only (capital injection excluded)
-    //
-    //   Day 1  : gross_mv - cost_basis          (no yesterday to compare)
-    //   Day N  : (gross_mv_today - gross_mv_yday) - (cost_today - cost_yday) + realized
-    //
-    let daily_pnl     = 0
+    // 4. Accounting Formulas
+    let daily_pnl = 0
     let daily_pnl_pct = 0
 
-    if (prevCostBasis === 0 && curCostBasis > 0) {
-      // ── FIRST DAY of history ──────────────────────────────────────────────
-      // daily_pnl = actual market value - money invested
-      // This equals: 6397 - 6417 = -20  ✓
-      daily_pnl     = curGrossMV - curCostBasis
-      daily_pnl_pct = curCostBasis > 0 ? (daily_pnl / curCostBasis * 100) : 0
-
-    } else if (prevCostBasis > 0 && curCostBasis > 0) {
-      // ── SUBSEQUENT DAYS ───────────────────────────────────────────────────
-      const capitalInToday = curCostBasis - prevCostBasis
-      daily_pnl     = (curGrossMV - prevGrossMV) - capitalInToday + realizedToday
-      daily_pnl_pct = prevGrossMV > 0 ? (daily_pnl / prevGrossMV * 100) : 0
+    const hasPrevHistory = prevTotalCost > 0 || Object.values(output).length > 0
+    
+    // First Day Handling (Strict)
+    if (!hasPrevHistory && curTotalCost > 0) {
+      daily_pnl = curTotalMV - curTotalCost
+      daily_pnl_pct = curTotalCost > 0 ? (daily_pnl / curTotalCost * 100) : 0
+    } else if (hasPrevHistory) {
+      // daily_pnl = (今日市值 - 昨日市值) - (今日成本變動) + 今日已實現
+      const costChange = curTotalCost - prevTotalCost
+      daily_pnl = (curTotalMV - prevTotalMV) - costChange + realizedToday
+      daily_pnl_pct = prevTotalMV > 0 ? (daily_pnl / prevTotalMV * 100) : 0
     }
 
-    // ── 5. Record entry (target month only) ───────────────────────────────
-    if (isTargetMonth) {
-      const unrealized = curNetMV - curCostBasis
-      const hasData    = Math.abs(daily_pnl) > 0.01 || Math.abs(realizedToday) > 0.01 || todaysTxs.length > 0
-
-      if (hasData) {
+    // 5. Store result for target month
+    if (date.startsWith(`${year}-${String(month).padStart(2, '0')}`)) {
+      const hasMeaningfulData = Math.abs(daily_pnl) > 0.1 || Math.abs(realizedToday) > 0.1 || todaysTxs.length > 0
+      if (hasMeaningfulData) {
         output[date] = {
-          entry_date:      date,
-          pnl:             Math.round(unrealized),
-          realized_pnl:    Math.round(realizedToday),
-          daily_pnl:       Math.round(daily_pnl),
-          daily_pnl_pct:   Math.round(daily_pnl_pct * 100) / 100,
-          net_market_value: Math.round(curNetMV),
-          gross_market_value: curGrossMV,
-          capital_in:      curCostBasis,
-          details,
-          note: todaysTxs.length > 0
-            ? `交易: ${todaysTxs.map(t => `${t.action} ${t.symbol}`).join(', ')}`
-            : '',
+          entry_date: date,
+          daily_pnl: Math.round(daily_pnl),
+          daily_pnl_pct: Number(daily_pnl_pct.toFixed(2)),
+          realized_pnl: Math.round(realizedToday),
+          pnl: Math.round(curTotalMV - curTotalCost), // Unrecognized PnL for detail reference
+          gross_market_value: curTotalMV,
+          capital_in: curTotalCost,
+          note: todaysTxs.length > 0 ? `交易: ${todaysTxs.map(t => `${t.action} ${t.symbol}`).join(', ')}` : '',
+          details
         }
       }
     }
 
-    // ── 6. Carry forward for next iteration ──────────────────────────────
-    prevGrossMV   = curGrossMV
-    prevCostBasis = curCostBasis
+    prevTotalMV = curTotalMV
+    prevTotalCost = curTotalCost
   }
 
   return NextResponse.json(Object.values(output))
