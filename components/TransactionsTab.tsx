@@ -16,8 +16,6 @@ import {
 } from 'lucide-react'
 import DatePicker from './DatePicker'
 import ConfirmModal from './ConfirmModal'
-import RealizedStockCard from './RealizedStockCard'
-import TxRow from './TxRow'
 
 interface Props {
   onRefresh: () => void
@@ -32,12 +30,11 @@ export default function TransactionsTab({ onRefresh }: Props) {
   const [tab, setTab] = useState<TabMode>('SELF')
   const [filter, setFilter] = useState('')
   const [deletingId, setDeletingId] = useState<number | null>(null)
-
   const [rangeMode, setRangeMode] = useState<RangeMode>('all')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
   const [expandedRealized, setExpandedRealized] = useState<string | null>(null)
-
+  const [exportOpen, setExportOpen] = useState(false)
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({ [`${new Date().getFullYear()}-${new Date().getMonth() + 1}`]: true })
 
   const filtered = useMemo(() => {
@@ -63,56 +60,32 @@ export default function TransactionsTab({ onRefresh }: Props) {
 
   const realizedData = useMemo(() => {
     if (tab !== 'REALIZED') return null
-    
-    const stats: Record<string, any> = {}
-    
+    const stats_map: Record<string, any> = {}
     Object.entries(fullHistoryStats).forEach(([sym, s]: [string, any]) => {
-      const inRangeHistory = s.history.filter((h: any) => 
-        h.type === 'SELL' && h.trade_date >= realizedRange.start && h.trade_date <= realizedRange.end
-      )
-      
+      const inRangeHistory = s.history.filter((h: any) => h.type === 'SELL' && h.trade_date >= realizedRange.start && h.trade_date <= realizedRange.end)
       if (inRangeHistory.length > 0) {
-        const local = { 
-          buy: 0, sell: 0, realized: 0, fee: 0, tax: 0, 
-          count: inRangeHistory.length, 
-          history: s.history 
-        }
+        const local = { buy: 0, sell: 0, realized: 0, fee: 0, tax: 0, count: inRangeHistory.length, history: s.history }
         inRangeHistory.forEach((h: any) => {
-          local.buy += h.realizedCost
-          local.sell += h.net
-          local.fee += (h.fee || 0)
-          local.tax += (h.tax || 0)
-          local.realized += h.profit
+          local.buy += h.realizedCost; local.sell += h.net; local.fee += (h.fee || 0); local.tax += (h.tax || 0); local.realized += h.profit
         })
-        stats[sym] = local
+        stats_map[sym] = local
       }
     })
-
-    const stocks = Object.entries(stats)
-      .map(([sym, s]) => ({ symbol: sym, ...s }))
-      .sort((a, b) => b.realized - a.realized)
-
+    const stocks = Object.entries(stats_map).map(([sym, s]) => ({ symbol: sym, ...s })).sort((a, b) => b.realized - a.realized)
     const summary = stocks.reduce((acc, s) => ({
-      totalBuy: acc.totalBuy + s.buy,
-      totalSell: acc.totalSell + s.sell,
-      totalFee: acc.totalFee + s.fee,
-      totalTax: acc.totalTax + s.tax,
-      totalRealized: acc.totalRealized + s.realized,
-      sellCount: acc.sellCount + s.count
+      totalBuy: acc.totalBuy + s.buy, totalSell: acc.totalSell + s.sell, totalFee: acc.totalFee + s.fee, totalTax: acc.totalTax + s.tax, totalRealized: acc.totalRealized + s.realized, sellCount: acc.sellCount + s.count
     }), { totalBuy: 0, totalSell: 0, totalFee: 0, totalTax: 0, totalRealized: 0, sellCount: 0 })
-
     return { stocks, summary }
   }, [tab, fullHistoryStats, realizedRange])
 
   const groupedData = useMemo(() => {
-    const groups: any = {}, today = new Date()
-    filtered.forEach((t:any) => {
-      const d = new Date(t.trade_date)
-      if (d > today) return
-      const y = d.getFullYear().toString(), m = (d.getMonth()+1).toString()
+    const groups: any = {}
+    filtered.forEach((tx: any) => {
+      const [y, m] = tx.trade_date.split('-')
       if (!groups[y]) groups[y] = {}
       if (!groups[y][m]) groups[y][m] = { txs: [], pnl: 0 }
-      groups[y][m].txs.push(t); groups[y][m].pnl += t.net_amount
+      groups[y][m].txs.push(tx)
+      if (tx.type === 'SELL') groups[y][m].pnl += (tx.profit || 0)
     })
     return groups
   }, [filtered])
@@ -123,33 +96,41 @@ export default function TransactionsTab({ onRefresh }: Props) {
     setDeletingId(null); onRefresh()
   }
 
-  const [exportOpen, setExportOpen] = useState(false)
-
   return (
-    <div className="p-4 space-y-6 pb-32 tabular-nums">
-      <div className="flex items-center gap-2">
-        <div className="flex-1 flex bg-[var(--bg-card)] p-1.5 rounded-2xl border border-[var(--border-bright)] shadow-xl">
-          {([{id:'SELF',label:'手動交易'},{id:'REALIZED',label:'已實交易'}] as const).map(t => (
-            <button key={t.id} onClick={()=>setTab(t.id)} className={`flex-1 py-2.5 text-sm font-black rounded-xl transition-all relative ${tab===t.id?'text-accent bg-white/5 shadow-inner':'text-[var(--t2)] opacity-60'}`}>{t.label}{tab===t.id && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-accent rounded-full mb-1" />}</button>
-          ))}
-        </div>
-        <button onClick={()=>setExportOpen(true)} className="w-12 h-12 flex items-center justify-center bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-2xl active:bg-white/10 text-accent transition-all shadow-xl"><Download size={20}/></button>
+    <div className="p-4 space-y-6 tabular-nums pb-32">
+      <div className="flex bg-[var(--bg-card)] p-1.5 rounded-2xl border border-[var(--border-bright)] shadow-xl relative z-10">
+        <button onClick={() => setTab('SELF')} className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all ${tab === 'SELF' ? 'bg-accent text-bg-base shadow-lg shadow-accent/20' : 'text-[var(--t2)] opacity-40 hover:opacity-100'}`}>手動紀錄</button>
+        <button onClick={() => setTab('REALIZED')} className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all ${tab === 'REALIZED' ? 'bg-accent text-bg-base shadow-lg shadow-accent/20' : 'text-[var(--t2)] opacity-40 hover:opacity-100'}`}>已實現損益</button>
       </div>
 
       {tab === 'REALIZED' ? (
         <div className="space-y-6 animate-slide-up">
-          <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
-            {['all','year','3months', 'month', 'custom'].map(opt => (
-              <button key={opt} onClick={()=>setRangeMode(opt as any)} className={`px-4 py-2.5 rounded-xl text-xs font-black border transition-all whitespace-nowrap ${rangeMode===opt?'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20':'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)]'}`}>{opt==='all'?'全部':opt==='year'?'今年':opt==='3months'?'近三個月':opt==='month'?'本月':'自訂'}</button>
-            ))}
+          <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-5 shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-[0.2em]">統計區間</span>
+              <button onClick={() => setExportOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[11px] font-black text-accent active:scale-95 transition-all shadow-md"><Download size={14}/> 匯出報表</button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {['month', '3months', 'year', 'all'].map(m => (
+                <button key={m} onClick={() => setRangeMode(m as any)} className={`py-3 rounded-xl text-[10px] font-black border transition-all ${rangeMode === m ? 'bg-accent text-bg-base border-accent shadow-md' : 'bg-white/5 text-[var(--t2)] border-transparent opacity-60'}`}>
+                  {m === 'month' ? '本月' : m === '3months' ? '三月' : m === 'year' ? '今年' : '全部'}
+                </button>
+              ))}
+            </div>
+            <button onClick={() => setRangeMode('custom')} className={`w-full mt-2 py-3 rounded-xl text-[10px] font-black border transition-all ${rangeMode === 'custom' ? 'bg-accent text-bg-base border-accent shadow-md' : 'bg-white/5 text-[var(--t2)] border-transparent opacity-60'}`}>自訂日期範疇</button>
+            {rangeMode === 'custom' && (
+              <div className="grid grid-cols-2 gap-3 mt-4 pt-4 border-t border-white/5 animate-slide-up">
+                <div className="space-y-1.5"><Label>開始日期</Label><DatePicker value={customStart} onChange={setCustomStart}/></div>
+                <div className="space-y-1.5"><Label>結束日期</Label><DatePicker value={customEnd} onChange={setCustomEnd}/></div>
+              </div>
+            )}
           </div>
-          {rangeMode === 'custom' && <div className="flex items-center gap-2 animate-slide-up"><DatePicker value={customStart} onChange={setCustomStart} className="flex-1"/><span className="opacity-20">~</span><DatePicker value={customEnd} onChange={setCustomEnd} className="flex-1"/></div>}
 
-          <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-6 space-y-6 shadow-2xl">
+          <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-6 shadow-2xl space-y-8">
             <div className="grid grid-cols-2 gap-y-6 gap-x-4">
-              <StatItem label="總買入額" value={fmtMoney(realizedData!.summary.totalBuy)} sub={`${realizedData!.summary.buyCount}筆`}/>
+              <StatItem label="總買入額" value={fmtMoney(realizedData!.summary.totalBuy)} sub={`${realizedData!.summary.sellCount}筆`}/>
               <StatItem label="總賣出額" value={fmtMoney(realizedData!.summary.totalSell)} sub={`${realizedData!.summary.sellCount}筆`}/>
-              <StatItem label="總手續費" value={fmtMoney(realizedData!.summary.totalFee)} sub={`${realizedData!.summary.buyCount+realizedData!.summary.sellCount}筆`}/>
+              <StatItem label="總手續費" value={fmtMoney(realizedData!.summary.totalFee)} sub="合計"/>
               <StatItem label="總交易稅" value={fmtMoney(realizedData!.summary.totalTax)} sub={`${realizedData!.summary.sellCount}筆`}/>
             </div>
             <div className="pt-6 border-t border-white/5 flex justify-between items-end">
@@ -160,7 +141,7 @@ export default function TransactionsTab({ onRefresh }: Props) {
 
           <div className="space-y-3">
             {realizedData!.stocks.map(s => (
-              <RealizedStockCard key={s.symbol} s={s} expanded={expandedRealized===s.symbol} onToggle={()=>setExpandedRealized(expandedRealized===s.symbol?null:s.symbol)} settings={settings} onUpdated={onRefresh} onDelete={(id:number)=>setDeletingId(id)} />
+              <RealizedStockCard key={s.symbol} s={s} expanded={expandedRealized===s.symbol} onToggle={()=>setExpandedRealized(expandedRealized===s.symbol?null:s.symbol)} onUpdated={onRefresh} onDelete={(id:number)=>setDeletingId(id)} />
             ))}
           </div>
         </div>
@@ -173,7 +154,7 @@ export default function TransactionsTab({ onRefresh }: Props) {
               {Object.keys(groupedData[year]).sort((a,b)=>Number(b)-Number(a)).map(month => (
                 <div key={month} className="space-y-2">
                   <button onClick={()=>{const k=`${year}-${month}`; setExpandedMonths(p=>({...p, [k]:!p[k]}))}} className={`w-full flex justify-between p-5 bg-[var(--bg-card)] border-[0.5px] ${expandedMonths[`${year}-${month}`] ? 'border-[var(--accent)] ring-1 ring-[var(--accent-bright)]/30 shadow-lg' : 'border-[var(--border-bright)]'} rounded-2xl active:bg-white/5 transition-all shadow-xl`}><div className="flex items-center gap-3"><span className="font-black text-[18px] text-[var(--t1)]">{month} 月</span><span className="text-[10px] px-2.5 py-1 rounded-full bg-white/10 text-[var(--t2)] opacity-60 font-black tracking-widest">{groupedData[year][month].txs.length} 筆</span></div><div className={`font-mono font-black text-[18px] ${groupedData[year][month].pnl>=0?'text-red-400':'text-green-400'}`}>{groupedData[year][month].pnl>=0?'+':''}{fmtMoney(Math.round(groupedData[year][month].pnl))}</div></button>
-                  {expandedMonths[`${year}-${month}`] && <div className="space-y-3 pt-1">{groupedData[year][month].txs.map((tx:any)=><TxRow key={tx.id} tx={tx} settings={settings} onDelete={(id:number)=>setDeletingId(id)} onUpdated={onRefresh}/>)}</div>}
+                  {expandedMonths[`${year}-${month}`] && <div className="space-y-3 pt-1">{groupedData[year][month].txs.map((tx:any)=><TxRow key={tx.id} tx={tx} onDelete={(id:number)=>setDeletingId(id)} onUpdated={onRefresh}/>)}</div>}
                 </div>
               ))}
             </div>
@@ -186,12 +167,46 @@ export default function TransactionsTab({ onRefresh }: Props) {
   )
 }
 
+function RealizedStockCard({ s, expanded, onToggle, onUpdated, onDelete }: any) {
+  const [name, setName] = useState(getStockName(s.symbol))
+  useEffect(() => { fetch(`/api/stockname?symbol=${s.symbol}`).then(res => res.json()).then(data => { if (data.name_zh) setName(data.name_zh) }) }, [s.symbol])
+  return (
+    <div className={`bg-[var(--bg-card)] border-[0.5px] ${expanded?'border-[var(--accent)] ring-1 ring-[var(--accent-bright)]/30 shadow-2xl':'border-[var(--border-bright)]'} rounded-2xl overflow-hidden transition-all shadow-xl`}>
+      <button onClick={onToggle} className="w-full p-5 text-left space-y-4 active:bg-white/5">
+        <div className="flex justify-between items-center"><div className="flex items-center gap-2"><span className="font-black text-[17px] text-[var(--t1)] tracking-tight truncate">{name}</span><span className="text-[12px] font-mono text-[var(--t2)] opacity-60 mt-0.5">{codeOnly(s.symbol)}</span></div><span className={`font-black font-mono text-[17px] ${s.realized>=0?'text-red-400':'text-green-400'}`}>{s.realized>=0?'+':''}{fmtMoney(s.realized)}</span></div>
+        <div className="flex justify-between text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest"><span>投入 {fmtMoney(s.buy)}</span><span>回收 {fmtMoney(s.sell)}</span></div>
+      </button>
+      {expanded && (
+        <div className="bg-black/30 border-t border-white/5 p-5 space-y-6">
+          {s.history.map((tx:any) => (
+            <div key={tx.id} className="space-y-2 animate-in fade-in slide-in-from-left-2">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className={`px-2.5 py-0.5 rounded-full font-black text-[10px] border ${tx.action==='BUY'||tx.action==='DCA'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='SELL'?'賣出':'買入'}</span>
+                  <span className="text-[var(--t2)] opacity-60 text-[11px] font-mono">{tx.trade_date}</span>
+                </div>
+                <span className="font-black text-[var(--t2)] opacity-90 text-[13px]">{(tx.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] opacity-20">@</span> {(tx.price ?? 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center pl-1">
+                <span className="font-mono font-black text-[14px] ${tx.realizedCost! == undefined ? 'text-red-400' : 'text-green-400'}">{tx.realizedCost !== undefined ? `成本 ${fmtMoney(tx.realizedCost)}` : ''}</span>
+              </div>
+              {tx.matches?.map((m:any,i:number)=><div key={i} className="pl-4 border-l-2 border-white/10 text-[10px] text-[var(--t3)] italic py-0.5 ml-1">沖銷 {m.date} 買入 ({m.shares} 股)</div>)}
+              {tx.type==='SELL' && (
+                <div className={`text-right font-black text-[10px] pt-1.5 border-t border-white/5 space-x-2 ${tx.profit>=0?'text-red-400/60':'text-green-400/60'}`}>
+                  <span>此筆損益 {tx.profit>=0?'+':''}{fmtMoney(tx.profit)}</span>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
 
-function StatItem({ label, value, sub }: any) { return <div className="flex flex-col"><span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</span><span className="font-black font-mono text-[20px] text-[var(--t1)] leading-tight">{value}</span><span className="text-[10px] font-black text-[var(--t2)] opacity-40 mt-1 uppercase tracking-tighter">{sub}</span></div> }
-
-function TxRow({ tx, settings, onDelete, onUpdated }: any) {
+function TxRow({ tx, onDelete, onUpdated }: any) {
   const [open, setOpen] = useState(false), [isEditing, setIsEditing] = useState(false)
-  if (isEditing) return <div className="p-5 bg-[var(--bg-card)] border-[var(--border-bright)] rounded-2xl shadow-2xl animate-slide-up"><EditForm tx={tx} settings={settings} onCancel={()=>setIsEditing(false)} onSaved={()=>{setIsEditing(false);onUpdated()}}/></div>
+  if (isEditing) return <div className="p-5 bg-[var(--bg-card)] border-[var(--border-bright)] rounded-2xl shadow-2xl animate-slide-up"><EditForm tx={tx} onCancel={()=>setIsEditing(false)} onSaved={()=>{setIsEditing(false);onUpdated()}}/></div>
   return (
     <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl overflow-hidden shadow-xl">
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left active:bg-white/5 transition-all">
@@ -202,11 +217,10 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
           </div>
           <div className="text-[11px] font-black text-[var(--t2)] opacity-60 mt-1.5 flex items-center gap-2 uppercase tracking-widest">
             <span>{tx.trade_date} · {(tx.shares ?? 0).toLocaleString()} 股</span>
-            {(tx.action === 'DCA' || tx.trade_type === 'DCA') && <span className="text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black text-[8px] leading-none mb-px">DCA</span>}
           </div>
         </div>
         <div className={`text-right font-black font-mono text-[17px] shrink-0 ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
-          {tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}
+          {tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount || 0)}
         </div>
       </button>
       {open && (
@@ -214,7 +228,6 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
           <div className="grid grid-cols-3 gap-4 pt-6">
             <DetailItem label="股數" value={(tx.shares ?? 0).toLocaleString()}/>
             <DetailItem label="價格" value={(tx.price ?? 0).toFixed(2)}/>
-            <DetailItem label="費用" value={fmtMoney(calcFee(tx.amount, settings, tx.action==='SELL', tx.action==='DCA' || tx.trade_type==='DCA') + (tx.action==='SELL'?calcTax(tx.amount, tx.symbol, settings):0))}/>
           </div>
           {tx.note && <div className="p-4 rounded-xl bg-white/5 text-[12px] text-[var(--t2)] opacity-70 italic leading-relaxed border border-white/5">"{tx.note}"</div>}
           <div className="flex gap-3 pt-1"><button onClick={()=>setIsEditing(true)} className="flex-[3] btn-primary py-3 flex items-center justify-center gap-2 text-sm"><Pencil size={16}/>編輯</button><button onClick={()=>onDelete(tx.id)} className="flex-1 btn-danger py-3 flex items-center justify-center active:scale-95 transition-all"><Trash2 size={18}/></button></div>
@@ -224,33 +237,22 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
   )
 }
 
+function StatItem({ label, value, sub }: any) { return <div className="flex flex-col"><span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</span><span className="font-black font-mono text-[20px] text-[var(--t1)] leading-tight">{value}</span><span className="text-[10px] font-black text-[var(--t2)] opacity-40 mt-1 uppercase tracking-tighter">{sub}</span></div> }
 function DetailItem({ label, value }: any) { return <div><div className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</div><div className="text-[15px] font-bold text-[var(--t1)] font-mono">{value}</div></div> }
 
-function EditForm({ tx, settings, onCancel, onSaved }: any) {
-  const [loading, setLoading] = useState(false)
+function EditForm({ tx, onCancel, onSaved }: any) {
+  const { stats } = usePortfolio()
   const [date, setDate] = useState(tx.trade_date), [shares, setShares] = useState<number|''>(tx.shares), [price, setPrice] = useState<number|''>(tx.price), [note, setNote] = useState(tx.note || '')
   const [tradeType, setTradeType] = useState(tx.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
   const [lots, setLots] = useState<number | ''>(Math.floor(tx.shares / 1000) || 1)
-  const [isDcaOpt, setIsDcaOpt] = useState(tx.action === 'DCA')
   const isBuy = tx.action === 'BUY' || tx.action === 'DCA'
   const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = Number(price) || 0
   const amount = finalShares * safePrice
-  const actionToSave = isBuy ? (isDcaOpt ? 'DCA' : 'BUY') : 'SELL'
-  const fee = calcFee(amount, settings, !isBuy, actionToSave === 'DCA')
-  const tax = tx.action === 'SELL' ? calcTax(amount, tx.symbol, settings) : 0
-  const net = isBuy ? -Math.floor(amount + fee) : Math.floor(amount - fee - tax)
-  
-  const isValid = finalShares > 0 && safePrice > 0 && (
-    date !== tx.trade_date || 
-    finalShares !== tx.shares || 
-    safePrice !== tx.price || 
-    note !== (tx.note||'') ||
-    isDcaOpt !== (tx.action === 'DCA')
-  )
-  
+  const net = isBuy ? -amount : amount // Simplified display in edit
+
   const handleSave = async () => {
-    setLoading(true); await fetch('/api/transactions', { method: 'PUT', body: JSON.stringify({ id: tx.id, trade_date: date, shares: finalShares, price: safePrice, note, action: actionToSave }) })
+    await fetch('/api/transactions', { method: 'PUT', body: JSON.stringify({ id: tx.id, trade_date: date, shares: finalShares, price: safePrice, note }) })
     onSaved()
   }
   return (
@@ -260,30 +262,13 @@ function EditForm({ tx, settings, onCancel, onSaved }: any) {
         <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>整張 (1000股)</button>
         <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>零股</button>
       </div>
-
-      {isBuy && (
-        <div className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/5">
-          <span className="text-[11px] font-black text-[var(--t2)] tracking-widest uppercase">定期定額</span>
-          <button 
-            onClick={() => setIsDcaOpt(!isDcaOpt)}
-            className={`w-12 h-6 rounded-full relative transition-colors ${isDcaOpt ? 'bg-yellow-500' : 'bg-white/10'}`}
-          >
-            <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${isDcaOpt ? 'left-7' : 'left-1'}`} />
-          </button>
-        </div>
-      )}
-
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v as any):setShares(v as any)}} className="input-base text-center font-black py-3" /></div>
-        <div className="space-y-1.5"><Label>成交價</Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>
+        <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v as any):setShares(v as any)}} className="input-base text-center font-black py-3" /></div>
+        <div className="space-y-1.5"><Label>成交價</Label><input type="number" step="0.01" value={price} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>
       </div>
       <div className="space-y-1.5"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
       <div className="space-y-1.5"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-sm py-3" placeholder="選填..." /></div>
-      <div className="card-base p-4 space-y-2 bg-black/20 text-[11px] font-bold">
-        <div className="flex justify-between opacity-40"><span>手續費 + 稅</span><span>{fmtMoney(fee + tax)}</span></div>
-        <div className="flex justify-between items-center pt-2 border-t border-white/5"><span className="text-[var(--t2)]">預估淨收支</span><span className={`text-base font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
-      </div>
-      <div className="flex gap-3 pt-1"><button onClick={handleSave} disabled={!isValid} className="flex-[3] btn-primary py-3.5">確認修改</button><button onClick={onCancel} className="flex-1 btn-secondary py-3.5">取消</button></div>
+      <div className="flex gap-3 pt-1"><button onClick={handleSave} className="flex-[3] btn-primary py-3.5">確認修改</button><button onClick={onCancel} className="flex-1 btn-secondary py-3.5">取消</button></div>
     </div>
   )
 }
