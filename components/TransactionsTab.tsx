@@ -129,6 +129,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     const stocks = Object.entries(stats)
       .filter(([, s]) => s.count > 0)
       .map(([sym, s]) => {
+        // Floor per-stock totals first (The 'Bottom-up' rule)
         const rounded = {
           symbol: sym,
           ...s,
@@ -138,6 +139,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
           fee: Math.floor(s.fee),
           tax: Math.floor(s.tax)
         }
+        // Then sum these integers into the global summary
         totalBuy += rounded.buy
         totalSell += rounded.sell
         totalFee += rounded.fee
@@ -242,8 +244,8 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
   return (
     <div className={`card-base overflow-hidden border transition-all ${expanded?'border-accent shadow-lg shadow-accent/5':'border-white/5'}`}>
       <button onClick={onToggle} className="w-full p-4 text-left space-y-3 active:bg-bg-hover">
-        <div className="flex justify-between items-center"><div className="flex items-center gap-2"><span className="font-black text-[16px] text-[var(--t1)] truncate">{name}</span><span className="text-[10px] font-mono opacity-30">{codeOnly(s.symbol)}</span></div><span className={`font-black font-mono text-[16px] ${s.realized>=0?'text-red-400':'text-green-400'}`}>{s.realized>=0?'+':''}{fmtMoney(Math.round(s.realized))}</span></div>
-        <div className="flex justify-between text-[11px] font-bold text-[var(--t3)]"><span>投入 {fmtMoney(Math.round(s.buy))}</span><span>回收 {fmtMoney(Math.round(s.sell))}</span></div>
+        <div className="flex justify-between items-center"><div className="flex items-center gap-2"><span className="font-black text-[16px] text-[var(--t1)] truncate">{name}</span><span className="text-[10px] font-mono opacity-30">{codeOnly(s.symbol)}</span></div><span className={`font-black font-mono text-[16px] ${s.realized>=0?'text-red-400':'text-green-400'}`}>{s.realized>=0?'+':''}{fmtMoney(s.realized)}</span></div>
+        <div className="flex justify-between text-[11px] font-bold text-[var(--t3)]"><span>投入 {fmtMoney(s.buy)}</span><span>回收 {fmtMoney(s.sell)}</span></div>
       </button>
       {expanded && (
         <div className="bg-black/20 border-t border-white/5 p-4 space-y-5">
