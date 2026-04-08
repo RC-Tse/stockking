@@ -124,14 +124,28 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
     return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
-  const stockTicks = useMemo(() => {
+  const customTicks = useMemo(() => {
     if (!enrichedStockHistory.length) return []
-    const start = enrichedStockHistory[0].timestamp
-    const end = enrichedStockHistory[enrichedStockHistory.length - 1].timestamp
-    const ticks = [start, end]
-    const mid = start + (end - start) / 2
-    ticks.push(mid)
-    return ticks.sort((a,b) => a - b)
+    const data = enrichedStockHistory
+    const results: number[] = []
+    const seenDates = new Set<string>()
+    const targetDays = [1, 10, 20]
+
+    // 取得所有出現過的月份
+    const months = Array.from(new Set(data.map(d => d.date.substring(0, 7))))
+
+    months.forEach(m => {
+      targetDays.forEach(td => {
+        const targetStr = `${m}-${String(td).padStart(2, '0')}`
+        // 尋找該月份中大於等於目標日的第一個交易日
+        const found = data.find(d => d.date >= targetStr && d.date.startsWith(m))
+        if (found && !seenDates.has(found.date)) {
+          results.push(found.timestamp)
+          seenDates.add(found.date)
+        }
+      })
+    })
+    return results.sort((a,b) => a - b)
   }, [enrichedStockHistory])
 
   const renderBuyDot = (props: any) => {
@@ -295,6 +309,12 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
           </div>
         )}
 
+        <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-bold text-[var(--t2)] animate-slide-up">
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'var(--accent)' }} /> 股價線</div>
+          <div className="flex items-center gap-1.5"><div className="w-4 h-0 border-b-2 border-dashed" style={{ borderColor: 'rgba(255,255,255,0.8)' }} /> 買入均價</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full border-2 border-[var(--accent)] bg-white" /> 買入點</div>
+        </div>
+
         <div 
           ref={scrollerRef}
           onPointerDown={handlePointerDown}
@@ -310,13 +330,12 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={enrichedStockHistory} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={stockTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval="preserveStartEnd" />
+                <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval={0} />
                 <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--accent)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
                 <Tooltip 
                   content={<StockTooltip />} 
                   active={isScrubbing}
                 />
-                <Legend verticalAlign="top" height={36} iconType="circle" wrapperStyle={{ fontSize: '11px', fontWeight: 'bold' }} />
                 <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" isAnimationActive={false} />
                 <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" isAnimationActive={false} />
                 <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" isAnimationActive={false} />
