@@ -486,21 +486,22 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
   const nameZh = q?.name_zh || h.symbol
 
   return (
-    <div className={`transition-all duration-300 border-0 ${isExpanded ? 'bg-black/40 ring-1 ring-accent/20' : 'bg-black/20'} rounded-2xl shadow-xl overflow-hidden`}>
+    <div className={`transition-all duration-300 border-[0.5px] ${isExpanded ? 'bg-[#232429] border-[#d4af37] ring-1 ring-[#d4af37]/30' : 'bg-[#232429] border-[#d4af37]/20'} rounded-2xl shadow-xl overflow-hidden`}>
       <div className="py-5 px-6 cursor-pointer active:bg-white/5 space-y-4" onClick={onToggle}>
         <div className="flex justify-between items-start">
           <div className="space-y-1">
             <div className="font-black text-[var(--t1)] text-[17px] tracking-tight">{nameZh}</div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-[var(--t3)] opacity-60">
+              <span className="text-[11px] font-bold text-[#EAD8B1] opacity-90">
                 {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
               </span>
               {q?.change !== undefined && (() => {
                 const isUp = q.change > 0, isDown = q.change < 0
-                const changeClass = isUp ? 'bg-red-500 text-white' : isDown ? 'bg-green-500 text-white' : 'bg-white/10 text-white'
+                const changeClass = isUp ? 'bg-red-500/80 text-white' : isDown ? 'bg-green-600/80 text-white' : 'bg-white/10 text-white'
                 return (
-                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${changeClass}`}>
-                    {isUp ? '+' : ''}{Math.abs(q.change_pct).toFixed(2)}%
+                  <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-0.5 ${changeClass}`}>
+                    {isUp ? <TrendingUp size={10} strokeWidth={3} /> : isDown ? <TrendingDown size={10} strokeWidth={3} /> : null}
+                    {isUp ? '+' : ''}{Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
                   </span>
                 )
               })()}
@@ -511,15 +512,15 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
         
         <div className="grid grid-cols-2 gap-4 pt-1">
           <div className="space-y-1">
-            <div className="text-[9px] font-black text-[var(--t3)] uppercase tracking-widest opacity-50">持有成本 / 預估淨市值</div>
+            <div className="text-[9px] font-black text-[#EAD8B1] uppercase tracking-widest opacity-60">持有成本 / 預估淨市值</div>
             <div className="text-[15px] font-black text-[var(--t1)] font-mono flex items-baseline gap-1.5">
               {fmtMoney(Math.round(h.total_cost))} <span className="text-[10px] opacity-20">/</span> <span className="text-accent">{fmtMoney(Math.round(h.net_market_value))}</span>
             </div>
           </div>
           <div className="text-right space-y-1">
-            <div className="text-[9px] font-black text-[var(--t3)] uppercase tracking-widest opacity-50">未實現損益</div>
+            <div className="text-[9px] font-black text-[#EAD8B1] uppercase tracking-widest opacity-60">未實現損益</div>
             <div className={`text-[15px] font-black font-mono ${color} flex items-baseline justify-end gap-1.5`}>
-              {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} <span className="text-[10px] opacity-50">({(h.pnl_pct ?? 0).toFixed(2)}%)</span>
+              {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} <span className="text-[10px] opacity-70">({(h.pnl_pct ?? 0).toFixed(2)}%)</span>
             </div>
           </div>
         </div>
@@ -619,21 +620,21 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
     </div>
   )
   return (
-    <div className="group relative flex justify-between items-center px-6 py-3 hover:bg-white/5 transition-all">
+    <div className="group relative flex justify-between items-center px-6 py-4 hover:bg-white/5 transition-all">
       <div className="flex flex-col gap-0.5">
-        <div className="text-[9px] text-[var(--t3)] font-mono opacity-30 tracking-tight">{t.trade_date}</div>
-        <div className="text-[13px] font-bold text-[var(--t2)] flex items-center gap-1.5">
-          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[9px] opacity-20 font-light">@</span> {(t.price ?? 0).toFixed(2)}
-          {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-[7.5px] text-yellow-500/60 border border-yellow-500/20 px-1 py-0.5 rounded font-black leading-none ml-1">DCA</span>}
+        <div className="text-[10px] text-[#EAD8B1] font-mono opacity-50 tracking-tight">{t.trade_date}</div>
+        <div className="text-[14px] font-bold text-[#EAD8B1] opacity-90 flex items-center gap-1.5">
+          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] opacity-20 font-light">@</span> {(t.price ?? 0).toFixed(2)}
+          {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-[8px] text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black tracking-tighter uppercase leading-none ml-1">DCA</span>}
         </div>
       </div>
       <div className="flex items-center gap-5">
-        <div className={`text-[13px] font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+        <div className={`text-[14px] font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
           {net >= 0 ? '+' : ''}{fmtMoney(net)}
         </div>
-        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="p-1.5 rounded-lg bg-white/5 text-[var(--t3)] hover:text-accent transition-colors"><Pencil size={11} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-1.5 rounded-lg bg-white/5 text-[var(--t3)] hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-accent transition-colors shadow-lg"><Pencil size={13} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-red-400 transition-colors shadow-lg"><Trash2 size={13} /></button>
         </div>
       </div>
     </div>
