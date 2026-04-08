@@ -39,7 +39,6 @@ export default function HoldingsTab({ onRefresh }: Props) {
   const { holdings, fullHistoryStats, allTimeRealized: totalRealized } = stats
   
   const currentYear = new Date().getFullYear().toString()
-  const currentYear = new Date().getFullYear().toString()
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showData, setShowData] = useState(true)
   const [selectedPieSym, setSelectedPieSym] = useState<string | null>(null)
