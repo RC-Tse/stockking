@@ -16,6 +16,10 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
+  // Today for Future Guard
+  const now = new Date()
+  const todayStr = now.toISOString().split('T')[0]
+
   // 1. Try Cache First (daily_snapshots)
   const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
   const lastDay = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
@@ -28,19 +32,25 @@ export async function GET(request: Request) {
     .lte('snapshot_date', lastDay)
     .order('snapshot_date', { ascending: true })
 
+  // Only use cache if it's full AND looks valid (not affected by previous future-date bugs if today changed)
+  // Actually, we'll re-calculate if the cache contains future entries that might have been zeroed before.
   if (cached && cached.length >= new Date(year, month, 0).getDate()) {
-    return NextResponse.json(cached.map(row => ({
-      entry_date: row.snapshot_date,
-      daily_pnl: Number(row.daily_pnl),
-      daily_pnl_pct: Number(row.daily_pnl_pct),
-      realized_pnl: Number(row.realized_pnl),
-      is_market_closed: row.is_market_closed,
-      pnl: Number(row.gross_mv - row.total_cost),
-      pnl_pct: Number(row.total_cost) ? (Number(row.gross_mv - row.total_cost) / Number(row.total_cost) * 100) : 0,
-      net_market_value: Number(row.gross_mv),
-      details: row.daily_stock_list_json,
-      hasTransactions: (row.daily_stock_list_json as any[]).some(d => d.has_tx_today)
-    })))
+    const latestSnapshotDate = cached[cached.length - 1].snapshot_date
+    // If cache ends before or on today, it's safe. If it goes into future, we might want to refresh if today moved.
+    if (latestSnapshotDate <= todayStr) {
+      return NextResponse.json(cached.map(row => ({
+        entry_date: row.snapshot_date,
+        daily_pnl: Number(row.daily_pnl),
+        daily_pnl_pct: Number(row.daily_pnl_pct),
+        realized_pnl: Number(row.realized_pnl),
+        is_market_closed: row.is_market_closed,
+        pnl: Number(row.gross_mv - row.total_cost),
+        pnl_pct: Number(row.total_cost) ? (Number(row.gross_mv - row.total_cost) / Number(row.total_cost) * 100) : 0,
+        net_market_value: Number(row.gross_mv),
+        details: row.daily_stock_list_json,
+        hasTransactions: (row.daily_stock_list_json as any[]).some(d => d.has_tx_today)
+      })))
+    }
   }
 
   // 2. Fetch Transactions & Settings for calculation
@@ -76,6 +86,8 @@ export async function GET(request: Request) {
 
   while (cur <= endDate) {
     const dateStr = cur.toISOString().split('T')[0]
+    const isFuture = dateStr > todayStr
+    
     const txsToday = txMap.get(dateStr) || []
     const dow = cur.getDay() // 0=Sun, 6=Sat
     
@@ -83,6 +95,7 @@ export async function GET(request: Request) {
     let costChangeToday = 0
     const stockContribution: Record<string, { costChange: number; realized: number }> = {}
 
+    // Process Transactions (still process even for future if needed, but usually none exist)
     for (const tx of txsToday) {
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
       const lots = inventory[tx.symbol]
@@ -125,7 +138,7 @@ export async function GET(request: Request) {
     const details: any[] = []
     const heldSymbols = Object.keys(inventory).filter(s => inventory[s].reduce((a, l) => a + l.shares, 0) > 0)
     
-    if (heldSymbols.length > 0) {
+    if (!isFuture && heldSymbols.length > 0) {
       const qRes = await fetch(`${origin}/api/stocks?symbols=${heldSymbols.join(',')}&date=${dateStr}`)
       const quotes = qRes.ok ? await qRes.json() : {}
       for (const sym of heldSymbols) {
@@ -147,24 +160,39 @@ export async function GET(request: Request) {
         })
         stockState[sym] = { prevNetMV: netMV, prevCost: cost }
       }
+    } else if (isFuture) {
+      // For future, we still need to track 'Cost' to keep the chain continuous if transactions exist
+      curTotalCost = Object.keys(inventory).reduce((acc, sym) => {
+        return acc + inventory[sym].reduce((s, l) => s + (l.origPrincipal + l.origFee - l.matchedCost), 0)
+      }, 0)
+      curTotalMV = 0 // Future price is unknown
     }
 
-    let daily_pnl = !hasPrevHistory ? (curTotalMV - curTotalCost) : ((curTotalMV - prevTotalMV) - costChangeToday + realizedToday)
+    let daily_pnl = 0
+    let daily_pnl_pct = 0
+
+    if (!isFuture) {
+      daily_pnl = !hasPrevHistory ? (curTotalMV - curTotalCost) : ((curTotalMV - prevTotalMV) - costChangeToday + realizedToday)
+      const denom = (prevTotalMV || curTotalCost)
+      daily_pnl_pct = (denom < 1) ? 0 : (daily_pnl / denom * 100)
+    }
+
     if (!hasPrevHistory && (curTotalCost > 0 || txsToday.length > 0)) hasPrevHistory = true
 
     // Market Closing Detection
     let isMarketClosed = (dow === 0 || dow === 6)
-    if (!isMarketClosed && heldSymbols.length > 0) {
-      // Heuristic for holidays: All changes are exactly zero
+    if (!isMarketClosed && heldSymbols.length > 0 && !isFuture) {
       const allZero = details.every(d => Math.abs(d.change) < 0.0001)
       if (allZero) isMarketClosed = true
+    } else if (isFuture) {
+      isMarketClosed = true // Future days are effectively closed for display
     }
 
     const isCurrentMonth = cur.getFullYear() === year && (cur.getMonth() + 1) === month
     if (isCurrentMonth) {
       const sortedDetails = details.sort((a, b) => b.cost - a.cost)
       results.push({
-        entry_date: dateStr, daily_pnl, daily_pnl_pct: (prevTotalMV || curTotalCost) ? (daily_pnl / (prevTotalMV || curTotalCost) * 100) : 0,
+        entry_date: dateStr, daily_pnl, daily_pnl_pct,
         realized_pnl: realizedToday, pnl: curTotalMV - curTotalCost, pnl_pct: curTotalCost ? (curTotalMV - curTotalCost) / curTotalCost * 100 : 0,
         net_market_value: curTotalMV, note: txsToday.find(t => t.note)?.note || '', hasTransactions: txsToday.length > 0,
         is_market_closed: isMarketClosed,
@@ -172,7 +200,7 @@ export async function GET(request: Request) {
       })
       snapshotsToUpsert.push({
         user_id: user.id, snapshot_date: dateStr, gross_mv: curTotalMV, total_cost: curTotalCost,
-        daily_pnl, daily_pnl_pct: (prevTotalMV || curTotalCost) ? (daily_pnl / (prevTotalMV || curTotalCost) * 100) : 0,
+        daily_pnl, daily_pnl_pct,
         realized_pnl: realizedToday, is_market_closed: isMarketClosed, daily_stock_list_json: sortedDetails
       })
     }
