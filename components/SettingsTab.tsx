@@ -22,12 +22,12 @@ interface Props {
 type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL'
 
 const THEMES = [
-  { id: 'dark',   name: '深色主題', colors: ['#0a0c10', '#161c28', '#d4af37'] },
-  { id: 'light',  name: '淺色主題', colors: ['#E0D3DE', '#CBB8A9', '#B3B492'] },
-  { id: 'blue',   name: '藍色主題', colors: ['#222222', '#1C5D99', '#639FAB'] },
-  { id: 'green',  name: '綠色主題', colors: ['#373D20', '#717744', '#BCBD8B'] },
-  { id: 'rose',   name: '玫瑰主題', colors: ['#EFD3D7', '#FEEAFA', '#CBC0D3'] },
-  { id: 'purple', name: '紫色主題', colors: ['#000000', '#502F4C', '#C8B8DB'] },
+  { id: 'dark',   name: '深色主題', colors: ['#0A0C10', '#232429', '#D4AF37'] },
+  { id: 'light',  name: '淺色主題', colors: ['#F2EFE9', '#E3DDD3', '#B3B492'] },
+  { id: 'blue',   name: '藍色主題', colors: ['#F2EFE9', '#003366', '#4682B4'] },
+  { id: 'green',  name: '綠色主題', colors: ['#080C07', '#1A2314', '#A4B494'] },
+  { id: 'rose',   name: '玫瑰主題', colors: ['#0C0809', '#2D1F21', '#D0A9AF'] },
+  { id: 'purple', name: '紫色主題', colors: ['#100818', '#3B2458', '#8B5CF6'] },
 ] as const
 
 export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
