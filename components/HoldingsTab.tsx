@@ -507,7 +507,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
               })()}
             </div>
           </div>
-          <div className="text-[12px] font-mono text-[var(--t3)] opacity-30 mt-1">{codeOnly(h.symbol)}</div>
+          <div className="text-[12px] font-mono text-[#EAD8B1] opacity-60 mt-1">{codeOnly(h.symbol)}</div>
         </div>
         
         <div className="grid grid-cols-2 gap-4 pt-1">
@@ -528,7 +528,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
 
       {isExpanded && (
         <div className="bg-black/30 border-t border-white/5 pb-2 animate-slide-up">
-          <div className="px-6 py-2.5 text-[10px] font-black text-[var(--t3)] uppercase tracking-[0.2em] border-b border-white/5 opacity-40 mb-2">歷史交易明細</div>
+          <div className="px-6 py-2.5 text-[10px] font-black text-[#EAD8B1] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">歷史交易明細</div>
           <div className="px-2 space-y-0.5">
             {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
           </div>
@@ -624,7 +624,7 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
       <div className="flex flex-col gap-0.5">
         <div className="text-[10px] text-[#EAD8B1] font-mono opacity-50 tracking-tight">{t.trade_date}</div>
         <div className="text-[14px] font-bold text-[#EAD8B1] opacity-90 flex items-center gap-1.5">
-          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] opacity-20 font-light">@</span> {(t.price ?? 0).toFixed(2)}
+          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] text-[#EAD8B1] opacity-40 font-light">@</span> {(t.price ?? 0).toFixed(2)}
           {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-[8px] text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black tracking-tighter uppercase leading-none ml-1">DCA</span>}
         </div>
       </div>
@@ -632,7 +632,7 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
         <div className={`text-[14px] font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
           {net >= 0 ? '+' : ''}{fmtMoney(net)}
         </div>
-        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className="flex gap-2">
           <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-accent transition-colors shadow-lg"><Pencil size={13} /></button>
           <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-red-400 transition-colors shadow-lg"><Trash2 size={13} /></button>
         </div>
