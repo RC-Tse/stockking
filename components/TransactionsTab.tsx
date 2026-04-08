@@ -111,7 +111,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
       }))
       .sort((a, b) => b.realized - a.realized)
 
-    // Phase 3: Violence Fix - Global Aggregation from Integer Source ONLY
+    // Phase 3: Super Violence Fix - Global Summary from finalized stocks ONLY
     const summary = stocks.reduce((acc, s) => ({
       totalBuy: acc.totalBuy + s.buy,
       totalSell: acc.totalSell + s.sell,
@@ -121,7 +121,10 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
       sellCount: acc.sellCount + s.count
     }), { totalBuy: 0, totalSell: 0, totalFee: 0, totalTax: 0, totalRealized: 0, sellCount: 0 })
 
-    return { summary: { ...summary, buyCount: summary.sellCount }, stocks }
+    return { 
+      summary: { ...summary, buyCount: summary.sellCount }, 
+      stocks 
+    }
   }, [txs, tab, realizedRange, settings])
 
   const groupedData = useMemo(() => {
