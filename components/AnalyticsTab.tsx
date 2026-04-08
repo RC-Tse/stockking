@@ -301,12 +301,12 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
           onPointerLeave={handlePointerUp}
-          className={`card-base pt-4 pb-4 pl-4 pr-0 h-84 border-white/10 bg-black/20 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x ${isScrubbing ? 'overflow-x-hidden' : ''}`}
-          style={{ WebkitOverflowScrolling: 'touch' }}
+          className={`card-base pt-4 pb-4 pl-4 pr-0 border-white/10 bg-black/20 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x ${isScrubbing ? 'overflow-x-hidden' : ''}`}
+          style={{ WebkitOverflowScrolling: 'touch', height: '320px' }}
         >
           {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
           
-          <div style={{ width: chartWidthPercent, height: '100%', minWidth: '100%' }}>
+          <div style={{ width: chartWidthPercent, height: '280px', minWidth: '100%' }}>
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={enrichedStockHistory} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
