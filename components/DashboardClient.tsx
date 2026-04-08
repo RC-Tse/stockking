@@ -42,7 +42,9 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
     if (!inventory[tx.symbol]) inventory[tx.symbol] = []
     const lots = inventory[tx.symbol]
     if (tx.action === 'BUY' || tx.action === 'DCA') {
-      lots.push({ shares: tx.shares, cost: Math.floor(tx.amount) + Math.floor(tx.fee) })
+      const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
+      const f = calcFee(tx.amount, settings, false, isDca)
+      lots.push({ shares: tx.shares, cost: Math.floor(tx.amount + f) })
     } else if (tx.action === 'SELL') {
       let sellRemaining = tx.shares
       let costBasis = 0
@@ -56,7 +58,10 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
         sellRemaining -= take
         if (lots[0].shares <= 0) lots.shift()
       }
-      allTimeRealized += Math.floor(tx.net_amount - costBasis)
+      const f = calcFee(tx.amount, settings, true)
+      const t = calcTax(tx.amount, tx.symbol, settings)
+      const net = Math.floor(tx.amount - f - t)
+      allTimeRealized += Math.floor(net - costBasis)
     }
   }
   const hList = Object.entries(inventory)
@@ -68,9 +73,9 @@ function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settin
       const q = quotes[sym]
       const cp = q?.bid_price || q?.price || 0
       const mv = Math.floor(cp * netShares)
-      const sell_fee = Math.floor(calcFee(mv, settings, true))
-      const sell_tax = Math.floor(calcTax(mv, sym, settings))
-      const net_mv = mv - sell_fee - sell_tax
+      const sell_fee = calcFee(mv, settings, true)
+      const sell_tax = calcTax(mv, sym, settings)
+      const net_mv = Math.floor(mv - sell_fee - sell_tax)
       const upnl = net_mv - totalCost
       return {
         symbol: sym,

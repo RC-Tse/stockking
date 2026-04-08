@@ -69,11 +69,16 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
       const buyYear = tx.trade_date.split('-')[0]
 
       if (tx.action !== 'SELL') {
-        const cost = Math.floor(tx.amount) + Math.floor(tx.fee)
+        const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
+        const f = calcFee(tx.amount, settings, false, isDca)
+        const cost = Math.floor(tx.amount + f)
         inventory[tx.symbol].push({ shares: tx.shares, cost, buyYear })
         stockHistory[tx.symbol].buyCost += cost
       } else {
-        stockHistory[tx.symbol].sellRev += tx.net_amount
+        const f = calcFee(tx.amount, settings, true)
+        const t = calcTax(tx.amount, tx.symbol, settings)
+        const singleNet = Math.floor(tx.amount - f - t)
+        stockHistory[tx.symbol].sellRev += singleNet
         let sellRemaining = tx.shares
         let costBasisForTx = 0
         const sellYear = tx.trade_date.split('-')[0]
@@ -90,7 +95,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           lot.shares -= sharesFromLot
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
-        const profit = Math.floor(tx.net_amount - costBasisForTx)
+        const profit = Math.floor(singleNet - costBasisForTx)
         totalRealized += profit
         realizedBySellYear[sellYear] = (realizedBySellYear[sellYear] || 0) + profit
       }

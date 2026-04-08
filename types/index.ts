@@ -127,7 +127,7 @@ export const ETF_CODES = new Set([
 
 export function isEtf(symbol: string): boolean {
   const code = symbol.toUpperCase().replace('.TW','').replace('.TWO','')
-  return ETF_CODES.has(code)
+  return code.startsWith('00')
 }
 
 export function codeOnly(symbol: string): string {
@@ -135,13 +135,13 @@ export function codeOnly(symbol: string): string {
 }
 
 export function calcFee(amount: number, s: UserSettings, isSell = false, isDca = false): number {
-  if (isDca) {
-    return s.dca_fee_min
-  }
+  // DCA: use fixed fee from settings directly (no rate calculation)
+  if (isDca) return s.dca_fee_min
+  // Regular buy/sell: rate * discount, minimum 1 yuan
   const rate = isSell
     ? s.sell_fee_rate * s.sell_discount
     : s.buy_fee_rate * s.buy_discount
-  return Math.max(Math.floor(amount * rate), s.fee_min)
+  return Math.max(1, Math.floor(amount * rate))
 }
 
 export function calcTax(amount: number, symbol: string, s: UserSettings): number {

@@ -71,10 +71,12 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
       const stock = stats[tx.symbol]
 
       if (tx.action !== 'SELL') {
-        const cost = Math.floor(tx.amount) + Math.floor(tx.fee)
-        inventory[tx.symbol].push({ shares: tx.shares, cost, date: tx.trade_date, id: tx.id })
-        if (inRange) { totalBuy += Math.floor(tx.amount); totalFee += Math.floor(tx.fee); buyCount++; stock.buy += Math.floor(tx.amount); stock.count++ }
-        stock.history.push({ ...tx, type: 'BUY' })
+        const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
+        const f = calcFee(tx.amount, settings, false, isDca)
+        const singleNet = Math.floor(tx.amount + f)
+        inventory[tx.symbol].push({ shares: tx.shares, cost: singleNet, date: tx.trade_date, id: tx.id })
+        if (inRange) { totalBuy += singleNet; totalFee += f; buyCount++; stock.buy += singleNet; stock.count++ }
+        stock.history.push({ ...tx, type: 'BUY', net: singleNet })
       } else {
         let rem = tx.shares, costBasis = 0, matches = []
         while (rem > 0 && inventory[tx.symbol].length) {
@@ -84,9 +86,12 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
           lot.shares -= take; lot.cost -= pCost; rem -= take
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
-        const profit = Math.floor(tx.net_amount - costBasis)
-        if (inRange) { totalSell += Math.floor(tx.amount); totalFee += Math.floor(tx.fee); totalTax += Math.floor(tx.tax); totalRealized += profit; totalBuy += costBasis; sellCount++; stock.sell += tx.net_amount; stock.realized += profit; stock.count++ }
-        stock.history.push({ ...tx, type: 'SELL', matches, profit })
+        const f = calcFee(tx.amount, settings, true)
+        const t = calcTax(tx.amount, tx.symbol, settings)
+        const singleNet = Math.floor(tx.amount - f - t)
+        const profit = Math.floor(singleNet - costBasis)
+        if (inRange) { totalSell += singleNet; totalFee += f; totalTax += t; totalRealized += profit; totalBuy += costBasis; sellCount++; stock.sell += singleNet; stock.realized += profit; stock.count++ }
+        stock.history.push({ ...tx, type: 'SELL', matches, profit, net: singleNet })
       }
     }
     return { summary: { totalBuy, totalSell, totalFee, totalTax, totalRealized, buyCount, sellCount }, stocks: Object.entries(stats).filter(([,s])=>s.count>0).map(([sym,s])=>({symbol:sym, ...s})).sort((a,b)=>b.realized-a.realized) }
@@ -195,7 +200,12 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
                 </div>
                 <span className="font-black text-[var(--t1)] text-[12px]">{(tx.shares ?? 0).toLocaleString()} 股 @ {(tx.price ?? 0).toFixed(2)}</span>
               </div>
-              <div className="flex justify-between items-center pl-1"><span className="opacity-20 text-[10px] font-bold">費 {fmtMoney(Math.floor(tx.fee))}{tx.tax>0&&` 稅 ${fmtMoney(Math.floor(tx.tax))}`}</span><span className={`font-mono font-black text-[12px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>{tx.net_amount>=0?'+':''}{fmtMoney(tx.net_amount)}</span></div>
+              <div className="flex justify-between items-center pl-1">
+                <span className="opacity-20 text-[10px] font-bold">費 {fmtMoney(calcFee(tx.amount, settings, tx.action==='SELL', tx.action==='DCA' || tx.trade_type==='DCA'))}{tx.action==='SELL'&&` 稅 ${fmtMoney(calcTax(tx.amount, tx.symbol, settings))}`}</span>
+                <span className={`font-mono font-black text-[12px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
+                  {tx.net_amount>=0?'+':''}{fmtMoney(tx.type==='BUY' ? -Math.floor(tx.amount + calcFee(tx.amount, settings, false, tx.action==='DCA' || tx.trade_type==='DCA')) : Math.floor(tx.amount - calcFee(tx.amount, settings, true) - calcTax(tx.amount, tx.symbol, settings)))}
+                </span>
+              </div>
               {tx.matches?.map((m:any,i:number)=><div key={i} className="pl-4 border-l-2 border-white/10 text-[10px] text-[var(--t3)] italic py-0.5 ml-1">沖銷 {m.date} 買入 ({m.shares} 股)</div>)}
               {tx.type==='SELL' && <div className={`text-right font-black text-[11px] pt-1.5 border-t border-white/5 ${tx.profit>=0?'text-red-400/60':'text-green-400/60'}`}>此筆損益 {tx.profit>=0?'+':''}{fmtMoney(Math.round(tx.profit))}</div>}
             </div>
@@ -233,7 +243,7 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
           <div className="grid grid-cols-3 gap-4 pt-5">
             <DetailItem label="股數" value={(tx.shares ?? 0).toLocaleString()}/>
             <DetailItem label="價格" value={(tx.price ?? 0).toFixed(2)}/>
-            <DetailItem label="費用" value={fmtMoney(Math.floor(tx.fee) + Math.floor(tx.tax))}/>
+            <DetailItem label="費用" value={fmtMoney(calcFee(tx.amount, settings, tx.action==='SELL', tx.action==='DCA' || tx.trade_type==='DCA') + (tx.action==='SELL'?calcTax(tx.amount, tx.symbol, settings):0))}/>
           </div>
           {tx.note && <div className="p-3 rounded-xl bg-white/5 text-[11px] text-[var(--t2)] italic leading-relaxed border border-white/5">"{tx.note}"</div>}
           <div className="flex gap-3 pt-1"><button onClick={()=>setIsEditing(true)} className="flex-[3] btn-primary py-3 flex items-center justify-center gap-2 text-sm"><Pencil size={16}/>編輯</button><button onClick={()=>onDelete(tx.id)} className="flex-1 btn-danger py-3 flex items-center justify-center active:scale-95 transition-all"><Trash2 size={18}/></button></div>
@@ -258,7 +268,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: any) {
   const actionToSave = isBuy ? (isDcaOpt ? 'DCA' : 'BUY') : 'SELL'
   const fee = calcFee(amount, settings, !isBuy, actionToSave === 'DCA')
   const tax = tx.action === 'SELL' ? calcTax(amount, tx.symbol, settings) : 0
-  const net = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
+  const net = isBuy ? -Math.floor(amount + fee) : Math.floor(amount - fee - tax)
   
   const isValid = finalShares > 0 && safePrice > 0 && (
     date !== tx.trade_date || 
@@ -299,7 +309,7 @@ function EditForm({ tx, settings, onCancel, onSaved }: any) {
       <div className="space-y-1.5"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
       <div className="space-y-1.5"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-sm py-3" placeholder="選填..." /></div>
       <div className="card-base p-4 space-y-2 bg-black/20 text-[11px] font-bold">
-        <div className="flex justify-between opacity-40"><span>手續費 + 稅</span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
+        <div className="flex justify-between opacity-40"><span>手續費 + 稅</span><span>{fmtMoney(fee + tax)}</span></div>
         <div className="flex justify-between items-center pt-2 border-t border-white/5"><span className="text-[var(--t2)]">預估淨收支</span><span className={`text-base font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
       </div>
       <div className="flex gap-3 pt-1"><button onClick={handleSave} disabled={!isValid} className="flex-[3] btn-primary py-3.5">確認修改</button><button onClick={onCancel} className="flex-1 btn-secondary py-3.5">取消</button></div>
