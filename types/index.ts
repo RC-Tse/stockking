@@ -65,6 +65,26 @@ export interface Quote {
   volume: number
 }
 
+export interface CalendarEntry {
+  entry_date: string
+  pnl: number
+  pnl_pct?: number
+  realized_pnl?: number
+  daily_pnl?: number
+  daily_pnl_pct?: number
+  net_market_value?: number
+  gross_market_value?: number
+  capital_in?: number
+  note: string
+  details?: {
+    symbol: string
+    name: string
+    price: number
+    pnl: number
+    pnl_pct: number
+    shares: number
+  }[]
+}
 
 export interface UserSettings {
   broker_name: string
