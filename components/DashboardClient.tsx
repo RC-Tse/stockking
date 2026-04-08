@@ -225,14 +225,14 @@ export default function DashboardClient({ user }: { user: AppUser }) {
         </button>
       )}
 
-      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[#232429]/95 backdrop-blur-2xl border-t border-[#d4af37]/20">
+      <nav className="fixed bottom-0 inset-x-0 md:max-w-[480px] md:mx-auto z-40 pb-safe bg-[var(--bg-surface)]/90 backdrop-blur-2xl border-t border-[var(--border-bright)] shadow-[0_-4px_20px_rgba(0,0,0,0.03)]">
         <div className="flex h-20 items-center">
           {TABS.map(t => {
             const Icon = t.icon, active = tab === t.id
             return (
               <button key={t.id} onClick={() => setTab(t.id)}
-                className={`flex-1 relative flex flex-col items-center justify-center gap-1.5 transition-all ${active ? 'text-[var(--accent)]' : 'text-[var(--accent)] opacity-40'}`}>
-                <div className={`p-2 rounded-full transition-all duration-300 ${active ? 'ring-2 ring-[var(--accent)] shadow-[0_0_15px_rgba(212,175,55,0.3)]' : 'ring-0'}`}>
+                className={`flex-1 relative flex flex-col items-center justify-center gap-1.5 transition-all ${active ? 'text-[var(--accent)]' : 'text-[var(--t2)] opacity-40'}`}>
+                <div className={`p-2 rounded-full transition-all duration-300 ${active ? 'ring-2 ring-[var(--accent)] shadow-[0_0_15px_var(--accent-dim)]' : 'ring-0'}`}>
                   <Icon size={20} strokeWidth={active ? 2.5 : 2} />
                 </div>
                 <span className="font-black text-[9px] uppercase tracking-[0.15em]">{t.label}</span>

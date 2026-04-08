@@ -49,12 +49,12 @@
   --bg-hover: #004080;
   --border: rgba(0, 0, 0, 0.05);
   --border-bright: rgba(70, 130, 180, 0.3);
-  --t1: #F0F2F5;
-  --t2: #B0C4DE;
-  --t3: #4682B4;
-  --accent: #4682B4;
-  --accent-bright: #87CEEB;
-  --accent-dim: rgba(70, 130, 180, 0.1);
+  --t1: #1A2B3D;
+  --t2: #34495E;
+  --t3: #5D6D7E;
+  --accent: #004080;
+  --accent-bright: #4682B4;
+  --accent-dim: rgba(0, 64, 128, 0.1);
 }
 
 [data-theme="green"] {
