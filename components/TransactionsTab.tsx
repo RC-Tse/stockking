@@ -62,21 +62,20 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
     if (tab !== 'REALIZED') return null
     const sorted = [...txs].sort((a,b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
     const inventory: any = {}, stats: Record<string, any> = {}
-    let totalBuy = 0, totalSell = 0, totalFee = 0, totalTax = 0, totalRealized = 0, buyCount = 0, sellCount = 0
 
     for (const tx of sorted) {
       const isSell = tx.action === 'SELL'
       const inRange = tx.trade_date >= realizedRange.start && tx.trade_date <= realizedRange.end
       
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-      if (!stats[tx.symbol]) stats[tx.symbol] = { buy: 0, sell: 0, realized: 0, count: 0, history: [] }
+      if (!stats[tx.symbol]) stats[tx.symbol] = { buy: 0, sell: 0, realized: 0, fee: 0, tax: 0, count: 0, history: [] }
       const stock = stats[tx.symbol]
 
       if (!isSell) {
         // Buy / DCA: Record in inventory
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.amount, settings, false, isDca)
-        const principal = tx.amount // shares * price
+        const principal = tx.amount 
         inventory[tx.symbol].push({ 
           shares: tx.shares, 
           principal, 
@@ -101,13 +100,10 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
           const lot = inventory[tx.symbol][0]
           const take = Math.min(lot.shares, rem)
           const ratio = take / lot.origShares
-          
           const matchedPrincipal = (take / lot.shares) * lot.principal
           const matchedFee = ratio * lot.fee
-          
           matchedBuyCostTotal += (matchedPrincipal + matchedFee)
           matchedBuyFeeTotal += matchedFee
-          
           matches.push({ date: lot.date, shares: take })
           lot.shares -= take; lot.principal -= matchedPrincipal; rem -= take
           if (lot.shares <= 0) inventory[tx.symbol].shift()
@@ -117,31 +113,44 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
         const profit = sellProceeds - finalMatchedCost
         
         if (inRange) {
-          totalSell += sellProceeds
-          totalBuy += finalMatchedCost
-          totalFee += (matchedBuyFeeTotal + f)
-          totalTax += t
-          totalRealized += profit
-          sellCount++
+          stock.buy += finalMatchedCost
           stock.sell += sellProceeds
+          stock.fee += (matchedBuyFeeTotal + f)
+          stock.tax += t
           stock.realized += profit
           stock.count++
         }
         stock.history.push({ ...tx, type: 'SELL', matches, profit, net: sellProceeds })
       }
     }
-    // Final rounding for UI
+
+    // Step 2: Post-process stocks and calculate summary via integer summation
+    let totalBuy = 0, totalSell = 0, totalFee = 0, totalTax = 0, totalRealized = 0, sellCount = 0
+    const stocks = Object.entries(stats)
+      .filter(([, s]) => s.count > 0)
+      .map(([sym, s]) => {
+        const rounded = {
+          symbol: sym,
+          ...s,
+          buy: Math.floor(s.buy),
+          sell: Math.floor(s.sell),
+          realized: Math.floor(s.realized),
+          fee: Math.floor(s.fee),
+          tax: Math.floor(s.tax)
+        }
+        totalBuy += rounded.buy
+        totalSell += rounded.sell
+        totalFee += rounded.fee
+        totalTax += rounded.tax
+        totalRealized += rounded.realized
+        sellCount += s.count
+        return rounded
+      })
+      .sort((a, b) => b.realized - a.realized)
+
     return { 
-      summary: { 
-        totalBuy: Math.round(totalBuy), 
-        totalSell: Math.round(totalSell), 
-        totalFee: Math.floor(totalFee), 
-        totalTax: Math.floor(totalTax), 
-        totalRealized: Math.round(totalRealized), 
-        buyCount, 
-        sellCount 
-      }, 
-      stocks: Object.entries(stats).filter(([,s])=>s.count>0).map(([sym,s])=>({symbol:sym, ...s})).sort((a,b)=>b.realized-a.realized) 
+      summary: { totalBuy, totalSell, totalFee, totalTax, totalRealized, buyCount: sellCount, sellCount }, 
+      stocks 
     }
   }, [txs, tab, realizedRange, settings])
 
