@@ -186,47 +186,6 @@ export default function TransactionsTab({ onRefresh }: Props) {
   )
 }
 
-function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelete }: any) {
-  const [name, setName] = useState(getStockName(s.symbol))
-  useEffect(() => { fetch(`/api/stockname?symbol=${s.symbol}`).then(res => res.json()).then(data => { if (data.name_zh) setName(data.name_zh) }) }, [s.symbol])
-  return (
-    <div className={`bg-[var(--bg-card)] border-[0.5px] ${expanded?'border-[var(--accent)] ring-1 ring-[var(--accent-bright)]/30 shadow-2xl':'border-[var(--border-bright)]'} rounded-2xl overflow-hidden transition-all shadow-xl`}>
-      <button onClick={onToggle} className="w-full p-5 text-left space-y-4 active:bg-white/5">
-        <div className="flex justify-between items-center"><div className="flex items-center gap-2"><span className="font-black text-[17px] text-[var(--t1)] tracking-tight truncate">{name}</span><span className="text-[12px] font-mono text-[var(--t2)] opacity-60 mt-0.5">{codeOnly(s.symbol)}</span></div><span className={`font-black font-mono text-[17px] ${s.realized>=0?'text-red-400':'text-green-400'}`}>{s.realized>=0?'+':''}{fmtMoney(s.realized)}</span></div>
-        <div className="flex justify-between text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest"><span>投入 {fmtMoney(s.buy)}</span><span>回收 {fmtMoney(s.sell)}</span></div>
-      </button>
-      {expanded && (
-        <div className="bg-black/30 border-t border-white/5 p-5 space-y-6">
-          {s.history.map((tx:any) => (
-            <div key={tx.id} className="space-y-2 animate-in fade-in slide-in-from-left-2">
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className={`px-2.5 py-0.5 rounded-full font-black text-[10px] border ${tx.action==='BUY'||tx.action==='DCA'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='SELL'?'賣出':'買入'}</span>
-                  <span className="text-[var(--t2)] opacity-60 text-[11px] font-mono">{tx.trade_date}</span>
-                  {(tx.action === 'DCA' || tx.trade_type === 'DCA') && <span className="text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black text-[9px] uppercase tracking-tighter ml-1">DCA</span>}
-                </div>
-                <span className="font-black text-[var(--t2)] opacity-90 text-[13px]">{(tx.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] opacity-20">@</span> {(tx.price ?? 0).toFixed(2)}</span>
-              </div>
-              <div className="flex justify-between items-center pl-1">
-                <span className="text-[var(--t2)] opacity-40 text-[10px] font-black uppercase tracking-widest leading-none">費 {fmtMoney(calcFee(tx.amount, settings, tx.action==='SELL', tx.action==='DCA' || tx.trade_type==='DCA'))}{tx.action==='SELL'&&` · 稅 ${fmtMoney(calcTax(tx.amount, tx.symbol, settings))}`}</span>
-                <span className={`font-mono font-black text-[14px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
-                  {tx.net_amount>=0?'+':''}{fmtMoney(tx.type==='BUY' ? -Math.floor(tx.amount + calcFee(tx.amount, settings, false, tx.action==='DCA' || tx.trade_type==='DCA')) : Math.floor(tx.amount - calcFee(tx.amount, settings, true) - calcTax(tx.amount, tx.symbol, settings)))}
-                </span>
-              </div>
-              {tx.matches?.map((m:any,i:number)=><div key={i} className="pl-4 border-l-2 border-white/10 text-[10px] text-[var(--t3)] italic py-0.5 ml-1">沖銷 {m.date} 買入 ({m.shares} 股)</div>)}
-              {tx.type==='SELL' && (
-                <div className={`text-right font-black text-[10px] pt-1.5 border-t border-white/5 space-x-2 ${tx.profit>=0?'text-red-400/60':'text-green-400/60'}`}>
-                  <span className="opacity-40">此筆成本 {fmtMoney(tx.realizedCost)}</span>
-                  <span>此筆損益 {tx.profit>=0?'+':''}{fmtMoney(tx.profit)}</span>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function StatItem({ label, value, sub }: any) { return <div className="flex flex-col"><span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</span><span className="font-black font-mono text-[20px] text-[var(--t1)] leading-tight">{value}</span><span className="text-[10px] font-black text-[var(--t2)] opacity-40 mt-1 uppercase tracking-tighter">{sub}</span></div> }
 
