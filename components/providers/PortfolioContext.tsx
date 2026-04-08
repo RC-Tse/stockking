@@ -19,6 +19,7 @@ interface PortfolioStats {
 interface PortfolioContextType {
   stats: PortfolioStats
   settings: UserSettings
+  quotes: Record<string, Quote>
   loading: boolean
 }
 
@@ -163,7 +164,7 @@ export function PortfolioProvider({
   }, [transactions, quotes, settings])
 
   return (
-    <PortfolioContext.Provider value={{ stats, settings, loading: false }}>
+    <PortfolioContext.Provider value={{ stats, settings, quotes, loading: false }}>
       {children}
     </PortfolioContext.Provider>
   )

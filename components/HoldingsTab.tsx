@@ -35,8 +35,17 @@ interface Props {
 }
 
 export default function HoldingsTab({ onRefresh }: Props) {
-  const { stats, settings } = usePortfolio()
+  const { stats, settings, quotes } = usePortfolio()
   const { holdings, fullHistoryStats, allTimeRealized: totalRealized } = stats
+  
+  // Flattening transactions from fullHistoryStats for the transactional list view
+  const transactions = useMemo(() => {
+    const all: any[] = []
+    Object.values(fullHistoryStats).forEach((s: any) => {
+      s.history.forEach((h: any) => all.push(h))
+    })
+    return all.sort((a, b) => b.trade_date.localeCompare(a.trade_date) || b.id - a.id)
+  }, [fullHistoryStats])
   
   const currentYear = new Date().getFullYear().toString()
   const [deletingId, setDeletingId] = useState<number | null>(null)
