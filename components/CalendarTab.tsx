@@ -41,36 +41,14 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
     const sorted = [...entries].sort((a,b) => a.entry_date.localeCompare(b.entry_date))
     const map: Record<number, any> = {}
     
-    sorted.forEach((e, idx) => {
-      const prev = idx > 0 ? sorted[idx-1] : null
-      
-      const currentGross = e.gross_market_value || 0
-      const prevGross = prev ? (prev.gross_market_value || 0) : 0
-      const currentCapital = e.capital_in || 0
-      const prevCapital = prev ? (prev.capital_in || 0) : 0
-      const realized = e.realized_pnl || 0
-      
-      // Daily PnL Formula: (TodayGross - PrevGross) - (TodayCapital - PrevCapital) + TodayRealized
-      // This isolates the pure market movement + realized profits from new capital purchases.
-      let dailyPnL = 0
-      if (!prev) {
-        // Initialization day
-        dailyPnL = currentGross - currentCapital
-      } else {
-        const capitalInToday = currentCapital - prevCapital
-        dailyPnL = (currentGross - prevGross) - capitalInToday + realized
-      }
-
-      // Daily Rate: Daily PnL / (Prev Gross MV OR Current Capital In for Day 1)
-      const denominator = prev ? prevGross : currentCapital
-      const dailyRate = denominator > 0 ? (dailyPnL / denominator * 100) : 0
-      
+    sorted.forEach((e) => {
       const day = parseInt(e.entry_date.split('-')[2], 10)
       map[day] = { 
         ...e, 
-        dailyPnL, 
-        dailyRate,
-        hasRealized: Math.abs(realized) > 0.01 
+        // Use server-calculated metrics directly
+        dailyPnL: e.daily_pnl || 0, 
+        dailyRate: e.daily_pnl_pct || 0,
+        hasRealized: Math.abs(e.realized_pnl || 0) > 0.01 
       }
     })
     return map

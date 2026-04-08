@@ -70,6 +70,8 @@ export interface CalendarEntry {
   pnl: number
   pnl_pct?: number
   realized_pnl?: number
+  daily_pnl?: number
+  daily_pnl_pct?: number
   net_market_value?: number
   gross_market_value?: number
   capital_in?: number
