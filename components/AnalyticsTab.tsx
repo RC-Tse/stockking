@@ -155,12 +155,26 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
         <circle 
           key={`dot-${payload.date}`} 
           cx={cx} cy={cy} r={5} 
-          fill="#e05050" stroke="#fff" strokeWidth={2} 
-          style={{filter: 'drop-shadow(0 0 4px #e05050)'}} 
+          fill="#e05050" 
+          stroke="#fff" 
+          strokeWidth={2} 
         />
       )
     }
     return null
+  }
+
+  const [activePoint, setActivePoint] = useState<{ y: number, price: number } | null>(null)
+
+  const handleMouseMove = (e: any) => {
+    if (isScrubbing && e && e.activeCoordinate && e.activePayload) {
+      setActivePoint({
+        y: e.activeCoordinate.y,
+        price: e.activePayload[0].payload.price
+      })
+    } else {
+      setActivePoint(null)
+    }
   }
 
   const StockTooltip = ({ active, payload }: any) => {
@@ -312,36 +326,59 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
         <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-bold text-[var(--t2)] animate-slide-up">
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'var(--accent)' }} /> 股價線</div>
           <div className="flex items-center gap-1.5"><div className="w-4 h-0 border-b-2 border-dashed" style={{ borderColor: 'rgba(255,255,255,0.8)' }} /> 買入均價</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full border-2 border-[var(--accent)] bg-white" /> 買入點</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full border-2 border-white bg-[#e05050]" /> 買入點</div>
         </div>
 
-        <div 
-          ref={scrollerRef}
-          onPointerDown={handlePointerDown}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
-          onPointerLeave={handlePointerUp}
-          className={`card-base pt-4 pb-4 pl-4 pr-0 border-white/10 bg-black/20 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x ${isScrubbing ? 'overflow-x-hidden' : ''}`}
-          style={{ WebkitOverflowScrolling: 'touch', height: '320px' }}
-        >
-          {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
-          
-          <div style={{ width: chartWidthPercent, height: '280px', minWidth: '100%' }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={enrichedStockHistory} margin={{ top: 5, right: 30, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval={0} />
-                <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--accent)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
-                <Tooltip 
-                  content={<StockTooltip />} 
-                  active={isScrubbing}
-                />
-                <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" isAnimationActive={false} />
-                <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" isAnimationActive={false} />
-                <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" isAnimationActive={false} />
-              </LineChart>
-            </ResponsiveContainer>
+        <div className="relative group">
+          <div 
+            ref={scrollerRef}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onPointerLeave={handlePointerUp}
+            className={`card-base pt-4 pb-4 pl-4 pr-0 border-white/10 bg-black/20 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x ${isScrubbing ? 'overflow-x-hidden' : ''}`}
+            style={{ WebkitOverflowScrolling: 'touch', height: '320px' }}
+          >
+            {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
+            
+            <div style={{ width: chartWidthPercent, height: '280px', minWidth: '100%' }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart 
+                  data={enrichedStockHistory} 
+                  margin={{ top: 5, right: 30, left: 0, bottom: 5 }}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={() => setActivePoint(null)}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                  <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval={0} />
+                  <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--accent)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
+                  <Tooltip 
+                    content={<StockTooltip />} 
+                    active={isScrubbing}
+                  />
+                  <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" isAnimationActive={false} />
+                  <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" isAnimationActive={false} />
+                  <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" isAnimationActive={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </div>
+
+          {/* 右側固定 Y 軸價格標籤 */}
+          {isScrubbing && activePoint && (
+            <div 
+              className="absolute right-0 pointer-events-none z-50 flex items-center transition-transform duration-75"
+              style={{ 
+                top: 0, // 因為 ResponsiveContainer 在捲軸容器內，這裡需要補償 scroller 的內距
+                transform: `translateY(${activePoint.y + 16}px)` // +16 是因為 card-base 有 pt-4
+              }}
+            >
+              <div className="bg-[#e05050] text-white text-[10px] font-black px-2 py-1 rounded-l shadow-lg border-y border-l border-white/20 whitespace-nowrap">
+                {activePoint.price.toFixed(2)}
+              </div>
+              <div className="w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[4px] border-l-[#e05050]" />
+            </div>
+          )}
         </div>
 
         {selectedHolding && (
