@@ -28,33 +28,52 @@ export async function GET(req: NextRequest) {
   // Filter for the specific period for first two sheets
   const filteredTxs = allTxs.filter(t => t.trade_date >= start_date && t.trade_date <= end_date)
 
+  // Fetch settings for fee/tax calculation
+  const { data: sr } = await supabase.from('settings').select('*').eq('user_id', user.id).single()
+  const settings: any = sr || { buy_fee_rate: 0.001425, buy_discount: 0.285, sell_fee_rate: 0.001425, sell_discount: 0.285, dca_fee_min: 1, tax_stock: 0.003, tax_etf: 0.001 }
+
+  const buildExportTx = (t: any) => {
+    const isDca = t.trade_type === 'DCA' || t.action === 'DCA'
+    const f = Math.max(isDca ? settings.dca_fee_min : 1, Math.floor(t.amount * (t.action === 'SELL' ? settings.sell_fee_rate * settings.sell_discount : settings.buy_fee_rate * settings.buy_discount)))
+    const taxRate = t.symbol.replace('.TW','').replace('.TWO','').startsWith('00') ? settings.tax_etf : settings.tax_stock
+    const tax = t.action === 'SELL' ? Math.floor(t.amount * taxRate) : 0
+    const net = t.action === 'SELL' ? Math.floor(t.amount - f - tax) : -Math.floor(t.amount + f)
+    return { f, tax, net }
+  }
+
   // Sheet 1: 手動交易
-  const selfTxs = filteredTxs.filter(t => t.trade_type !== 'DCA').map(t => ({
-    '日期': t.trade_date,
-    '股票代碼': t.symbol,
-    '中文名稱': t.name_zh || getStockName(t.symbol),
-    '動作': t.action === 'BUY' ? '買入' : '賣出',
-    '整張/零股': t.shares % 1000 === 0 ? '整張' : '零股',
-    '股數': t.shares,
-    '成交價': t.price,
-    '交易金額': t.amount,
-    '手續費': t.fee,
-    '交易稅': t.tax,
-    '淨收支': t.net_amount,
-    '備註': t.note || ''
-  }))
+  const selfTxs = filteredTxs.filter(t => t.trade_type !== 'DCA').map(t => {
+    const { f, tax, net } = buildExportTx(t)
+    return {
+      '日期': t.trade_date,
+      '股票代碼': t.symbol,
+      '中文名稱': t.name_zh || getStockName(t.symbol),
+      '動作': t.action === 'BUY' ? '買入' : '賣出',
+      '整張/零股': t.shares % 1000 === 0 ? '整張' : '零股',
+      '股數': t.shares,
+      '成交價': t.price,
+      '交易金額': Math.floor(t.amount),
+      '手續費': f,
+      '交易稅': tax,
+      '淨收支': net,
+      '備註': t.note || ''
+    }
+  })
 
   // Sheet 2: 定期定額
-  const dcaTxs = filteredTxs.filter(t => t.trade_type === 'DCA').map(t => ({
-    '日期': t.trade_date,
-    '股票代碼': t.symbol,
-    '中文名稱': t.name_zh || getStockName(t.symbol),
-    '申購金額': Math.abs(t.net_amount),
-    '買入股數': t.shares,
-    '成交價': t.price,
-    '手續費': t.fee,
-    '淨收支': t.net_amount
-  }))
+  const dcaTxs = filteredTxs.filter(t => t.trade_type === 'DCA').map(t => {
+    const { f, net } = buildExportTx(t)
+    return {
+      '日期': t.trade_date,
+      '股票代碼': t.symbol,
+      '中文名稱': t.name_zh || getStockName(t.symbol),
+      '申購金額': Math.abs(net),
+      '買入股數': t.shares,
+      '成交價': t.price,
+      '手續費': f,
+      '淨收支': net
+    }
+  })
 
   // Sheet 3: 庫存匯總 (Based on total history)
   const inventory: Record<string, { shares: number, cost: number }[]> = {}
@@ -65,23 +84,29 @@ export async function GET(req: NextRequest) {
     if (!stats[t.symbol]) stats[t.symbol] = { buyCost: 0, sellRev: 0 }
     
     if (t.action === 'BUY' || t.action === 'DCA') {
-      const cost = t.amount + t.fee
+      const isDca = t.trade_type === 'DCA' || t.action === 'DCA'
+      const f = Math.max(isDca ? settings.dca_fee_min : 1, Math.floor(t.amount * (settings.buy_fee_rate * settings.buy_discount)))
+      const cost = Math.floor(t.amount + f)
       inventory[t.symbol].push({ shares: t.shares, cost })
       stats[t.symbol].buyCost += cost
     } else {
-      stats[t.symbol].sellRev += t.net_amount
+      const f = Math.max(1, Math.floor(t.amount * (settings.sell_fee_rate * settings.sell_discount)))
+      const taxRate = t.symbol.replace('.TW','').replace('.TWO','').startsWith('00') ? settings.tax_etf : settings.tax_stock
+      const tax = Math.floor(t.amount * taxRate)
+      const net = Math.floor(t.amount - f - tax)
+      stats[t.symbol].sellRev += net
+      
       let rem = t.shares
       while (rem > 0 && inventory[t.symbol].length > 0) {
         const lot = inventory[t.symbol][0]
-        if (lot.shares <= rem) {
-          rem -= lot.shares
-          inventory[t.symbol].shift()
-        } else {
-          const u = lot.cost / lot.shares
-          lot.shares -= rem
-          lot.cost -= rem * u
-          rem = 0
-        }
+        const take = Math.min(lot.shares, rem)
+        const unit = lot.cost / lot.shares
+        const pCost = Math.floor(take * unit)
+        
+        lot.shares -= take
+        lot.cost -= pCost
+        rem -= take
+        if (lot.shares <= 0) inventory[t.symbol].shift()
       }
     }
   }
@@ -91,20 +116,20 @@ export async function GET(req: NextRequest) {
     const s = stats[sym]
     const currentLots = inventory[sym]
     const heldShares = currentLots.reduce((sum, l) => sum + l.shares, 0)
-    const heldCost = currentLots.reduce((sum, l) => sum + l.cost, 0)
+    const heldCost = Math.floor(currentLots.reduce((sum, l) => sum + l.cost, 0))
     const lastTx = allTxs.filter(t => t.symbol === sym).pop()
     const lastPrice = lastTx?.price || 0
-    const mv = Math.round(heldShares * lastPrice)
+    const mv = Math.floor(heldShares * lastPrice)
 
     return {
       '股票代碼': sym,
       '中文名稱': getStockName(sym),
-      '買入總成本': Math.round(s.buyCost),
-      '賣出總收入': Math.round(s.sellRev),
-      '已實現損益': Math.round(s.sellRev - (s.buyCost - heldCost)),
+      '買入總成本': Math.floor(s.buyCost),
+      '賣出總收入': Math.floor(s.sellRev),
+      '已實現損益': Math.floor(s.sellRev - (s.buyCost - heldCost)),
       '目前持股數': heldShares,
       '目前市值估算': mv,
-      '未實現損益估算': Math.round(mv - heldCost)
+      '未實現損益估算': Math.floor(mv - heldCost)
     }
   })
 
