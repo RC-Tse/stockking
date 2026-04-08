@@ -23,7 +23,6 @@ import {
 import DatePicker from './DatePicker'
 import ConfirmModal from './ConfirmModal'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import IntegratedCalendar from './IntegratedCalendar'
 
 const PIE_COLORS = [
   '#d4af37', '#e05050', '#42b07a', '#1C5D99', 
@@ -35,13 +34,10 @@ interface Props {
   quotes: Record<string, Quote>
   settings: UserSettings
   transactions: Transaction[]
-  calEntries: CalendarEntry[]
-  calLoading: boolean
   onRefresh: () => void
-  onRefreshCal: (year: number, month: number) => void
 }
 
-export default function HoldingsTab({ holdings, quotes, settings, transactions, calEntries, calLoading, onRefresh, onRefreshCal }: Props) {
+export default function HoldingsTab({ holdings, quotes, settings, transactions, onRefresh }: Props) {
   const currentYear = new Date().getFullYear().toString()
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showData, setShowData] = useState(true)
@@ -376,8 +372,6 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         )}
       </div>
 
-      <IntegratedCalendar entries={calEntries} transactions={transactions} onRefresh={onRefreshCal} holdings={holdings} quotes={quotes} settings={settings} loading={calLoading} />
-
       <div className="space-y-4">
         <div className="flex gap-2 px-1 text-xs justify-end">
           {(
@@ -492,48 +486,51 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
   const nameZh = q?.name_zh || h.symbol
 
   return (
-    <div className={`card-base overflow-hidden transition-all duration-300 border ${isExpanded ? 'border-accent shadow-lg shadow-accent/5' : 'border-white/10 shadow-xl'}`}>
-      <div className="p-4 cursor-pointer active:bg-bg-hover space-y-3" onClick={onToggle}>
-        <div className="flex justify-between items-center">
-          <div className="font-black text-[var(--t1)] text-base">
-            {nameZh} <span className="text-xs text-[var(--t3)] font-mono ml-1">{codeOnly(h.symbol)}</span>
-          </div>
-        </div>
-        
-        <div className="text-[11px] font-bold text-[var(--t2)]">
-          {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
-          {q?.change !== undefined && (() => {
-            const isUp = q.change > 0, isDown = q.change < 0
-            const changeClass = isUp ? (q.change_pct >= 9.8 ? 'text-red-900 bg-red-500 font-black px-1.5 py-0.5 rounded-md' : 'text-red-400 bg-red-400/20 px-1.5 py-0.5 rounded-md') : isDown ? (q.change_pct <= -9.8 ? 'text-green-900 bg-green-500 font-black px-1.5 py-0.5 rounded-md' : 'text-green-400 bg-green-400/20 px-1.5 py-0.5 rounded-md') : 'text-white'
-            return (
-              <span className={`ml-2 ${changeClass}`}>
-                {isUp ? '▲' : isDown ? '▼' : ''} {Math.abs(q.change).toFixed(2)} ({Math.abs(q.change_pct).toFixed(2)}%)
+    <div className={`transition-all duration-300 border-0 ${isExpanded ? 'bg-black/40 ring-1 ring-accent/20' : 'bg-black/20'} rounded-2xl shadow-xl overflow-hidden`}>
+      <div className="py-5 px-6 cursor-pointer active:bg-white/5 space-y-4" onClick={onToggle}>
+        <div className="flex justify-between items-start">
+          <div className="space-y-1">
+            <div className="font-black text-[var(--t1)] text-[17px] tracking-tight">{nameZh}</div>
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] font-bold text-[var(--t3)] opacity-60">
+                {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
               </span>
-            )
-          })()}
-        </div>
-
-        <div className="h-px bg-white/5" />
-
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">持有成本 / 預估淨市值</div>
-            <div className="text-sm font-bold text-[var(--t1)] font-mono">
-              {fmtMoney(Math.round(h.total_cost))} / <span className="text-[var(--t1)]">{fmtMoney(Math.round(h.net_market_value))}</span>
+              {q?.change !== undefined && (() => {
+                const isUp = q.change > 0, isDown = q.change < 0
+                const changeClass = isUp ? 'bg-red-500 text-white' : isDown ? 'bg-green-500 text-white' : 'bg-white/10 text-white'
+                return (
+                  <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${changeClass}`}>
+                    {isUp ? '+' : ''}{Math.abs(q.change_pct).toFixed(2)}%
+                  </span>
+                )
+              })()}
             </div>
           </div>
-          <div className="text-right">
-            <div className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest mb-1">未實現損益</div>
-            <div className={`text-sm font-black font-mono ${color}`}>
-              {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} ({(h.pnl_pct ?? 0).toFixed(2)}%)
+          <div className="text-[12px] font-mono text-[var(--t3)] opacity-30 mt-1">{codeOnly(h.symbol)}</div>
+        </div>
+        
+        <div className="grid grid-cols-2 gap-4 pt-1">
+          <div className="space-y-1">
+            <div className="text-[9px] font-black text-[var(--t3)] uppercase tracking-widest opacity-50">持有成本 / 預估淨市值</div>
+            <div className="text-[15px] font-black text-[var(--t1)] font-mono flex items-baseline gap-1.5">
+              {fmtMoney(Math.round(h.total_cost))} <span className="text-[10px] opacity-20">/</span> <span className="text-accent">{fmtMoney(Math.round(h.net_market_value))}</span>
+            </div>
+          </div>
+          <div className="text-right space-y-1">
+            <div className="text-[9px] font-black text-[var(--t3)] uppercase tracking-widest opacity-50">未實現損益</div>
+            <div className={`text-[15px] font-black font-mono ${color} flex items-baseline justify-end gap-1.5`}>
+              {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} <span className="text-[10px] opacity-50">({(h.pnl_pct ?? 0).toFixed(2)}%)</span>
             </div>
           </div>
         </div>
       </div>
 
       {isExpanded && (
-        <div className="bg-black/20 border-t border-white/5 p-3 space-y-2">
-          {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
+        <div className="bg-black/30 border-t border-white/5 pb-2 animate-slide-up">
+          <div className="px-6 py-2.5 text-[10px] font-black text-[var(--t3)] uppercase tracking-[0.2em] border-b border-white/5 opacity-40 mb-2">歷史交易明細</div>
+          <div className="px-2 space-y-0.5">
+            {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
+          </div>
         </div>
       )}
     </div>
@@ -589,58 +586,59 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   }
   
   if (isEditing) return (
-    <div className="p-5 rounded-2xl bg-bg-surface border border-accent/30 space-y-5 my-2 shadow-2xl animate-slide-up">
-      <div className="text-center pb-2 border-b border-white/5"><h4 className="font-black text-sm text-accent tracking-tight">編輯：{isBuy?'買入':'賣出'} {t.name_zh || t.symbol}</h4></div>
+    <div className="m-4 p-5 rounded-2xl bg-bg-surface border border-accent/20 space-y-5 shadow-2xl animate-scale-in">
+      <div className="text-center pb-2 border-b border-white/5"><h4 className="font-black text-xs text-accent tracking-tight">編輯：{isBuy?'買入':'賣出'} {t.name_zh || t.symbol}</h4></div>
       <div className="flex gap-2 p-1 bg-black/20 rounded-xl">
-        <button onClick={() => setTradeType('FULL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>整張 (1000股)</button>
-        <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-2 text-[10px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)]'}`}>零股</button>
+        <button onClick={() => setTradeType('FULL')} className={`flex-1 py-1.5 text-[9px] font-black rounded-lg transition-all ${tradeType==='FULL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)] opacity-40'}`}>整張 (1000股)</button>
+        <button onClick={() => setTradeType('FRACTIONAL')} className={`flex-1 py-1.5 text-[9px] font-black rounded-lg transition-all ${tradeType==='FRACTIONAL'?'bg-accent text-bg-base shadow-md':'text-[var(--t3)] opacity-40'}`}>零股</button>
       </div>
 
       {isBuy && (
-        <div className="flex items-center justify-between p-3 rounded-xl bg-black/20 border border-white/5">
-          <span className="text-[11px] font-black text-[var(--t2)] tracking-widest uppercase">定期定額</span>
+        <div className="flex items-center justify-between p-2 rounded-xl bg-black/20 border border-white/5">
+          <span className="text-[10px] font-black text-[var(--t2)] tracking-widest uppercase opacity-60">定期定額</span>
           <button 
             onClick={() => setIsDcaOpt(!isDcaOpt)}
-            className={`w-12 h-6 rounded-full relative transition-colors ${isDcaOpt ? 'bg-yellow-500' : 'bg-white/10'}`}
+            className={`w-10 h-5 rounded-full relative transition-colors ${isDcaOpt ? 'bg-yellow-500' : 'bg-white/10'}`}
           >
-            <div className={`w-4 h-4 rounded-full bg-white absolute top-1 transition-all ${isDcaOpt ? 'left-7' : 'left-1'}`} />
+            <div className={`w-3 h-3 rounded-full bg-white absolute top-1 transition-all ${isDcaOpt ? 'left-6' : 'left-1'}`} />
           </button>
         </div>
       )}
 
       <div className="grid grid-cols-2 gap-4">
-        <div className="space-y-1.5"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v):setShares(v)}} className="input-base text-center font-black py-3" /></div>
-        <div className="space-y-1.5"><Label>成交價</Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-3" /></div>
+        <div className="space-y-1"><Label>{tradeType==='FULL'?'張數':'股數'}</Label><input type="number" value={tradeType==='FULL'?lots:shares} onFocus={()=>tradeType==='FULL'?setLots(''):setShares('')} onChange={e=>{const v=e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v):setShares(v)}} className="input-base text-center font-black py-2.5 text-sm" /></div>
+        <div className="space-y-1"><Label>成交價</Label><input type="number" step="0.01" value={price} onFocus={()=>setPrice('')} onChange={e=>setPrice(e.target.value===''?'':Number(e.target.value))} className="input-base text-center font-black py-2.5 text-sm" /></div>
       </div>
-      <div className="space-y-1.5"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
-      <div className="space-y-1.5"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-sm py-3" placeholder="選填..." /></div>
-      <div className="card-base p-4 space-y-2 bg-black/20 text-[11px] font-bold">
-        <div className="flex justify-between opacity-40"><span>手續費 + 稅</span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
-        <div className="flex justify-between items-center pt-2 border-t border-white/5"><span className="text-[var(--t2)]">預估淨收支</span><span className={`text-base font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
+      <div className="space-y-1"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
+      <div className="space-y-1"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-[11px] py-2.5" placeholder="選填..." /></div>
+      <div className="bg-black/20 p-3 rounded-xl space-y-1 text-[10px] font-bold">
+        <div className="flex justify-between opacity-30"><span>手續費 + 稅</span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
+        <div className="flex justify-between items-center pt-1 border-t border-white/5"><span className="text-[var(--t2)] opacity-60">預估淨收支</span><span className={`text-[13px] font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
       </div>
-      <div className="flex gap-3 pt-1"><button onClick={handleSave} disabled={!isValid || loading} className="flex-[3] btn-primary py-3.5">確認修改</button><button onClick={() => setIsEditing(false)} className="flex-1 btn-secondary py-3.5">取消</button></div>
+      <div className="flex gap-2 pt-1"><button onClick={handleSave} disabled={!isValid || loading} className="flex-[3] btn-primary py-3 text-xs">確認修改</button><button onClick={() => setIsEditing(false)} className="flex-1 btn-secondary py-3 text-xs">取消</button></div>
     </div>
   )
   return (
-    <div className="flex justify-between items-center py-2.5 border-b border-white/5 last:border-0">
-      <div className="flex flex-col"><div className="flex items-center gap-2 text-[11px] opacity-40 font-mono">{t.trade_date} {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-yellow-500 bg-yellow-400/10 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black tracking-widest leading-none mt-0.5">定期定額</span>}</div><div className="text-sm font-bold text-[var(--t1)]">{(t.shares ?? 0).toLocaleString()} 股 @ {(t.price ?? 0).toFixed(2)}</div></div>
-      <div className="text-right">
-        <div className={`text-base font-mono font-black ${t.net_amount >= 0 ? 'text-red-400' : 'text-green-400'}`}>{t.net_amount >= 0 ? '+' : ''}{fmtMoney(Math.round(t.net_amount))}</div>
-        <div className="flex gap-3 justify-end mt-1">
-          <button onClick={() => setIsEditing(true)} className="text-[11px] font-black text-accent active:opacity-50 transition-opacity">編輯</button>
-          <button onClick={() => onDelete(t.id)} className="text-[11px] font-black text-red-400 active:opacity-50 transition-opacity">刪除</button>
+    <div className="group relative flex justify-between items-center px-6 py-3 hover:bg-white/5 transition-all">
+      <div className="flex flex-col gap-0.5">
+        <div className="text-[9px] text-[var(--t3)] font-mono opacity-30 tracking-tight">{t.trade_date}</div>
+        <div className="text-[13px] font-bold text-[var(--t2)] flex items-center gap-1.5">
+          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[9px] opacity-20 font-light">@</span> {(t.price ?? 0).toFixed(2)}
+          {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-[7.5px] text-yellow-500/60 border border-yellow-500/20 px-1 py-0.5 rounded font-black leading-none ml-1">DCA</span>}
+        </div>
+      </div>
+      <div className="flex items-center gap-5">
+        <div className={`text-[13px] font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+          {net >= 0 ? '+' : ''}{fmtMoney(net)}
+        </div>
+        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="p-1.5 rounded-lg bg-white/5 text-[var(--t3)] hover:text-accent transition-colors"><Pencil size={11} /></button>
+          <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-1.5 rounded-lg bg-white/5 text-[var(--t3)] hover:text-red-400 transition-colors"><Trash2 size={11} /></button>
         </div>
       </div>
     </div>
   )
 }
 
-
-function shortMoney(v: number): string {
-  const abs = Math.abs(v), sign = v < 0 ? '-' : ''
-  if (abs >= 1_000_000) return `${sign}${(abs / 1_000_000).toFixed(1)}M`
-  if (abs >= 1_000) return `${sign}${(abs / 1_000).toFixed(1)}K`
-  return `${sign}${abs.toFixed(0)}`
-}
 
 function Label({ children }: { children: React.ReactNode }) { return <label className="text-[10px] font-black opacity-30 uppercase tracking-widest ml-1 mb-1 block">{children}</label> }
