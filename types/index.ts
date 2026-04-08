@@ -76,13 +76,18 @@ export interface CalendarEntry {
   gross_market_value?: number
   capital_in?: number
   note: string
+  hasTransactions?: boolean
   details?: {
     symbol: string
     name: string
-    price: number
-    pnl: number
-    pnl_pct: number
     shares: number
+    price: number
+    change: number
+    change_pct: number
+    cost: number
+    mv: number
+    stock_daily_pnl: number
+    stock_daily_pnl_pct: number
   }[]
 }
 
