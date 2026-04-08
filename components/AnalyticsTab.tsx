@@ -351,7 +351,7 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                   <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 9, fill: 'var(--t3)'}} axisLine={false} interval={0} />
-                  <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={{fontSize: 10, fill: 'var(--accent)'}} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
+                  <YAxis domain={['auto', 'auto']} orientation="right" unit="元" tick={false} axisLine={false} tickLine={false} allowDataOverflow={true} width={45} />
                   <Tooltip 
                     content={<StockTooltip />} 
                     active={isScrubbing}
@@ -364,12 +364,12 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
             </div>
           </div>
 
-          {/* 右側固定 Y 軸價格標籤 */}
+          {/* 右側固定 Y 軸價格標籤 - 查價模式 */}
           {isScrubbing && activePoint && (
             <div 
               className="absolute right-0 pointer-events-none z-50 flex items-center transition-transform duration-75"
               style={{ 
-                top: 0, // 因為 ResponsiveContainer 在捲軸容器內，這裡需要補償 scroller 的內距
+                top: 0,
                 transform: `translateY(${activePoint.y + 16}px)` // +16 是因為 card-base 有 pt-4
               }}
             >
@@ -377,6 +377,20 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
                 {activePoint.price.toFixed(2)}
               </div>
               <div className="w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[4px] border-l-[#e05050]" />
+            </div>
+          )}
+
+          {/* 右側固定 Y 軸價格標籤 - 預設顯示最新價 */}
+          {!isScrubbing && enrichedStockHistory.length > 0 && (
+            <div 
+              className="absolute right-0 pointer-events-none z-40 flex items-center opacity-70"
+              style={{ 
+                bottom: '40px' // 預設靠下方顯示，因為沒有座標轉換函數，先固定在此
+              }}
+            >
+              <div className="bg-white/10 text-white/50 text-[10px] font-black px-2 py-1 rounded-l border border-white/10 whitespace-nowrap">
+                最新: {enrichedStockHistory[enrichedStockHistory.length - 1].price.toFixed(2)}
+              </div>
             </div>
           )}
         </div>
