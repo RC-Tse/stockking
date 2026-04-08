@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS public.daily_snapshots (
   daily_pnl              NUMERIC   NOT NULL DEFAULT 0,
   daily_pnl_pct          NUMERIC   NOT NULL DEFAULT 0,
   realized_pnl           NUMERIC   NOT NULL DEFAULT 0,
+  is_market_closed       BOOLEAN   NOT NULL DEFAULT false,
   daily_stock_list_json  JSONB     NOT NULL DEFAULT '[]',
   created_at             TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (user_id, snapshot_date)

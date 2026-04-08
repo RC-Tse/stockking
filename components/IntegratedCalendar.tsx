@@ -108,6 +108,11 @@ export default function IntegratedCalendar({ entries, transactions, onRefresh, h
                 <span className={`text-[10px] font-black bg-white/5 px-1.5 py-0.5 rounded ${(selectedEntry.daily_pnl_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {(selectedEntry.daily_pnl_pct ?? 0) >= 0 ? '+' : ''}{(selectedEntry.daily_pnl_pct ?? 0).toFixed(2)}%
                 </span>
+                {selectedEntry.is_market_closed && (
+                  <span className="text-[10px] pb-1 font-black text-white/40 uppercase tracking-widest flex items-center gap-1.5 ml-1">
+                    <span className="w-1.5 h-1.5 rounded-full bg-white/20" /> 當天休市
+                  </span>
+                )}
               </div>
             </div>
             {selectedEntry.note && (
@@ -118,52 +123,61 @@ export default function IntegratedCalendar({ entries, transactions, onRefresh, h
             )}
           </div>
 
-          <div className="space-y-4 tabular-nums">
-            {selectedEntry.details?.map(det => {
-              const isUp = det.change >= 0
-              const isPnlUp = det.stock_daily_pnl >= 0
-              const pillColor = isUp ? 'bg-red-400/20 text-red-400' : 'bg-green-400/20 text-green-400'
-              const pnlColor = isPnlUp ? 'text-red-400' : 'text-green-400'
-              
-              return (
-                <div key={det.symbol} className="card-base p-5 border-white/10 bg-black/40 shadow-xl space-y-4 animate-slide-up">
-                  {/* First Row: Name and Symbol */}
-                  <div className="flex justify-between items-baseline">
-                    <span className="text-xl font-black text-[var(--t1)]">{det.name}</span>
-                    <span className="text-xs font-bold text-[var(--t3)] tracking-wider">{codeOnly(det.symbol)}</span>
-                  </div>
-
-                  {/* Second Row: Market Context & Change Pill */}
-                  <div className="flex items-center justify-between">
-                    <div className="text-[12px] font-bold text-[var(--t2)] opacity-80">
-                      {det.shares.toLocaleString()} 股 · 收盤 {det.price.toFixed(2)}
+          {selectedEntry.is_market_closed ? (
+            <div className="card-base p-16 border-dashed border-white/10 bg-white/5 flex flex-col items-center justify-center space-y-3 opacity-60">
+              <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center">
+                <RefreshCw size={24} className="text-white/20 rotate-45" />
+              </div>
+              <div className="text-sm font-black text-white/40 tracking-widest uppercase">當天未開盤</div>
+            </div>
+          ) : (
+            <div className="space-y-4 tabular-nums">
+              {selectedEntry.details?.map(det => {
+                const isUp = det.change >= 0
+                const isPnlUp = det.stock_daily_pnl >= 0
+                const pillColor = isUp ? 'bg-red-400/20 text-red-400' : 'bg-green-400/20 text-green-400'
+                const pnlColor = isPnlUp ? 'text-red-400' : 'text-green-400'
+                
+                return (
+                  <div key={det.symbol} className="card-base p-5 border-white/10 bg-black/40 shadow-xl space-y-4 animate-slide-up">
+                    {/* First Row: Name and Symbol */}
+                    <div className="flex justify-between items-baseline">
+                      <span className="text-xl font-black text-[var(--t1)]">{det.name}</span>
+                      <span className="text-xs font-bold text-[var(--t3)] tracking-wider">{codeOnly(det.symbol)}</span>
                     </div>
-                    <div className={`px-2.5 py-1 rounded-lg font-black text-[11px] flex items-center gap-1.5 shadow-sm ${pillColor}`}>
-                      {isUp ? '▲' : '▼'} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
+
+                    {/* Second Row: Market Context & Change Pill */}
+                    <div className="flex items-center justify-between">
+                      <div className="text-[12px] font-bold text-[var(--t2)] opacity-80">
+                        {det.shares.toLocaleString()} 股 · 收盤 {det.price.toFixed(2)}
+                      </div>
+                      <div className={`px-2.5 py-1 rounded-lg font-black text-[11px] flex items-center gap-1.5 shadow-sm ${pillColor}`}>
+                        {isUp ? '▲' : '▼'} {Math.abs(det.change).toFixed(2)} ({Math.abs(det.change_pct).toFixed(2)}%)
+                      </div>
+                    </div>
+
+                    <div className="h-px bg-white/5" />
+
+                    {/* Third Row: Labels */}
+                    <div className="flex justify-between">
+                      <span className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest">持有成本 / 預估淨市值</span>
+                      <span className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest">當日損益</span>
+                    </div>
+
+                    {/* Fourth Row: Values */}
+                    <div className="flex justify-between items-end">
+                      <div className="text-[18px] font-black font-mono text-[var(--t1)]">
+                        {fmtMoney(Math.round(det.cost))} <span className="mx-1 opacity-20">/</span> {fmtMoney(Math.round(det.mv))}
+                      </div>
+                      <div className={`text-[18px] font-black font-mono ${pnlColor}`}>
+                        {isPnlUp ? '+' : ''}{fmtMoney(Math.round(det.stock_daily_pnl))} <span className="text-[13px] ml-0.5">({det.stock_daily_pnl_pct.toFixed(2)}%)</span>
+                      </div>
                     </div>
                   </div>
-
-                  <div className="h-px bg-white/5" />
-
-                  {/* Third Row: Labels */}
-                  <div className="flex justify-between">
-                    <span className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest">持有成本 / 預估淨市值</span>
-                    <span className="text-[10px] font-black text-[var(--t3)] uppercase tracking-widest">當日損益</span>
-                  </div>
-
-                  {/* Fourth Row: Values */}
-                  <div className="flex justify-between items-end">
-                    <div className="text-[18px] font-black font-mono text-[var(--t1)]">
-                      {fmtMoney(Math.round(det.cost))} <span className="mx-1 opacity-20">/</span> {fmtMoney(Math.round(det.mv))}
-                    </div>
-                    <div className={`text-[18px] font-black font-mono ${pnlColor}`}>
-                      {isPnlUp ? '+' : ''}{fmtMoney(Math.round(det.stock_daily_pnl))} <span className="text-[13px] ml-0.5">({det.stock_daily_pnl_pct.toFixed(2)}%)</span>
-                    </div>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       )}
     </div>

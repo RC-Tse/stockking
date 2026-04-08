@@ -34,11 +34,12 @@ export async function GET(request: Request) {
       daily_pnl: Number(row.daily_pnl),
       daily_pnl_pct: Number(row.daily_pnl_pct),
       realized_pnl: Number(row.realized_pnl),
+      is_market_closed: row.is_market_closed,
       pnl: Number(row.gross_mv - row.total_cost),
       pnl_pct: Number(row.total_cost) ? (Number(row.gross_mv - row.total_cost) / Number(row.total_cost) * 100) : 0,
       net_market_value: Number(row.gross_mv),
       details: row.daily_stock_list_json,
-      hasTransactions: (row.daily_stock_list_json as any[]).some(d => d.has_tx_today) // Inferred
+      hasTransactions: (row.daily_stock_list_json as any[]).some(d => d.has_tx_today)
     })))
   }
 
@@ -76,6 +77,7 @@ export async function GET(request: Request) {
   while (cur <= endDate) {
     const dateStr = cur.toISOString().split('T')[0]
     const txsToday = txMap.get(dateStr) || []
+    const dow = cur.getDay() // 0=Sun, 6=Sat
     
     let realizedToday = 0
     let costChangeToday = 0
@@ -90,8 +92,9 @@ export async function GET(request: Request) {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.amount, settings, false, isDca)
         lots.push({ shares: tx.shares, origPrincipal: tx.amount, origFee: f, matchedCost: 0 })
-        costChangeToday += (tx.amount + f)
-        stockContribution[tx.symbol].costChange += (tx.amount + f)
+        const inc = tx.amount + f
+        costChangeToday += inc
+        stockContribution[tx.symbol].costChange += inc
       } else if (tx.action === 'SELL') {
         let rem = tx.shares
         let matchedCostTotal = 0
@@ -149,6 +152,14 @@ export async function GET(request: Request) {
     let daily_pnl = !hasPrevHistory ? (curTotalMV - curTotalCost) : ((curTotalMV - prevTotalMV) - costChangeToday + realizedToday)
     if (!hasPrevHistory && (curTotalCost > 0 || txsToday.length > 0)) hasPrevHistory = true
 
+    // Market Closing Detection
+    let isMarketClosed = (dow === 0 || dow === 6)
+    if (!isMarketClosed && heldSymbols.length > 0) {
+      // Heuristic for holidays: All changes are exactly zero
+      const allZero = details.every(d => Math.abs(d.change) < 0.0001)
+      if (allZero) isMarketClosed = true
+    }
+
     const isCurrentMonth = cur.getFullYear() === year && (cur.getMonth() + 1) === month
     if (isCurrentMonth) {
       const sortedDetails = details.sort((a, b) => b.cost - a.cost)
@@ -156,12 +167,13 @@ export async function GET(request: Request) {
         entry_date: dateStr, daily_pnl, daily_pnl_pct: (prevTotalMV || curTotalCost) ? (daily_pnl / (prevTotalMV || curTotalCost) * 100) : 0,
         realized_pnl: realizedToday, pnl: curTotalMV - curTotalCost, pnl_pct: curTotalCost ? (curTotalMV - curTotalCost) / curTotalCost * 100 : 0,
         net_market_value: curTotalMV, note: txsToday.find(t => t.note)?.note || '', hasTransactions: txsToday.length > 0,
+        is_market_closed: isMarketClosed,
         details: sortedDetails
       })
       snapshotsToUpsert.push({
         user_id: user.id, snapshot_date: dateStr, gross_mv: curTotalMV, total_cost: curTotalCost,
         daily_pnl, daily_pnl_pct: (prevTotalMV || curTotalCost) ? (daily_pnl / (prevTotalMV || curTotalCost) * 100) : 0,
-        realized_pnl: realizedToday, daily_stock_list_json: sortedDetails
+        realized_pnl: realizedToday, is_market_closed: isMarketClosed, daily_stock_list_json: sortedDetails
       })
     }
 

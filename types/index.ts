@@ -74,6 +74,7 @@ export interface CalendarEntry {
   daily_pnl_pct?: number
   net_market_value?: number
   gross_market_value?: number
+  is_market_closed?: boolean
   capital_in?: number
   note: string
   hasTransactions?: boolean
