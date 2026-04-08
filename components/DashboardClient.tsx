@@ -112,6 +112,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [calEntries, setCalEntries] = useState<CalendarEntry[]>([])
   const [holdings, setHoldings]   = useState<Holding[]>([])
   const [allTimeRealized, setAllTimeRealized] = useState(0)
+  const [calLoading, setCalLoading] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [loading, setLoading]     = useState(true)
   const router = useRouter()
@@ -160,8 +161,13 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   }, [])
 
   const refreshCal = useCallback(async (year: number, month: number) => {
-    const r = await fetch(`/api/calendar?year=${year}&month=${month}`)
-    if (r.ok) setCalEntries(await r.json())
+    setCalLoading(true)
+    try {
+      const r = await fetch(`/api/calendar?year=${year}&month=${month}`)
+      if (r.ok) setCalEntries(await r.json())
+    } finally {
+      setCalLoading(false)
+    }
   }, [])
 
 
@@ -215,7 +221,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       <main className="flex-1 overflow-y-auto pb-32">
         {loading ? <div className="p-10 text-center opacity-20 animate-pulse text-[var(--t1)]">載入中...</div> : (
           <>
-            {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} onRefresh={refresh} onRefreshCal={refreshCal} />}
+            {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} calEntries={calEntries} calLoading={calLoading} onRefresh={refresh} onRefreshCal={refreshCal} />}
             {tab === 'analytics' && <AnalyticsTab holdings={holdings} transactions={txs} settings={settings} quotes={quotes} />}
             {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSignOut={signOut} onSave={async s => {
