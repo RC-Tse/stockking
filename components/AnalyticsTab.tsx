@@ -8,17 +8,27 @@ import {
 } from 'recharts'
 import { TrendingUp, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker from './DatePicker'
-
-interface Props {
-  holdings: Holding[]
-  transactions: Transaction[]
-  settings: UserSettings
-  quotes: Record<string, Quote>
-}
+import { usePortfolio } from './providers/PortfolioContext'
 
 type StockRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
 
-export default function AnalyticsTab({ holdings, transactions, quotes }: Props) {
+interface Props {
+  onRefresh: () => void
+}
+
+export default function AnalyticsTab({ onRefresh }: Props) {
+  const { stats } = usePortfolio()
+  const { holdings } = stats
+  
+  // Flatten transactions from allHistoryStats for local use
+  const transactions = useMemo(() => {
+    const all: Transaction[] = []
+    Object.values(stats.fullHistoryStats).forEach((s: any) => {
+      s.history.forEach((h: any) => all.push(h))
+    })
+    return all
+  }, [stats.fullHistoryStats])
+
   // ── Stock Chart States ──
   const [selSym, setSelSym] = useState(holdings[0]?.symbol || '')
   const [stockRange, setStockRange] = useState<StockRange>('1M')
@@ -297,13 +307,13 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
           </h3>
           
           <div className="flex flex-col gap-3">
-            <select 
+             <select 
               value={selSym} 
               onChange={e => setSelSym(e.target.value)}
               className="w-full bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t2)] outline-none focus:border-accent transition-all appearance-none cursor-pointer shadow-lg"
             >
               {holdings.map(h => (
-                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)}</option>
+                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{getStockName(h.symbol)}</option>
               ))}
             </select>
 

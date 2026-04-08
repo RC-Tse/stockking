@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
 import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax } from '@/types'
+import { usePortfolio } from './providers/PortfolioContext'
 import { 
   Download, 
   TrendingUp, 
@@ -12,26 +13,27 @@ import {
   ChevronDown,
   Calendar,
   BarChart2,
-  ClipboardList
 } from 'lucide-react'
 import DatePicker from './DatePicker'
 import ConfirmModal from './ConfirmModal'
+import ExportModal from './ExportModal'
+import RealizedStockCard from './RealizedStockCard'
+import TxRow from './TxRow'
 
 interface Props {
-  txs: Transaction[]
-  settings: UserSettings
   onRefresh: () => void
 }
 
 type TabMode = 'SELF' | 'REALIZED'
 type RangeMode = 'month' | '3months' | 'year' | 'all' | 'custom'
 
-export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
+export default function TransactionsTab({ onRefresh }: Props) {
+  const { stats } = usePortfolio()
+  const { fullHistoryStats } = stats
   const [tab, setTab] = useState<TabMode>('SELF')
   const [filter, setFilter] = useState('')
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
-  // Realized Tab States
   const [rangeMode, setRangeMode] = useState<RangeMode>('all')
   const [customStart, setCustomStart] = useState('')
   const [customEnd, setCustomEnd] = useState('')
@@ -40,104 +42,57 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
   const [expandedMonths, setExpandedMonths] = useState<Record<string, boolean>>({ [`${new Date().getFullYear()}-${new Date().getMonth() + 1}`]: true })
 
   const filtered = useMemo(() => {
-    let result = txs
-    // SELF tab shows all manual transactions (DCA is just a subtype of BUY)
+    const allTxs: Transaction[] = []
+    Object.values(fullHistoryStats).forEach((s: any) => {
+      s.history.forEach((h: any) => allTxs.push(h))
+    })
+    let result = allTxs.sort((a,b) => b.trade_date.localeCompare(a.trade_date) || b.id - a.id)
     if (filter.trim() && tab !== 'REALIZED') {
       result = result.filter(t => codeOnly(t.symbol).includes(filter.toUpperCase()) || t.symbol.includes(filter.toUpperCase()) || (t.name_zh || getStockName(t.symbol)).includes(filter))
     }
     return result
-  }, [txs, tab, filter])
+  }, [fullHistoryStats, tab, filter])
 
   const realizedRange = useMemo(() => {
     const today = new Date().toISOString().split('T')[0], now = new Date()
     if (rangeMode === 'all') return { start: '2000-01-01', end: today }
     if (rangeMode === 'year') return { start: `${now.getFullYear()}-01-01`, end: today }
     if (rangeMode === 'month') return { start: new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0], end: today }
-    // User requested "Last 3 months" to be: April 7 -> Feb 1. (Month - 2)
     if (rangeMode === '3months') return { start: new Date(now.getFullYear(), now.getMonth() - 2, 1).toISOString().split('T')[0], end: today }
     return { start: customStart, end: customEnd }
   }, [rangeMode, customStart, customEnd])
 
   const realizedData = useMemo(() => {
     if (tab !== 'REALIZED') return null
-    const sorted = [...txs].sort((a,b) => a.trade_date.localeCompare(b.trade_date) || a.id - b.id)
-    const inventory: any = {}, stats: Record<string, any> = {}
-
-    // Phase 1: History Replay & Per-Stock Accumulation
-    for (const tx of sorted) {
-      const isSell = tx.action === 'SELL'
-      const inRange = tx.trade_date >= realizedRange.start && tx.trade_date <= realizedRange.end
-      if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-      if (!stats[tx.symbol]) stats[tx.symbol] = { buy: 0, sell: 0, realized: 0, fee: 0, tax: 0, count: 0, history: [] }
-      const stock = stats[tx.symbol]
-
-      if (!isSell) {
-        const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
-        const f = calcFee(tx.amount, settings, false, isDca)
-        inventory[tx.symbol].push({ shares: tx.shares, principal: tx.amount, fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
-        stock.history.push({ ...tx, type: 'BUY', net: -Math.floor(tx.amount + f) })
-      } else {
-        const f = calcFee(tx.amount, settings, true), t = calcTax(tx.amount, tx.symbol, settings)
-        const sellProceeds = Math.floor(tx.amount - f - t)
-        let rem = tx.shares, matchedBuyCostTotal = 0, matchedBuyFeeTotal = 0, matches = []
-        while (rem > 0 && inventory[tx.symbol].length) {
-          const lot = inventory[tx.symbol][0]
-          const take = Math.min(lot.shares, rem)
-          
-          let matchedPrincipal = 0
-          let matchedFee = 0
-          
-          if (take === lot.shares) {
-            // Final match: use remaining balance exactly
-            matchedPrincipal = lot.principal
-            matchedFee = lot.fee
-          } else {
-            // Partial match: proportional calculation
-            matchedPrincipal = Math.floor((take / lot.shares) * lot.principal)
-            matchedFee = Math.floor((take / (lot.origShares)) * (lot.fee + (lot.allocatedFee || 0))) // Wait, simplified below
-          }
-          // Better partial match logic for clarity:
-          const ratio = take / lot.shares
-          if (take < lot.shares) {
-            matchedPrincipal = Math.floor(lot.principal * ratio)
-            matchedFee = Math.floor(lot.fee * ratio)
-          }
-
-          matchedBuyCostTotal += (matchedPrincipal + matchedFee)
-          matchedBuyFeeTotal += matchedFee
-          matches.push({ date: lot.date, shares: take })
-          
-          lot.shares -= take
-          lot.principal -= matchedPrincipal
-          lot.fee -= matchedFee
-          rem -= take
-          
-          if (lot.shares <= 0) inventory[tx.symbol].shift()
+    
+    const stats: Record<string, any> = {}
+    
+    Object.entries(fullHistoryStats).forEach(([sym, s]: [string, any]) => {
+      const inRangeHistory = s.history.filter((h: any) => 
+        h.type === 'SELL' && h.trade_date >= realizedRange.start && h.trade_date <= realizedRange.end
+      )
+      
+      if (inRangeHistory.length > 0) {
+        const local = { 
+          buy: 0, sell: 0, realized: 0, fee: 0, tax: 0, 
+          count: inRangeHistory.length, 
+          history: s.history 
         }
-        const finalMatchedCost = Math.round(matchedBuyCostTotal)
-        const profit = sellProceeds - finalMatchedCost
-        if (inRange) {
-          stock.buy += finalMatchedCost; stock.sell += sellProceeds; stock.fee += (matchedBuyFeeTotal + f); stock.tax += t; stock.realized += profit; stock.count++
-        }
-        stock.history.push({ ...tx, type: 'SELL', matches, profit, net: sellProceeds, realizedCost: finalMatchedCost })
+        inRangeHistory.forEach((h: any) => {
+          local.buy += h.realizedCost
+          local.sell += h.net
+          local.fee += (h.fee || 0)
+          local.tax += (h.tax || 0)
+          local.realized += h.profit
+        })
+        stats[sym] = local
       }
-    }
+    })
 
-    // Phase 2: Stock Level Integer Finalization
     const stocks = Object.entries(stats)
-      .filter(([, s]) => s.count > 0)
-      .map(([sym, s]) => ({
-        symbol: sym,
-        ...s,
-        buy: Math.floor(s.buy),
-        sell: Math.floor(s.sell),
-        realized: Math.floor(s.realized),
-        fee: Math.floor(s.fee),
-        tax: Math.floor(s.tax)
-      }))
+      .map(([sym, s]) => ({ symbol: sym, ...s }))
       .sort((a, b) => b.realized - a.realized)
 
-    // Phase 3: Super Violence Fix - Global Summary from finalized stocks ONLY
     const summary = stocks.reduce((acc, s) => ({
       totalBuy: acc.totalBuy + s.buy,
       totalSell: acc.totalSell + s.sell,
@@ -147,11 +102,8 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
       sellCount: acc.sellCount + s.count
     }), { totalBuy: 0, totalSell: 0, totalFee: 0, totalTax: 0, totalRealized: 0, sellCount: 0 })
 
-    return { 
-      summary: { ...summary, buyCount: summary.sellCount }, 
-      stocks 
-    }
-  }, [txs, tab, realizedRange, settings])
+    return { stocks, summary }
+  }, [tab, fullHistoryStats, realizedRange])
 
   const groupedData = useMemo(() => {
     const groups: any = {}, today = new Date()

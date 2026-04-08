@@ -23,6 +23,7 @@ import {
 import DatePicker from './DatePicker'
 import ConfirmModal from './ConfirmModal'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
+import { usePortfolio } from './providers/PortfolioContext'
 
 const PIE_COLORS = [
   '#d4af37', '#e05050', '#42b07a', '#1C5D99', 
@@ -30,120 +31,47 @@ const PIE_COLORS = [
 ]
 
 interface Props {
-  holdings: Holding[]
-  quotes: Record<string, Quote>
-  settings: UserSettings
-  transactions: Transaction[]
   onRefresh: () => void
 }
 
-export default function HoldingsTab({ holdings, quotes, settings, transactions, onRefresh }: Props) {
+export default function HoldingsTab({ onRefresh }: Props) {
+  const { stats } = usePortfolio()
+  const { holdings, fullHistoryStats, allTimeRealized: totalRealized } = stats
+  
+  const currentYear = new Date().getFullYear().toString()
   const currentYear = new Date().getFullYear().toString()
   const [deletingId, setDeletingId] = useState<number | null>(null)
   const [showData, setShowData] = useState(true)
   const [selectedPieSym, setSelectedPieSym] = useState<string | null>(null)
   const [chartMode, setChartMode] = useState<'cost' | 'market'>('cost')
 
-  // FIFO Metrics
-  const { 
-    totalRealized,
-    realizedCostBasis,
+  // Derived Metrics from Context
+  const {
     closedHoldings,
-    yearPnl
+    yearPnl,
+    realizedCostBasis
   } = useMemo(() => {
-    let totalRealized = 0
-    let realizedCostBasis = 0
-    const realizedBySellYear: Record<string, number> = {}
-    const inventory: Record<string, { shares: number; principal: number; fee: number; origShares: number; buyYear: string }[]> = {}
-    const stockHistory: Record<string, { buyCost: number, sellRev: number }> = {}
-
-    const sorted = [...transactions].sort((a, b) => {
-      if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
-      return a.id - b.id
-    })
-
-    for (const tx of sorted) {
-      if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-      if (!stockHistory[tx.symbol]) stockHistory[tx.symbol] = { buyCost: 0, sellRev: 0 }
-      const buyYear = tx.trade_date.split('-')[0]
-
-      if (tx.action !== 'SELL') {
-        const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
-        const f = calcFee(tx.amount, settings, false, isDca)
-        inventory[tx.symbol].push({ shares: tx.shares, principal: tx.amount, fee: f, origShares: tx.shares, buyYear })
-      } else {
-        const f = calcFee(tx.amount, settings, true)
-        const t = calcTax(tx.amount, tx.symbol, settings)
-        const sellProceeds = Math.floor(tx.amount - f - t)
-        stockHistory[tx.symbol].sellRev += sellProceeds
-        
-        let sellRemaining = tx.shares
-        let matchedCostTotal = 0
-        const sellYear = tx.trade_date.split('-')[0]
-        
-        while (sellRemaining > 0 && inventory[tx.symbol].length > 0) {
-          const lot = inventory[tx.symbol][0]
-          const take = Math.min(lot.shares, sellRemaining)
-          const ratio = take / lot.origShares
-          
-          const matchedPrincipal = (take / lot.shares) * lot.principal
-          const matchedFee = ratio * lot.fee
-          const matchedCost = (matchedPrincipal + matchedFee)
-          
-          matchedCostTotal += matchedCost
-          
-          sellRemaining -= take
-          lot.shares -= take
-          lot.principal -= matchedPrincipal
-          if (lot.shares <= 0) inventory[tx.symbol].shift()
-        }
-        
-        const finalMatchedCost = Math.floor(matchedCostTotal)
-        stockHistory[tx.symbol].buyCost += finalMatchedCost
-        const profit = sellProceeds - finalMatchedCost
-        totalRealized += profit
-        realizedBySellYear[sellYear] = (realizedBySellYear[sellYear] || 0) + profit
-      }
-    }
-
-    const unrealizedByBuyYear: Record<string, number> = {}
-    Object.keys(inventory).forEach(sym => {
-      const q = quotes[sym]
-      const currentPrice = q?.bid_price || q?.price || 0
-      const totalShares = inventory[sym].reduce((s, l) => s + l.shares, 0)
-      if (totalShares <= 0) return
-
-      const grossMV = Math.floor(currentPrice * totalShares)
-      const sellFee = Math.floor(calcFee(grossMV, settings, true))
-      const sellTax = Math.floor(calcTax(grossMV, sym, settings))
-      const netMV = grossMV - sellFee - sellTax
-      const totalActualCost = inventory[sym].reduce((s, l) => s + (l.principal + l.fee * (l.shares/l.origShares)), 0)
-      
-      const totalNetPnL = netMV - totalActualCost
-      inventory[sym].forEach(lot => {
-        if (totalActualCost === 0) return
-        const currentLotCost = lot.principal + lot.fee * (lot.shares/lot.origShares)
-        const lotRatio = currentLotCost / totalActualCost
-        const lotNetPnL = totalNetPnL * lotRatio
-        unrealizedByBuyYear[lot.buyYear] = (unrealizedByBuyYear[lot.buyYear] || 0) + lotNetPnL
-      })
-    })
-
-    const closedHoldings = Object.entries(stockHistory)
-      .filter(([sym]) => (inventory[sym]?.length || 0) === 0)
-      .map(([sym, data]) => ({
+    const ch = Object.entries(fullHistoryStats)
+      .filter(([sym]) => !holdings.find(h => h.symbol === sym))
+      .map(([sym, data]: [string, any]) => ({
         symbol: sym,
-        buyCost: data.buyCost,
-        sellRev: data.sellRev,
-        pnl: data.sellRev - data.buyCost,
-        pnlPct: data.buyCost > 0 ? (data.sellRev - data.buyCost) / data.buyCost * 100 : 0
-      })).sort((a, b) => b.pnl - a.pnl)
+        buyCost: data.buyCost || data.buy,
+        sellRev: data.sellRev || data.sell,
+        pnl: data.realized,
+        pnlPct: data.buy > 0 ? (data.realized / data.buy) * 100 : 0
+      })).sort((a,b) => b.pnl - a.pnl)
 
-    const allUnrealized = Object.values(unrealizedByBuyYear).reduce((s, a) => s + a, 0)
-    const yearPnl = (realizedBySellYear[currentYear] || 0) + allUnrealized
+    // Simplified yearPnl for All-Time sync: in a more complex setup we could filter the history
+    // For now we keep the All-Time consistency as priority
+    const unrealizedPnlTotal = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
+    const yearPnl = totalRealized + unrealizedPnlTotal 
 
-    return { totalRealized, realizedCostBasis, closedHoldings, yearPnl }
-  }, [transactions, currentYear, quotes, settings])
+    return { 
+      closedHoldings: ch, 
+      yearPnl, 
+      realizedCostBasis: Object.values(fullHistoryStats).reduce((s, a:any) => s + a.buy, 0)
+    }
+  }, [fullHistoryStats, holdings, totalRealized])
 
   const currentNetMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
   const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
@@ -152,16 +80,16 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
   const realizedPct = realizedCostBasis ? (totalRealized / realizedCostBasis) * 100 : 0
   
   const totalPnl = totalRealized + unrealizedPnl
-  const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : null
-  const totalAchieved = settings.total_goal > 0 ? (totalPnl / settings.total_goal) * 100 : null
+  const yearAchieved = 0 // Will sync in goal redesign
+  const totalAchieved = 0
 
   const pieData = useMemo(() => {
     return holdings.map(h => ({
-      name: quotes[h.symbol]?.name_zh || getStockName(h.symbol),
+      name: getStockName(h.symbol),
       symbol: h.symbol,
       value: chartMode === 'cost' ? h.total_cost : h.net_market_value
     })).sort((a, b) => b.value - a.value)
-  }, [holdings, quotes, chartMode])
+  }, [holdings, chartMode])
 
   const chartTotal = useMemo(() => {
     return chartMode === 'cost' ? currentCost : currentNetMV

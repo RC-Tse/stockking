@@ -1,11 +1,11 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
-  Transaction, Holding, UserSettings, Quote,
-  DEFAULT_SETTINGS, calcFee, calcTax, fmtMoney,
+  Transaction, UserSettings, Quote,
+  DEFAULT_SETTINGS, fmtMoney,
 } from '@/types'
 import { 
   BarChart2, 
@@ -14,6 +14,7 @@ import {
   Plus,
   LineChart
 } from 'lucide-react'
+import { PortfolioProvider, usePortfolio } from './providers/PortfolioContext'
 import HoldingsTab      from './HoldingsTab'
 import TransactionsTab  from './TransactionsTab'
 import SettingsTab      from './SettingsTab'
@@ -31,87 +32,12 @@ const TABS: { id: Tab; icon: any; label: string }[] = [
   { id: 'settings',     icon: Settings2, label: '設定'  },
 ]
 
-function buildHoldings(txs: Transaction[], quotes: Record<string, Quote>, settings: UserSettings): { holdings: Holding[], allTimeRealized: number } {
-  const inventory: Record<string, { shares: number; principal: number; fee: number; origShares: number }[]> = {}
-  let allTimeRealized = 0
-  const sorted = [...txs].sort((a, b) => {
-    if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
-    return a.id - b.id
-  })
-  for (const tx of sorted) {
-    if (!inventory[tx.symbol]) inventory[tx.symbol] = []
-    const lots = inventory[tx.symbol]
-    
-    if (tx.action === 'BUY' || tx.action === 'DCA') {
-      const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
-      const f = calcFee(tx.amount, settings, false, isDca)
-      lots.push({ shares: tx.shares, principal: tx.amount, fee: f, origShares: tx.shares })
-    } else if (tx.action === 'SELL') {
-      let sellRemaining = tx.shares
-      let matchedBuyCostTotal = 0
-      
-      while (sellRemaining > 0 && lots.length > 0) {
-        const lot = lots[0]
-        const take = Math.min(lot.shares, sellRemaining)
-        const ratio = take / lot.origShares
-        
-        const matchedPrincipal = (take / lot.shares) * lot.principal
-        const matchedFee = ratio * lot.fee
-        
-        matchedBuyCostTotal += (matchedPrincipal + matchedFee)
-        
-        lot.shares -= take
-        lot.principal -= matchedPrincipal
-        sellRemaining -= take
-        if (lot.shares <= 0) lots.shift()
-      }
-      
-      const f = calcFee(tx.amount, settings, true)
-      const t = calcTax(tx.amount, tx.symbol, settings)
-      const sellProceeds = Math.floor(tx.amount - f - t)
-      allTimeRealized += Math.floor(sellProceeds - Math.floor(matchedBuyCostTotal))
-    }
-  }
-  const hList = Object.entries(inventory)
-    .map(([sym, lots]) => {
-      const netShares = lots.reduce((s, l) => s + l.shares, 0)
-      if (netShares <= 0) return null
-      const totalCost = lots.reduce((s, l) => s + (l.principal + l.fee * (l.shares/l.origShares)), 0)
-      const avgCost = totalCost / netShares
-      const q = quotes[sym]
-      const cp = q?.bid_price || q?.price || 0
-      const mv = Math.floor(cp * netShares)
-      const sell_fee = calcFee(mv, settings, true)
-      const sell_tax = calcTax(mv, sym, settings)
-      const net_mv = Math.floor(mv - sell_fee - sell_tax)
-      const upnl = net_mv - totalCost
-      return {
-        symbol: sym,
-        shares: netShares,
-        avg_cost: Math.round(avgCost * 100) / 100,
-        total_cost: Math.round(totalCost),
-        current_price: cp,
-        market_value: mv,
-        net_market_value: net_mv,
-        sell_fee,
-        sell_tax,
-        unrealized_pnl: Math.round(upnl),
-        pnl_pct: totalCost ? Math.round(upnl / totalCost * 10000) / 100 : 0,
-      }
-    })
-    .filter((h): h is Holding => h !== null)
-  
-  return { holdings: hList, allTimeRealized }
-}
 
 export default function DashboardClient({ user }: { user: AppUser }) {
   const [tab, setTab]             = useState<Tab>('holdings')
   const [txs, setTxs]             = useState<Transaction[]>([])
   const [quotes, setQuotes]       = useState<Record<string, Quote>>({})
   const [settings, setSettings]   = useState<UserSettings>(DEFAULT_SETTINGS)
-  const [holdings, setHoldings]   = useState<Holding[]>([])
-  const [allTimeRealized, setAllTimeRealized] = useState(0)
-  const [drawerOpen, setDrawerOpen] = useState(false)
   const [loading, setLoading]     = useState(true)
   const router = useRouter()
   const supabase = createClient()
@@ -154,15 +80,8 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     if (syms.length) {
       const qRes = await fetch(`/api/stocks?symbols=${syms.join(',')}`)
       if (qRes.ok) {
-        const q: Record<string, Quote> = await qRes.json()
-        setQuotes(q)
-        const { holdings: newHoldings, allTimeRealized: realized } = buildHoldings(txData, q, setData)
-        setHoldings(newHoldings)
-        setAllTimeRealized(realized)
+        setQuotes(await qRes.json())
       }
-    } else {
-      setHoldings([])
-      setAllTimeRealized(0)
     }
   }, [])
 
@@ -172,17 +91,29 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     fetch('/api/stockname/refresh').catch(console.error)
   }, [refresh])
 
-  const { totalPnl, pnlPct, totalMV } = useMemo(() => {
-    let buyTotal = 0
-    for (const t of txs) {
-      if (t.action === 'BUY' || t.action === 'DCA') buyTotal += (t.amount + t.fee)
-    }
-    const currentMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
-    const unrealizedPnl = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
-    const tp = allTimeRealized + unrealizedPnl
-    return { totalPnl: tp, totalMV: currentMV, pnlPct: buyTotal ? (tp / buyTotal) * 100 : 0 }
-  }, [holdings, allTimeRealized, txs])
 
+  const signOut = async () => {
+    await supabase.auth.signOut()
+    router.push('/login')
+  }
+
+  return (
+    <PortfolioProvider transactions={txs} quotes={quotes} settings={settings}>
+      <DashboardInner 
+        user={user} tab={tab} setTab={setTab} 
+        refresh={refresh} loading={loading} 
+        drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen}
+        settings={settings} setSettings={setSettings}
+      />
+    </PortfolioProvider>
+  )
+}
+
+function DashboardInner({ user, tab, setTab, refresh, loading, drawerOpen, setDrawerOpen, settings, setSettings }: any) {
+  const { stats } = usePortfolio()
+  const { totalPnl, pnlPct, totalNetMV: totalMV } = stats
+  const router = useRouter()
+  const supabase = createClient()
   const signOut = async () => {
     await supabase.auth.signOut()
     router.push('/login')
@@ -213,9 +144,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       <main className="flex-1 overflow-y-auto pb-32">
         {loading ? <div className="p-10 text-center opacity-20 animate-pulse text-[var(--t1)]">載入中...</div> : (
           <>
-            {tab === 'holdings' && <HoldingsTab holdings={holdings} quotes={quotes} settings={settings} transactions={txs} onRefresh={refresh} />}
-            {tab === 'analytics' && <AnalyticsTab holdings={holdings} transactions={txs} settings={settings} quotes={quotes} />}
-            {tab === 'transactions' && <TransactionsTab txs={txs} settings={settings} onRefresh={refresh} />}
+            {tab === 'holdings' && <HoldingsTab onRefresh={refresh} />}
+            {tab === 'analytics' && <AnalyticsTab onRefresh={refresh} />}
+            {tab === 'transactions' && <TransactionsTab onRefresh={refresh} />}
             {tab === 'settings' && <SettingsTab settings={settings} onSignOut={signOut} onSave={async s => {
               await fetch('/api/settings', { method: 'POST', body: JSON.stringify(s) })
               setSettings(s)
