@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
 
   const dailyStats: Record<string, any> = {}
   const inventory: Record<string, { shares: number; orig_cost: number; allocated_cost: number }[]> = {}
+  const lastKnownPrices: Record<string, number> = {}
   
   let prevGrossTotal = 0
   let prevCostTotal = 0
@@ -112,7 +113,7 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    // 計算收盤狀態
+    // 計算收盤狀態 (具備價格延續性)
     let currentGrossTotal = 0
     let currentNetMV = 0
     let currentCostTotal = 0
@@ -126,8 +127,11 @@ export async function GET(req: NextRequest) {
 
     Object.entries(endOfDayHoldings).forEach(([sym, endShares]) => {
       const todayPrice = histories[sym]?.[date]
-      if (todayPrice !== undefined && endShares > 0) {
-        const gross = Math.floor(todayPrice * endShares)
+      if (todayPrice !== undefined) lastKnownPrices[sym] = todayPrice
+      
+      const priceToUse = lastKnownPrices[sym]
+      if (priceToUse !== undefined && endShares > 0) {
+        const gross = Math.floor(priceToUse * endShares)
         const net = gross - calcFee(gross, settings, true) - calcTax(gross, sym, settings)
         const costBasis = inventory[sym].reduce((s, l) => s + (l.orig_cost - l.allocated_cost), 0)
         
@@ -138,7 +142,7 @@ export async function GET(req: NextRequest) {
         details.push({
           symbol: sym,
           name: STOCK_NAMES[sym] || sym,
-          price: todayPrice,
+          price: priceToUse,
           market_value: net,
           total_cost: costBasis,
           pnl: net - costBasis,
@@ -147,13 +151,22 @@ export async function GET(req: NextRequest) {
       }
     })
 
+    // 如果今天完全沒價格且沒交易，則延續昨日狀態 (適用於週末/假日)
+    const hasActivity = todaysTxs.length > 0
+    const hasStock = Object.keys(endOfDayHoldings).length > 0
+    
+    if (currentCostTotal === 0 && prevCostTotal > 0 && hasStock) {
+       currentGrossTotal = prevGrossTotal
+       currentCostTotal = prevCostTotal
+    }
+
     // --- Daily PnL Calculation Logic ---
     const capitalInToday = currentCostTotal - prevCostTotal
     let daily_pnl = 0
     let daily_pnl_pct = 0
 
     if (prevCostTotal === 0 && currentCostTotal > 0) {
-      // Initialization Day (e.g., 12/10)
+      // Initialization Day (e.g., 12/10) - 排除預扣稅費
       daily_pnl = currentGrossTotal - currentCostTotal
       daily_pnl_pct = currentCostTotal > 0 ? (daily_pnl / currentCostTotal * 100) : 0
     } else if (prevCostTotal > 0) {
@@ -164,7 +177,8 @@ export async function GET(req: NextRequest) {
 
     if (isCurrentMonth) {
       const unrealizedPnL = currentNetMV - currentCostTotal
-      if (Math.abs(unrealizedPnL) > 0.01 || Math.abs(dailyRealizedPnl) > 0.01 || todaysTxs.length > 0) {
+      // 只有當日有波動、有已實現或有交易時才記錄這一天
+      if (Math.abs(daily_pnl) > 0.01 || Math.abs(dailyRealizedPnl) > 0.01 || hasActivity) {
         dailyStats[date] = {
           entry_date: date,
           pnl: Math.round(unrealizedPnL),
