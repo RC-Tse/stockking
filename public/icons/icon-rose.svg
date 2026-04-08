@@ -1,0 +1,11 @@
+<svg width="192" height="192" viewBox="0 0 192 192" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="192" height="192" rx="40" fill="#0C0809"/>
+  <defs>
+    <linearGradient id="rose-grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#D0A9AF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#E8CCD1;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  <path d="M48 110L64 54L96 86L128 54L144 110H48Z" fill="url(#rose-grad)"/>
+  <text x="96" y="150" fill="#D0A9AF" font-family="PingFang TC, sans-serif" font-size="18" font-weight="bold" text-anchor="middle">存股王</text>
+</svg>

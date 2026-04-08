@@ -124,11 +124,19 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   useEffect(() => {
     const t = settings.theme || 'dark'
     document.documentElement.setAttribute('data-theme', t)
-    const icon = document.querySelector('link[rel="apple-touch-icon"]')
-    if (icon) {
-      const isLightIcon = t === 'light' || t === 'rose'
-      icon.setAttribute('href', isLightIcon ? '/icons/icon-192-light.svg' : '/icons/icon-192.svg')
-    }
+    
+    // 更新主題圖示 (Apple Touch Icon & Favicon)
+    const iconLinks = document.querySelectorAll('link[rel="apple-touch-icon"], link[rel="icon"]')
+    let iconPath = '/icons/icon-192.svg'
+    if (t === 'light') iconPath = '/icons/icon-192-light.svg'
+    else if (t === 'blue') iconPath = '/icons/icon-blue.svg'
+    else if (t === 'purple') iconPath = '/icons/icon-purple.svg'
+    else if (t === 'rose') iconPath = '/icons/icon-rose.svg'
+    else if (t === 'green') iconPath = '/icons/icon-green.svg'
+
+    iconLinks.forEach(link => {
+      link.setAttribute('href', iconPath)
+    })
   }, [settings.theme])
 
   const refresh = useCallback(async () => {
