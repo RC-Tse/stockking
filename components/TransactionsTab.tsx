@@ -120,7 +120,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
           stock.realized += profit
           stock.count++
         }
-        stock.history.push({ ...tx, type: 'SELL', matches, profit, net: sellProceeds })
+        stock.history.push({ ...tx, type: 'SELL', matches, profit, net: sellProceeds, realizedCost: finalMatchedCost })
       }
     }
 
@@ -264,7 +264,12 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
                 </span>
               </div>
               {tx.matches?.map((m:any,i:number)=><div key={i} className="pl-4 border-l-2 border-white/10 text-[10px] text-[var(--t3)] italic py-0.5 ml-1">沖銷 {m.date} 買入 ({m.shares} 股)</div>)}
-              {tx.type==='SELL' && <div className={`text-right font-black text-[11px] pt-1.5 border-t border-white/5 ${tx.profit>=0?'text-red-400/60':'text-green-400/60'}`}>此筆損益 {tx.profit>=0?'+':''}{fmtMoney(Math.round(tx.profit))}</div>}
+              {tx.type==='SELL' && (
+                <div className={`text-right font-black text-[10px] pt-1.5 border-t border-white/5 space-x-2 ${tx.profit>=0?'text-red-400/60':'text-green-400/60'}`}>
+                  <span className="opacity-40">此筆成本 {fmtMoney(tx.realizedCost)}</span>
+                  <span>此筆損益 {tx.profit>=0?'+':''}{fmtMoney(tx.profit)}</span>
+                </div>
+              )}
             </div>
           ))}
         </div>
