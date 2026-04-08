@@ -213,9 +213,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
 
   return (
     <div className="p-4 space-y-6 tabular-nums" style={{ fontVariantNumeric: 'tabular-nums' }}>
-      <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl p-5 relative overflow-hidden animate-slide-up shadow-2xl">
+      <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-5 relative overflow-hidden animate-slide-up shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <span className="text-base font-black text-[#EAD8B1] uppercase tracking-[0.2em]">持股概覽 · {holdings.length} 檔</span>
+          <span className="text-base font-black text-[var(--t2)] uppercase tracking-[0.2em]">持股概覽 · {holdings.length} 檔</span>
           <div className="flex items-center gap-2">
             <button onClick={() => setShowData(!showData)} className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all">
               {showData ? <Eye size={14} /> : <EyeOff size={14} />}
@@ -231,10 +231,10 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             <StatBox label="持有成本" value={showData ? fmtMoney(currentCost) : "••••••"} className="w-1/2 text-center" large />
             <div className="w-1/2 flex flex-col items-center border-l border-white/5 px-3">
               <div className="flex items-center gap-1 mb-1.5">
-                <span className="text-[11px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest">預估淨市值</span>
+                <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">預估淨市值</span>
                 <span 
                   onClick={() => alert("預估淨市值 = (庫存股數 * 市價) - 預估賣出手續費 - 預估證交稅\n此數值與各大券商 App 之「損益試算」或「淨市值」顯示一致。")}
-                  className="text-[9px] text-[#d4af37]/60 border border-[#d4af37]/30 rounded-full w-3.5 h-3.5 flex items-center justify-center font-black cursor-pointer flex-shrink-0 active:scale-90 transition-all"
+                  className="text-[9px] text-[var(--accent)] border border-[var(--accent)]/30 rounded-full w-3.5 h-3.5 flex items-center justify-center font-black cursor-pointer flex-shrink-0 active:scale-90 transition-all"
                 >i</span>
               </div>
               <span className={`font-black font-mono leading-none text-[22px] ${!showData ? 'text-white' : (currentNetMV >= currentCost ? 'text-red-400' : 'text-green-400')}`}>{showData ? fmtMoney(currentNetMV) : "••••••"}</span>
@@ -255,10 +255,10 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
         </div>
       </div>
 
-      <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl p-6 space-y-6 shadow-xl">
+      <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-6 space-y-6 shadow-xl">
         <div className="flex flex-col gap-4 px-1">
           <div className="flex items-center justify-between">
-            <span className="text-[13px] font-black text-[#EAD8B1] uppercase tracking-wider flex items-center gap-2">
+            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider flex items-center gap-2">
               <PieChartIcon size={14} className="text-accent" /> 資產分佈 ({chartMode === 'cost' ? '成本' : '市值'})
             </span>
           </div>
@@ -319,7 +319,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-black text-[#EAD8B1] opacity-60 uppercase">{chartMode === 'cost' ? '總投入' : '合計市值'}</span>
+            <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase">{chartMode === 'cost' ? '總投入' : '合計市值'}</span>
             <span className="text-lg font-black text-[var(--t1)] font-mono">{fmtMoney(Math.round(chartTotal))}</span>
           </div>
         </div>
@@ -333,9 +333,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
             >
               <div className="flex items-center gap-2 min-w-0">
                 <div className="w-2 h-2 rounded-full shrink-0" style={{ background: PIE_COLORS[index % PIE_COLORS.length] }} />
-                <span className={`text-[11px] font-bold truncate ${selectedPieSym === entry.symbol ? 'text-accent' : 'text-[#EAD8B1] opacity-90'}`}>{entry.name}</span>
+                <span className={`text-[11px] font-bold truncate ${selectedPieSym === entry.symbol ? 'text-accent' : 'text-[var(--t2)] opacity-90'}`}>{entry.name}</span>
               </div>
-              <span className="text-[10px] font-mono text-[#EAD8B1] opacity-50 ml-2">{chartTotal > 0 ? ((entry.value / chartTotal) * 100).toFixed(1) : 0}%</span>
+              <span className="text-[10px] font-mono text-[var(--t2)] opacity-50 ml-2">{chartTotal > 0 ? ((entry.value / chartTotal) * 100).toFixed(1) : 0}%</span>
             </button>
           ))}
         </div>
@@ -346,10 +346,10 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               <div className="flex justify-between items-start">
                 <div>
                   <h4 className="text-[var(--t1)] font-black text-sm">{quotes[selectedHolding.symbol]?.name_zh || getStockName(selectedHolding.symbol)}</h4>
-                  <p className="text-[10px] font-mono text-[#EAD8B1] opacity-40">{codeOnly(selectedHolding.symbol)}</p>
+                  <p className="text-[10px] font-mono text-[var(--t2)] opacity-40">{codeOnly(selectedHolding.symbol)}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-[10px] font-black text-[#EAD8B1] uppercase mb-0.5">{chartMode === 'cost' ? '佔投入比例' : '佔市值比例'}</div>
+                  <div className="text-[10px] font-black text-[var(--t2)] uppercase mb-0.5">{chartMode === 'cost' ? '佔投入比例' : '佔市值比例'}</div>
                   <div className="text-sm font-black text-accent font-mono">{chartTotal > 0 ? (( (chartMode === 'cost' ? selectedHolding.total_cost : selectedHolding.net_market_value) / chartTotal) * 100).toFixed(1) : 0}%</div>
                 </div>
               </div>
@@ -362,7 +362,7 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
               </div>
 
               <div className="pt-2 border-t border-white/5 flex justify-between items-end">
-                <span className="text-[10px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest">未實現損益</span>
+                <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">未實現損益</span>
                 <span className={`font-black font-mono text-base ${selectedHolding.unrealized_pnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {selectedHolding.unrealized_pnl >= 0 ? '+' : ''}{fmtMoney(selectedHolding.unrealized_pnl)} ({selectedHolding.pnl_pct.toFixed(2)}%)
                 </span>
@@ -432,7 +432,7 @@ function StatBox({ label, value, upDown, large, className }: any) {
   const color = (upDown === undefined || isHidden) ? 'text-[var(--t1)]' : upDown >= 0 ? 'text-red-400' : 'text-green-400'
   return (
     <div className={`flex flex-col ${className}`}>
-      <span className="text-[11px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest mb-1.5">{label}</span>
+      <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</span>
       <span className={`font-black font-mono leading-none ${large ? 'text-[22px]' : 'text-[18px]'} ${color}`}>{value}</span>
     </div>
   )
@@ -441,7 +441,7 @@ function StatBox({ label, value, upDown, large, className }: any) {
 function DetailBox({ label, value }: { label: string, value: string }) {
   return (
     <div>
-      <div className="text-[10px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest mb-1">{label}</div>
+      <div className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1">{label}</div>
       <div className="text-sm font-bold text-[var(--t1)] font-mono">{value}</div>
     </div>
   )
@@ -452,7 +452,7 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
   return (
     <div className="space-y-2.5">
       <div className="flex justify-between items-end">
-        <span className="text-[13px] font-black text-[#EAD8B1] opacity-90 flex items-center gap-2">
+        <span className="text-[13px] font-black text-[var(--t2)] opacity-90 flex items-center gap-2">
           <Icon size={14} className="text-accent" /> {label}
         </span>
         {goal > 0 ? (
@@ -460,7 +460,7 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
             <span className={`text-[13px] font-black font-mono ${isNegative ? 'text-red-400' : 'text-accent'}`}>
               {showData ? `${achieved.toFixed(1)}%` : "••••••"}
             </span>
-            <span className="text-[10px] font-bold text-[#EAD8B1] opacity-50">
+            <span className="text-[10px] font-bold text-[var(--t2)] opacity-50">
               {showData ? `${fmtMoney(Math.round(current))} / ${fmtMoney(goal)}` : "••••••"}
             </span>
           </div>
@@ -486,13 +486,13 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
   const nameZh = q?.name_zh || h.symbol
 
   return (
-    <div className={`transition-all duration-300 border-[0.5px] ${isExpanded ? 'bg-[#232429] border-[#d4af37] ring-1 ring-[#d4af37]/30' : 'bg-[#232429] border-[#d4af37]/20'} rounded-2xl shadow-xl overflow-hidden`}>
+    <div className={`transition-all duration-300 border-[0.5px] ${isExpanded ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent-bright)]/30' : 'bg-[var(--bg-card)] border-[var(--border-bright)]'} rounded-2xl shadow-xl overflow-hidden`}>
       <div className="py-5 px-6 cursor-pointer active:bg-white/5 space-y-4" onClick={onToggle}>
         <div className="flex justify-between items-start">
           <div className="space-y-1">
             <div className="font-black text-[var(--t1)] text-[17px] tracking-tight">{nameZh}</div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-[#EAD8B1] opacity-90">
+              <span className="text-[11px] font-bold text-[var(--t2)] opacity-90">
                 {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
               </span>
               {q?.change !== undefined && (() => {
@@ -512,13 +512,13 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
         
         <div className="grid grid-cols-2 gap-4 pt-1">
           <div className="space-y-1">
-            <div className="text-[9px] font-black text-[#EAD8B1] uppercase tracking-widest opacity-60">持有成本 / 預估淨市值</div>
+            <div className="text-[9px] font-black text-[var(--t2)] uppercase tracking-widest opacity-60">持有成本 / 預估淨市值</div>
             <div className="text-[15px] font-black text-[var(--t1)] font-mono flex items-baseline gap-1.5">
               {fmtMoney(Math.round(h.total_cost))} <span className="text-[10px] opacity-20">/</span> <span className="text-accent">{fmtMoney(Math.round(h.net_market_value))}</span>
             </div>
           </div>
           <div className="text-right space-y-1">
-            <div className="text-[9px] font-black text-[#EAD8B1] uppercase tracking-widest opacity-60">未實現損益</div>
+            <div className="text-[9px] font-black text-[var(--t2)] uppercase tracking-widest opacity-60">未實現損益</div>
             <div className={`text-[15px] font-black font-mono ${color} flex items-baseline justify-end gap-1.5`}>
               {isUp ? '+' : ''}{fmtMoney(Math.round(h.unrealized_pnl))} <span className="text-[10px] opacity-70">({(h.pnl_pct ?? 0).toFixed(2)}%)</span>
             </div>
@@ -528,7 +528,7 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
 
       {isExpanded && (
         <div className="bg-black/30 border-t border-white/5 pb-2 animate-slide-up">
-          <div className="px-6 py-2.5 text-[10px] font-black text-[#EAD8B1] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">歷史交易明細</div>
+          <div className="px-6 py-2.5 text-[10px] font-black text-[var(--t2)] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">歷史交易明細</div>
           <div className="px-2 space-y-0.5">
             {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
           </div>
@@ -545,13 +545,13 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
   const color = isUp ? 'text-red-400' : 'text-green-400'
 
   return (
-    <div className={`transition-all duration-300 border-[0.5px] ${expanded ? 'bg-[#232429] border-[#d4af37] ring-1 ring-[#d4af37]/30' : 'bg-[#232429] border-[#d4af37]/20'} rounded-2xl shadow-xl overflow-hidden`}>
+    <div className={`transition-all duration-300 border-[0.5px] ${expanded ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent-bright)]/30 shadow-2xl' : 'bg-[var(--bg-card)] border-[var(--border-bright)]'} rounded-2xl shadow-xl overflow-hidden`}>
       <div className="py-5 px-6 cursor-pointer active:bg-white/5 space-y-4" onClick={onToggle}>
         <div className="flex justify-between items-start">
           <div className="space-y-1">
             <div className="font-black text-[var(--t1)] text-[17px] tracking-tight">{name}</div>
             <div className="flex items-center gap-2">
-              <span className="text-[11px] font-bold text-[#EAD8B1] opacity-60">
+              <span className="text-[11px] font-bold text-[var(--t2)] opacity-60">
                 結算盈虧計入
               </span>
               <span className={`text-[10px] font-black px-2.5 py-0.5 rounded-full flex items-center gap-0.5 ${isUp ? 'bg-red-500/80' : 'bg-green-600/80'} text-white`}>
@@ -560,18 +560,18 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
               </span>
             </div>
           </div>
-          <div className="text-[12px] font-mono text-[#EAD8B1] opacity-60 mt-1">{codeOnly(c.symbol)}</div>
+          <div className="text-[12px] font-mono text-[var(--t2)] opacity-60 mt-1">{codeOnly(c.symbol)}</div>
         </div>
         
         <div className="grid grid-cols-2 gap-4 pt-1">
           <div className="space-y-1">
-            <div className="text-[9px] font-black text-[#EAD8B1] uppercase tracking-widest opacity-60">總投入成本 / 總回收營收</div>
+            <div className="text-[9px] font-black text-[var(--t2)] uppercase tracking-widest opacity-60">總投入成本 / 總回收營收</div>
             <div className="text-[15px] font-black text-[var(--t1)] font-mono flex items-baseline gap-1.5">
               {fmtMoney(Math.round(c.buyCost))} <span className="text-[10px] opacity-20">/</span> <span className="text-accent">{fmtMoney(Math.round(c.sellRev))}</span>
             </div>
           </div>
           <div className="text-right space-y-1">
-            <div className="text-[9px] font-black text-[#EAD8B1] uppercase tracking-widest opacity-60">已實現損益</div>
+            <div className="text-[9px] font-black text-[var(--t2)] uppercase tracking-widest opacity-60">已實現損益</div>
             <div className={`text-[15px] font-black font-mono ${color} flex items-baseline justify-end gap-1.5`}>
               {isUp ? '+' : ''}{fmtMoney(Math.round(c.pnl))}
             </div>
@@ -580,7 +580,7 @@ function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRe
       </div>
       {expanded && (
         <div className="bg-black/30 border-t border-white/5 pb-2 animate-slide-up">
-          <div className="px-6 py-2.5 text-[10px] font-black text-[#EAD8B1] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">完整交易歷程</div>
+          <div className="px-6 py-2.5 text-[10px] font-black text-[var(--t2)] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">完整交易歷程</div>
           <div className="px-2 space-y-0.5">
             {transactions.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onRefresh} onDelete={onDelete} />)}
           </div>
@@ -654,9 +654,9 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   return (
     <div className="group relative flex justify-between items-center px-6 py-4 hover:bg-white/5 transition-all">
       <div className="flex flex-col gap-0.5">
-        <div className="text-[10px] text-[#EAD8B1] font-mono opacity-50 tracking-tight">{t.trade_date}</div>
-        <div className="text-[14px] font-bold text-[#EAD8B1] opacity-90 flex items-center gap-1.5">
-          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] text-[#EAD8B1] opacity-40 font-light">@</span> {(t.price ?? 0).toFixed(2)}
+        <div className="text-[10px] text-[var(--t2)] font-mono opacity-50 tracking-tight">{t.trade_date}</div>
+        <div className="text-[14px] font-bold text-[var(--t2)] opacity-90 flex items-center gap-1.5">
+          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] text-[var(--t2)] opacity-40 font-light">@</span> {(t.price ?? 0).toFixed(2)}
           {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-[8px] text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black tracking-tighter uppercase leading-none ml-1">DCA</span>}
         </div>
       </div>

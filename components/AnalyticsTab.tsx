@@ -300,10 +300,10 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
             <select 
               value={selSym} 
               onChange={e => setSelSym(e.target.value)}
-              className="w-full bg-[#232429] border border-[#d4af37]/30 rounded-xl px-4 py-3 text-[15px] font-black text-[#EAD8B1] outline-none focus:border-accent transition-all appearance-none cursor-pointer shadow-lg"
+              className="w-full bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t2)] outline-none focus:border-accent transition-all appearance-none cursor-pointer shadow-lg"
             >
               {holdings.map(h => (
-                <option key={h.symbol} value={h.symbol} className="bg-[#232429]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)}</option>
+                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{quotes[h.symbol]?.name_zh || getStockName(h.symbol)}</option>
               ))}
             </select>
 
@@ -311,14 +311,14 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
               {(['1M', '3M', '6M', '9M', '1Y', 'ALL'] as StockRange[]).map(r => (
                 <button 
                   key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
-                  className={`flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[#232429] text-[#EAD8B1] opacity-60 border-[#d4af37]/20 whitespace-nowrap'}`}
+                  className={`flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)] whitespace-nowrap'}`}
                 >
                   {r === 'ALL' ? '全部' : r}
                 </button>
               ))}
               <button 
                 onClick={() => { setStockRange('CUSTOM'); setShowCustomStock(!showCustomStock); }}
-                className={`px-4 py-2.5 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[#232429] text-[#EAD8B1] opacity-60 border-[#d4af37]/20'}`}
+                className={`px-4 py-2.5 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)]'}`}
               >
                 <CalendarIcon size={14} />
               </button>
@@ -327,19 +327,19 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
         </div>
 
         {showCustomStock && (
-          <div className="flex items-center justify-end gap-3 px-1 py-1 animate-slide-up bg-[#232429] rounded-2xl border border-[#d4af37]/20 shadow-xl">
+          <div className="flex items-center justify-end gap-3 px-1 py-1 animate-slide-up bg-[var(--bg-card)] rounded-2xl border border-[var(--border-bright)] shadow-xl">
             <div className="flex items-center gap-2">
-              <span className="text-[10px] font-black text-[#EAD8B1] opacity-60">起</span>
+              <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
               <DatePicker value={customStockStart} onChange={(v: string) => setCustomStockStart(v)} />
             </div>
             <div className="flex items-center gap-2 pr-2">
-              <span className="text-[10px] font-black text-[#EAD8B1] opacity-60">迄</span>
+              <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
               <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} />
             </div>
           </div>
         )}
 
-        <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-black text-[#EAD8B1] opacity-80 animate-slide-up">
+        <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-black text-[var(--t2)] opacity-80 animate-slide-up">
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'var(--accent)' }} /> 股價線</div>
           <div className="flex items-center gap-1.5"><div className="w-4 h-0 border-b-2 border-dashed" style={{ borderColor: 'rgba(255,255,255,0.8)' }} /> 買入均價</div>
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full border-2 border-white bg-[#e05050]" /> 買入點</div>
@@ -352,7 +352,7 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            className={`bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
+            className={`bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
             style={{ WebkitOverflowScrolling: 'touch', height: '320px' }}
           >
             {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
@@ -366,7 +366,7 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
                   onMouseLeave={() => setActivePoint(null)}
                 >
                   <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 11, fontWeight: 900, fill: '#EAD8B1', opacity: 0.6}} axisLine={false} interval={0} />
+                  <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t2)', opacity: 0.6}} axisLine={false} interval={0} />
                   <YAxis domain={[yAxisMetrics.min, yAxisMetrics.max]} orientation="right" tick={false} axisLine={false} tickLine={false} hide />
                   <Tooltip 
                     content={<StockTooltip />} 
@@ -417,12 +417,12 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
 
         {selectedHolding && (
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl p-4 shadow-xl">
-              <div className="text-[11px] font-black text-[#EAD8B1] opacity-70 uppercase mb-1">現時平均成本</div>
+            <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-4 shadow-xl">
+              <div className="text-[11px] font-black text-[var(--t2)] opacity-70 uppercase mb-1">現時平均成本</div>
               <div className="text-[18px] font-black text-[var(--t1)] font-mono">{selectedHolding.avg_cost.toFixed(2)}</div>
             </div>
-            <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl p-4 shadow-xl">
-              <div className="text-[11px] font-black text-[#EAD8B1] opacity-70 uppercase mb-1">現時股價 vs 成本</div>
+            <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-4 shadow-xl">
+              <div className="text-[11px] font-black text-[var(--t2)] opacity-70 uppercase mb-1">現時股價 vs 成本</div>
               <div className={`text-[18px] font-black font-mono ${selectedHolding.pnl_pct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                 {selectedHolding.pnl_pct >= 0 ? '+' : ''}{selectedHolding.pnl_pct.toFixed(2)}%
               </div>
