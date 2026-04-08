@@ -81,14 +81,40 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
         const sellProceeds = Math.floor(tx.amount - f - t)
         let rem = tx.shares, matchedBuyCostTotal = 0, matchedBuyFeeTotal = 0, matches = []
         while (rem > 0 && inventory[tx.symbol].length) {
-          const lot = inventory[tx.symbol][0], take = Math.min(lot.shares, rem), ratio = take / lot.origShares
-          const matchedPrincipal = (take / lot.shares) * lot.principal, matchedFee = ratio * lot.fee
-          matchedBuyCostTotal += (matchedPrincipal + matchedFee); matchedBuyFeeTotal += matchedFee
+          const lot = inventory[tx.symbol][0]
+          const take = Math.min(lot.shares, rem)
+          
+          let matchedPrincipal = 0
+          let matchedFee = 0
+          
+          if (take === lot.shares) {
+            // Final match: use remaining balance exactly
+            matchedPrincipal = lot.principal
+            matchedFee = lot.fee
+          } else {
+            // Partial match: proportional calculation
+            matchedPrincipal = Math.floor((take / lot.shares) * lot.principal)
+            matchedFee = Math.floor((take / (lot.origShares)) * (lot.fee + (lot.allocatedFee || 0))) // Wait, simplified below
+          }
+          // Better partial match logic for clarity:
+          const ratio = take / lot.shares
+          if (take < lot.shares) {
+            matchedPrincipal = Math.floor(lot.principal * ratio)
+            matchedFee = Math.floor(lot.fee * ratio)
+          }
+
+          matchedBuyCostTotal += (matchedPrincipal + matchedFee)
+          matchedBuyFeeTotal += matchedFee
           matches.push({ date: lot.date, shares: take })
-          lot.shares -= take; lot.principal -= matchedPrincipal; rem -= take
+          
+          lot.shares -= take
+          lot.principal -= matchedPrincipal
+          lot.fee -= matchedFee
+          rem -= take
+          
           if (lot.shares <= 0) inventory[tx.symbol].shift()
         }
-        const finalMatchedCost = Math.floor(matchedBuyCostTotal)
+        const finalMatchedCost = Math.round(matchedBuyCostTotal)
         const profit = sellProceeds - finalMatchedCost
         if (inRange) {
           stock.buy += finalMatchedCost; stock.sell += sellProceeds; stock.fee += (matchedBuyFeeTotal + f); stock.tax += t; stock.realized += profit; stock.count++

@@ -71,6 +71,8 @@ export interface CalendarEntry {
   pnl_pct?: number
   realized_pnl?: number
   net_market_value?: number
+  gross_market_value?: number
+  capital_in?: number
   note: string
   details?: {
     symbol: string

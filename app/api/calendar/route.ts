@@ -67,7 +67,7 @@ export async function GET(req: NextRequest) {
   }
 
   const dailyStats: Record<string, any> = {}
-  const inventory: Record<string, { shares: number; cost: number }[]> = {}
+  const inventory: Record<string, { shares: number; orig_cost: number; allocated_cost: number }[]> = {}
   
   const startD = new Date(startDate)
   const endD = new Date(endDate)
@@ -76,19 +76,10 @@ export async function GET(req: NextRequest) {
     const date = d.toISOString().split('T')[0]
     const isCurrentMonth = date.startsWith(`${year}-${String(month).padStart(2, '0')}`)
     
-    // 記錄今日開盤持股 (用於計算原本部位的市值變動)
-    const startOfDayHoldings: Record<string, number> = {}
-    Object.entries(inventory).forEach(([sym, lots]) => {
-      const total = lots.reduce((s, l) => s + l.shares, 0)
-      if (total > 0) startOfDayHoldings[sym] = total
-    })
-
     const todaysTxs = txs.filter(t => t.trade_date === date)
     let dailyRealizedPnl = 0
-    let dailyMarketPnl = 0
     let capitalInToday = 0
     const boughtToday: Record<string, { shares: number, cost: number }> = {}
-    const soldToday: Record<string, number> = {}
 
     todaysTxs.forEach(tx => {
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
@@ -97,38 +88,45 @@ export async function GET(req: NextRequest) {
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         if (!boughtToday[tx.symbol]) boughtToday[tx.symbol] = { shares: 0, cost: 0 }
         const txTotalCost = Math.floor(Number(tx.amount) || 0) + Math.floor(Number(tx.fee) || 0)
-        lots.push({ shares: tx.shares, cost: txTotalCost })
+        lots.push({ shares: tx.shares, orig_cost: txTotalCost, allocated_cost: 0 })
         capitalInToday += txTotalCost
-        boughtToday[tx.symbol].shares += tx.shares
-        boughtToday[tx.symbol].cost += txTotalCost
       } else if (tx.action === 'SELL') {
-        soldToday[tx.symbol] = (soldToday[tx.symbol] || 0) + tx.shares
         let sellRem = tx.shares
         const sellUnitNet = tx.net_amount / tx.shares
         while (sellRem > 0 && lots.length > 0) {
-        const lot = lots[0]
-        const take = Math.min(lot.shares, sellRem)
-        const lotCostBasis = (take / lot.shares) * lot.cost
-        const portionProfit = (sellUnitNet * take) - lotCostBasis
-        dailyRealizedPnl += portionProfit
-        
-        sellRem -= take
-        lot.cost -= lotCostBasis
-        lot.shares -= take
-        
-        if (lot.shares <= 0) lots.shift()
+          const lot = lots[0]
+          const take = Math.min(lot.shares, sellRem)
+          
+          let lotCostBasis = 0
+          if (take === lot.shares) {
+            // Final match for this lot: exact remaining cost
+            lotCostBasis = lot.orig_cost - lot.allocated_cost
+          } else {
+            // Proportional match: floor to carry 1-yuan differences to the end
+            lotCostBasis = Math.floor((take / lot.shares) * (lot.orig_cost - lot.allocated_cost))
+          }
+          
+          const portionProfit = (sellUnitNet * take) - lotCostBasis
+          dailyRealizedPnl += portionProfit
+          
+          sellRem -= take
+          lot.allocated_cost += lotCostBasis
+          lot.shares -= take
+          
+          if (lot.shares <= 0) lots.shift()
         }
       }
     })
 
-    // 計算當日「持倉狀態」(基於收盤持股與其成本)
+    // 計算當日「持倉狀態」
+    let totalGrossMV = 0
     let totalNetMV = 0
     let totalActualCost = 0
     const details: any[] = []
 
     const getNetVal = (p: number, sh: number, s: string) => {
       const gross = Math.floor(p * sh)
-      const fee = calcFee(gross, settings, true) // Standard SELL fee for valuation
+      const fee = calcFee(gross, settings, true)
       const tax = calcTax(gross, s, settings)
       return gross - fee - tax
     }
@@ -142,9 +140,11 @@ export async function GET(req: NextRequest) {
     Object.entries(endOfDayHoldings).forEach(([sym, endShares]) => {
       const todayPrice = histories[sym]?.[date]
       if (todayPrice !== undefined && endShares > 0) {
+        const grossMV = Math.floor(todayPrice * endShares)
         const netMV = getNetVal(todayPrice, endShares, sym)
-        const costVal = inventory[sym].reduce((s, l) => s + l.cost, 0)
+        const costVal = inventory[sym].reduce((s, l) => s + (l.orig_cost - l.allocated_cost), 0)
         
+        totalGrossMV += grossMV
         totalNetMV += netMV
         totalActualCost += costVal
         
@@ -167,10 +167,12 @@ export async function GET(req: NextRequest) {
       if (Math.abs(unrealizedPnL) > 0.01 || Math.abs(dailyRealizedPnl) > 0.01 || todaysTxs.length > 0) {
         dailyStats[date] = {
           entry_date: date,
-          pnl: Math.round(unrealizedPnL),          // 目前已改為「當前部位總未實現損益」
-          pnl_pct: Math.round(pnlPct * 100) / 100,  // (未實現損益 / 總成本)
-          realized_pnl: Math.round(dailyRealizedPnl), // 當日已實現
+          pnl: Math.round(unrealizedPnL),
+          pnl_pct: Math.round(pnlPct * 100) / 100,
+          realized_pnl: Math.round(dailyRealizedPnl),
           net_market_value: Math.round(totalNetMV),
+          gross_market_value: totalGrossMV,
+          capital_in: totalActualCost,
           details: details as any[],
           note: todaysTxs.length > 0 ? `交易: ${todaysTxs.map(t => `${t.action} ${t.symbol}`).join(', ')}` : ''
         }
