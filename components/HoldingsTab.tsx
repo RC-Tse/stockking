@@ -287,9 +287,9 @@ export default function HoldingsTab({ holdings, quotes, settings, transactions, 
           </div>
         </div>
 
-        <div className="h-64 w-full relative">
+        <div className="h-64 w-full relative outline-none" style={{ WebkitTapHighlightColor: 'transparent' }}>
           <ResponsiveContainer width="100%" height="100%">
-            <PieChart>
+            <PieChart style={{ outline: 'none' }}>
               <Pie
                 data={pieData}
                 innerRadius={65}

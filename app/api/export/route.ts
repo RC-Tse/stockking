@@ -41,14 +41,16 @@ export async function GET(req: NextRequest) {
     return { f, tax, net }
   }
 
-  // Sheet 1: 手動交易
-  const selfTxs = filteredTxs.filter(t => t.trade_type !== 'DCA').map(t => {
+  // 合併交易明細 (Sheet 1)
+  const allTxDetails = filteredTxs.map(t => {
     const { f, tax, net } = buildExportTx(t)
+    const isDca = t.trade_type === 'DCA' || t.action === 'DCA'
     return {
       '日期': t.trade_date,
-      '股票代碼': t.symbol,
-      '中文名稱': t.name_zh || getStockName(t.symbol),
-      '動作': t.action === 'BUY' ? '買入' : '賣出',
+      '股票代碼': t.symbol.replace('.TW','').replace('.TWO',''),
+      '股票名稱': t.name_zh || getStockName(t.symbol),
+      '動作': (t.action === 'BUY' || t.action === 'DCA') ? '買入' : '賣出',
+      '定期定額': isDca ? '是' : '',
       '整張/零股': t.shares % 1000 === 0 ? '整張' : '零股',
       '股數': t.shares,
       '成交價': t.price,
@@ -60,22 +62,7 @@ export async function GET(req: NextRequest) {
     }
   })
 
-  // Sheet 2: 定期定額
-  const dcaTxs = filteredTxs.filter(t => t.trade_type === 'DCA').map(t => {
-    const { f, net } = buildExportTx(t)
-    return {
-      '日期': t.trade_date,
-      '股票代碼': t.symbol,
-      '中文名稱': t.name_zh || getStockName(t.symbol),
-      '申購金額': Math.abs(net),
-      '買入股數': t.shares,
-      '成交價': t.price,
-      '手續費': f,
-      '淨收支': net
-    }
-  })
-
-  // Sheet 3: 庫存匯總 (Based on total history)
+  // 處理庫存匯總 (Sheet 2) 並分區
   const inventory: Record<string, { shares: number, cost: number }[]> = {}
   const stats: Record<string, { buyCost: number, sellRev: number }> = {}
 
@@ -111,8 +98,10 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // Fetch current quotes for MV (simplified for export - using last known price)
-  const summary = Object.keys(stats).map(sym => {
+  const activeHoldings: any[] = []
+  const inactiveHoldings: any[] = []
+
+  Object.keys(stats).forEach(sym => {
     const s = stats[sym]
     const currentLots = inventory[sym]
     const heldShares = currentLots.reduce((sum, l) => sum + l.shares, 0)
@@ -121,9 +110,9 @@ export async function GET(req: NextRequest) {
     const lastPrice = lastTx?.price || 0
     const mv = Math.floor(heldShares * lastPrice)
 
-    return {
-      '股票代碼': sym,
-      '中文名稱': getStockName(sym),
+    const row = {
+      '股票代碼': sym.replace('.TW','').replace('.TWO',''),
+      '股票名稱': getStockName(sym),
       '買入總成本': Math.floor(s.buyCost),
       '賣出總收入': Math.floor(s.sellRev),
       '已實現損益': Math.floor(s.sellRev - (s.buyCost - heldCost)),
@@ -131,26 +120,37 @@ export async function GET(req: NextRequest) {
       '目前市值估算': mv,
       '未實現損益估算': Math.floor(mv - heldCost)
     }
+
+    if (heldShares > 0) activeHoldings.push(row)
+    else inactiveHoldings.push(row)
   })
 
-  // Create Workbook
+  // 組合 Sheet 數據，插入分區標題
+  const summaryRows = [
+    { '股票代碼': '--- 手上持有 ---' },
+    ...activeHoldings,
+    { '股票代碼': '' },
+    { '股票代碼': '--- 已結清 ---' },
+    ...inactiveHoldings
+  ]
+
+  // 檔名 YYYYMMDD
+  const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
+  const filename = `交易紀錄_${today}.xlsx`
+
   const wb = XLSX.utils.book_new()
+  const ws1 = XLSX.utils.json_to_sheet(allTxDetails)
+  XLSX.utils.book_append_sheet(wb, ws1, '交易明細')
   
-  const ws1 = XLSX.utils.json_to_sheet(selfTxs)
-  XLSX.utils.book_append_sheet(wb, ws1, '手動交易')
-  
-  const ws2 = XLSX.utils.json_to_sheet(dcaTxs)
-  XLSX.utils.book_append_sheet(wb, ws2, '定期定額')
-  
-  const ws3 = XLSX.utils.json_to_sheet(summary)
-  XLSX.utils.book_append_sheet(wb, ws3, '庫存匯總')
+  const ws2 = XLSX.utils.json_to_sheet(summaryRows)
+  XLSX.utils.book_append_sheet(wb, ws2, '庫存匯總')
 
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
 
   return new NextResponse(buf, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      'Content-Disposition': `attachment; filename="export.xlsx"`
+      'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`
     }
   })
 }
