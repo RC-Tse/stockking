@@ -89,47 +89,47 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
     <div className="p-4 space-y-6 pb-32">
       {view === 'MAIN' && (
         <>
-          <div className="glass overflow-hidden border border-white/5">
+          <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl overflow-hidden shadow-2xl">
             <button 
               onClick={() => setView('GOAL')}
-              className="w-full flex items-center justify-between group p-5 border-b border-white/5 active:bg-white/5 transition-colors"
+              className="w-full flex items-center justify-between group p-6 border-b border-white/5 active:bg-white/5 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <SettingsIcon size={18} className="text-accent" />
+              <div className="flex items-center gap-4">
+                <SettingsIcon size={20} className="text-accent" />
                 <div className="text-left">
-                  <div className="text-[15px] md:text-[13px] font-black text-[var(--t1)]">目標設定</div>
-                  <div className="text-[14px] md:text-[12px] text-[var(--t2)] mt-0.5">設定年度與資產目標</div>
+                  <div className="text-[15px] font-black text-[var(--t1)]">目標設定</div>
+                  <div className="text-[12px] text-[#EAD8B1] opacity-60 mt-1 uppercase tracking-wide">設定年度與資產目標</div>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-[var(--t3)] group-active:text-accent transition-colors" />
+              <ChevronRight size={18} className="text-[#EAD8B1] opacity-30 group-active:text-accent transition-colors" />
             </button>
 
             <button 
               onClick={() => setView('UI')}
-              className="w-full flex items-center justify-between group p-5 border-b border-white/5 active:bg-white/5 transition-colors"
+              className="w-full flex items-center justify-between group p-6 border-b border-white/5 active:bg-white/5 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <Palette size={18} className="text-accent" />
+              <div className="flex items-center gap-4">
+                <Palette size={20} className="text-accent" />
                 <div className="text-left">
-                  <div className="text-[15px] md:text-[13px] font-black text-[var(--t1)]">介面主題</div>
-                  <div className="text-[14px] md:text-[12px] text-[var(--t2)] mt-0.5">目前: {THEMES.find(t => t.id === localSettings.theme)?.name || '預設'}</div>
+                  <div className="text-[15px] font-black text-[var(--t1)]">介面主題</div>
+                  <div className="text-[12px] text-[#EAD8B1] opacity-60 mt-1 uppercase tracking-wide">目前: {THEMES.find(t => t.id === localSettings.theme)?.name || '預設'}</div>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-[var(--t3)] group-active:text-accent transition-colors" />
+              <ChevronRight size={18} className="text-[#EAD8B1] opacity-30 group-active:text-accent transition-colors" />
             </button>
 
             <button 
               onClick={() => setView('CALC')}
-              className="w-full flex items-center justify-between group p-5 active:bg-white/5 transition-colors"
+              className="w-full flex items-center justify-between group p-6 active:bg-white/5 transition-colors"
             >
-              <div className="flex items-center gap-3">
-                <Layout size={18} className="text-accent" />
+              <div className="flex items-center gap-4">
+                <Layout size={20} className="text-accent" />
                 <div className="text-left">
-                  <div className="text-[15px] md:text-[13px] font-black text-[var(--t1)]">手續費設定</div>
-                  <div className="text-[14px] md:text-[12px] text-[var(--t2)] mt-0.5">調整手續費與稅率</div>
+                  <div className="text-[15px] font-black text-[var(--t1)]">手續費設定</div>
+                  <div className="text-[12px] text-[#EAD8B1] opacity-60 mt-1 uppercase tracking-wide">調整手續費與稅率</div>
                 </div>
               </div>
-              <ChevronRight size={18} className="text-[var(--t3)] group-active:text-accent transition-colors" />
+              <ChevronRight size={18} className="text-[#EAD8B1] opacity-30 group-active:text-accent transition-colors" />
             </button>
           </div>
 
@@ -154,20 +154,20 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
             <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-accent active:bg-white/10 transition-colors">
               <ChevronLeft size={20} />
             </button>
-            <h3 className="text-[15px] md:text-[13px] font-black text-[var(--t2)] uppercase tracking-[0.2em]">投資目標設定</h3>
+            <h3 className="text-[13px] font-black text-[#EAD8B1] uppercase tracking-[0.2em]">投資目標設定</h3>
           </div>
 
-          <div className="glass p-5 space-y-6 border border-white/5">
+          <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl p-6 space-y-8 shadow-2xl">
             <div className="space-y-2">
               <Label>年度損益目標 (TWD)</Label>
               <input 
                 type="number" inputMode="numeric"
                 value={localSettings.year_goal || ''} 
                 onChange={e => handleSave({ year_goal: Number(e.target.value) })}
-                className="input-base text-[16px] md:text-sm font-black font-mono"
+                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[17px] font-black font-mono text-[var(--t1)] outline-none focus:border-accent transition-all"
                 placeholder="例如: 100000"
               />
-              <p className="text-[14px] md:text-[12px] text-[var(--t2)] font-medium leading-relaxed">
+              <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
                 設定您今年的投資獲利目標，包含已實現與未實現損益。
               </p>
             </div>
@@ -181,17 +181,17 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
                 className="input-base text-[16px] md:text-sm font-black font-mono"
                 placeholder="例如: 1000000"
               />
-              <p className="text-[14px] md:text-[12px] text-[var(--t2)] font-medium leading-relaxed">
+              <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
                 設定您長期的總累積損益目標。
               </p>
             </div>
-            <div className="space-y-2">
+            <div className="space-y-3">
               <Label>總目標起始日</Label>
               <DatePicker 
                 value={localSettings.total_goal_start_date} 
                 onChange={val => handleSave({ total_goal_start_date: val })} 
               />
-              <p className="text-[14px] md:text-[12px] text-[var(--t2)] font-medium leading-relaxed">
+              <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
                 設定總損益目標的計算起點。
               </p>
             </div>
@@ -203,10 +203,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
       {view === 'UI' && (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
           <div className="flex items-center gap-4 px-1">
-            <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-accent active:bg-white/10 transition-colors">
-              <ChevronLeft size={20} />
-            </button>
-            <h3 className="text-[15px] md:text-[13px] font-black text-[var(--t2)] uppercase tracking-[0.2em]">介面主題設定</h3>
+            <h3 className="text-[13px] font-black text-[#EAD8B1] uppercase tracking-[0.2em]">介面主題設定</h3>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
@@ -214,14 +211,14 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <button
                 key={theme.id}
                 onClick={() => handleThemeChange(theme.id)}
-                className={`flex flex-col text-left glass p-4 border-2 transition-all active:scale-95 ${localSettings.theme === theme.id ? 'border-accent shadow-[0_0_20px_var(--accent-dim)]' : 'border-transparent'}`}
+                className={`flex flex-col text-left bg-[#232429] p-5 rounded-2xl border-2 transition-all active:scale-95 shadow-xl ${localSettings.theme === theme.id ? 'border-accent shadow-[0_0_20px_rgba(212,175,55,0.2)]' : 'border-transparent'}`}
               >
-                <div className="flex gap-1 mb-3">
+                <div className="flex gap-2 mb-4">
                   {theme.colors.map((c, idx) => (
-                    <div key={idx} className="w-4 h-4 rounded-full border border-white/10" style={{ background: c }} />
+                    <div key={idx} className="w-5 h-5 rounded-full border border-white/10" style={{ background: c }} />
                   ))}
                 </div>
-                <span className={`text-sm font-black ${localSettings.theme === theme.id ? 'text-accent' : 'text-[var(--t2)]'}`}>{theme.name}</span>
+                <span className={`text-[13px] font-black tracking-wide ${localSettings.theme === theme.id ? 'text-accent' : 'text-[#EAD8B1] opacity-80'}`}>{theme.name}</span>
               </button>
             ))}
           </div>
@@ -231,13 +228,10 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
       {view === 'CALC' && (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
           <div className="flex items-center gap-4 px-1">
-            <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-accent active:bg-white/10 transition-colors">
-              <ChevronLeft size={20} />
-            </button>
-            <h3 className="text-[15px] md:text-[13px] font-black text-[var(--t2)] uppercase tracking-[0.2em]">手續費設定</h3>
+            <h3 className="text-[13px] font-black text-[#EAD8B1] uppercase tracking-[0.2em]">手續費設定</h3>
           </div>
 
-          <div className="glass p-5 space-y-8 border border-white/5">
+          <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl p-6 space-y-10 shadow-2xl">
             <div className="space-y-6">
               <h4 className="text-[11px] font-black text-accent/50 uppercase tracking-widest border-b border-accent/10 pb-2">買入手續費</h4>
               <div className="grid grid-cols-2 gap-6">
@@ -291,5 +285,5 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
 }
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <label className="text-[15px] md:text-[13px] mb-1.5 block font-black text-[var(--t2)] uppercase tracking-wider ml-1">{children}</label>
+  return <label className="text-[11px] font-black mb-2 block text-[#EAD8B1] opacity-60 uppercase tracking-[0.15em] ml-1">{children}</label>
 }

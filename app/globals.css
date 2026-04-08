@@ -8,13 +8,13 @@
   /* 主題一：深色 dark (預設) */
   --bg-base: #0a0c10;
   --bg-surface: #10141c;
-  --bg-card: #161c28;
-  --bg-hover: #1e2535;
+  --bg-card: #232429;
+  --bg-hover: #2d2e35;
   --border: rgba(255, 255, 255, 0.06);
-  --border-bright: rgba(212, 175, 55, 0.3);
+  --border-bright: rgba(212, 175, 55, 0.2);
   --t1: #f0ece4;
-  --t2: #8a8070;
-  --t3: #4a4540;
+  --t2: #EAD8B1;
+  --t3: #a8a090;
   --accent: #d4af37;
   --accent-bright: #f0d060;
   --accent-dim: rgba(212, 175, 55, 0.12);
@@ -146,25 +146,21 @@ img {
   background: var(--bg-card);
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--border-bright);
+  border: 0.5px solid var(--border-bright);
   border-radius: 16px;
-}
-
-[data-theme="light"] .glass,
-[data-theme="rose"] .glass {
-  background: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(0, 0, 0, 0.1);
 }
 
 .card-base {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  border: 0.5px solid var(--border-bright);
   border-radius: 16px;
 }
 
-[data-theme="light"] .card-base,
-[data-theme="rose"] .card-base {
-  border-color: rgba(0, 0, 0, 0.1);
+.premium-card {
+  background: #232429;
+  border: 0.5px solid rgba(212, 175, 55, 0.2);
+  border-radius: 16px;
+  overflow: hidden;
 }
 
 .input-base {
