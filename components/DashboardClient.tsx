@@ -38,6 +38,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [txs, setTxs]             = useState<Transaction[]>([])
   const [quotes, setQuotes]       = useState<Record<string, Quote>>({})
   const [settings, setSettings]   = useState<UserSettings>(DEFAULT_SETTINGS)
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [loading, setLoading]     = useState(true)
   const router = useRouter()
   const supabase = createClient()
