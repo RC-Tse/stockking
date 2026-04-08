@@ -37,23 +37,43 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
   }, [year, month])
 
   const entryMap = useMemo(() => {
-    const map: Record<number, CalendarEntry> = {}
-    entries.forEach(e => {
+    // Sort entries by date to perform daily change calculation
+    const sorted = [...entries].sort((a,b) => a.entry_date.localeCompare(b.entry_date))
+    const map: Record<number, any> = {}
+    
+    sorted.forEach((e, idx) => {
+      const prev = idx > 0 ? sorted[idx-1] : null
+      
+      // Daily PnL Formula: (CurrentUnrealized - PrevUnrealized) + CurrentRealized
+      const currentUnrealized = e.pnl
+      const prevUnrealized = prev ? prev.pnl : 0
+      const realized = e.realized_pnl || 0
+      
+      const dailyPnL = (currentUnrealized - prevUnrealized) + realized
+      // Daily Rate: Daily PnL / Prev Total Net Market Value
+      const prevNetMV = prev ? (prev.net_market_value || 0) : 0
+      const dailyRate = prevNetMV > 0 ? (dailyPnL / prevNetMV * 100) : 0
+      
       const day = parseInt(e.entry_date.split('-')[2], 10)
-      map[day] = e
+      map[day] = { 
+        ...e, 
+        dailyPnL, 
+        dailyRate,
+        hasRealized: Math.abs(realized) > 0.01 
+      }
     })
     return map
   }, [entries])
 
-  // Stats
+  // Stats - Update to use dailyPnL for monthly total
   const stats = useMemo(() => {
-    const active = entries.filter(e => e.pnl !== 0)
-    const totalPnl = active.reduce((s, e) => s + e.pnl, 0)
-    const winDays = active.filter(e => e.pnl > 0).length
-    const lossDays = active.filter(e => e.pnl < 0).length
+    const active = Object.values(entryMap).filter(e => Math.abs(e.dailyPnL) > 0.01)
+    const totalPnl = active.reduce((s, e) => s + e.dailyPnL, 0)
+    const winDays = active.filter(e => e.dailyPnL > 0).length
+    const lossDays = active.filter(e => e.dailyPnL < 0).length
     const winRate = active.length ? (winDays / active.length * 100).toFixed(1) : '0.0'
     return { totalPnl, winDays, lossDays, winRate }
-  }, [entries])
+  }, [entryMap])
 
   function moveMonth(delta: number) {
     setViewDate(new Date(viewDate.getFullYear(), viewDate.getMonth() + delta, 1))
@@ -64,22 +84,22 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
       {/* Header & Stats */}
       <div className="glass rounded-2xl p-4 space-y-4">
         <div className="flex items-center justify-between">
-          <button onClick={() => moveMonth(-1)} className="p-2 text-lg">←</button>
+          <button onClick={() => moveMonth(-1)} className="p-2 text-lg opacity-40">←</button>
           <h2 className="font-black text-lg" style={{ color: 'var(--t1)' }}>{year} 年 {month} 月</h2>
-          <button onClick={() => moveMonth(1)} className="p-2 text-lg">→</button>
+          <button onClick={() => moveMonth(1)} className="p-2 text-lg opacity-40">→</button>
         </div>
 
         <div className="grid grid-cols-2 gap-3">
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
-            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--t3)' }}>月損益總計</div>
+            <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--t3)' }}>當月資產變動</div>
             <div className="text-lg font-black font-mono" style={{ color: stats.totalPnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
-              {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(stats.totalPnl)}
+              {stats.totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(stats.totalPnl))}
             </div>
           </div>
           <div className="p-3 rounded-xl bg-white/5 border border-white/5">
             <div className="text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: 'var(--t3)' }}>勝率 / 交易天數</div>
             <div className="text-lg font-black font-mono" style={{ color: 'var(--accent)' }}>
-              {stats.winRate}% <span className="text-xs opacity-50">({entries.filter(e => e.pnl !== 0).length} 天)</span>
+              {stats.winRate}% <span className="text-xs opacity-50">({stats.winDays + stats.lossDays} 天)</span>
             </div>
           </div>
         </div>
@@ -105,21 +125,41 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
           if (d === null) return <div key={`empty-${i}`} className="aspect-square" />
           const entry = entryMap[d]
           const isToday = year === now.getFullYear() && month === (now.getMonth()+1) && d === now.getDate()
+          const hasNote = entry?.note && entry.note.length > 0
           
           return (
             <div key={d} 
-              className={`aspect-square rounded-lg flex flex-col items-center justify-between p-1 border transition-all ${isToday ? 'border-accent shadow-[0_0_10px_var(--accent-dim)]' : 'border-white/5'}`}
+              className={`aspect-square rounded-lg flex flex-col p-1 border transition-all ${isToday ? 'border-accent shadow-[0_0_10px_var(--accent-dim)]' : 'border-white/5'}`}
               style={{ background: 'var(--bg-surface)' }}>
-              <span className="text-[10px] font-bold self-start" style={{ color: isToday ? 'var(--accent)' : 'var(--t2)' }}>{d}</span>
-              {entry && entry.pnl !== 0 && (
-                <div className="w-full text-center">
-                  <div className="text-[9px] font-black font-mono leading-none mb-0.5" 
-                    style={{ color: entry.pnl >= 0 ? 'var(--red)' : 'var(--grn)' }}>
-                    {entry.pnl > 0 ? '+' : ''}{shortMoney(entry.pnl)}
+              
+              <div className="flex justify-between items-start mb-0.5">
+                <span className="text-[9px] font-bold" style={{ color: isToday ? 'var(--accent)' : 'var(--t3)' }}>{d}</span>
+                {hasNote && <div className="w-1 h-1 rounded-full bg-yellow-500 shadow-[0_0_4px_rgba(234,179,8,0.5)]" />}
+              </div>
+
+              {entry && (Math.abs(entry.dailyPnL) > 0.01 || entry.hasRealized) ? (
+                <div className="flex-1 flex flex-col justify-center text-center">
+                  {entry.hasRealized && (
+                    <div className="flex-1 flex flex-col justify-center">
+                      <span className="text-[8px] opacity-40 font-black scale-90 leading-none">REALIZED</span>
+                      <span className="text-[9px] font-black font-mono leading-none" style={{ color: entry.realized_pnl > 0 ? 'var(--red)' : 'var(--grn)' }}>
+                        {entry.realized_pnl > 0 ? '+' : ''}{shortMoney(entry.realized_pnl)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex-1 flex flex-col justify-center">
+                    <span className="text-[8px] opacity-30 font-black scale-75 leading-none mb-px">DAILY</span>
+                    <span className="text-[10px] font-black font-mono leading-none" style={{ color: entry.dailyPnL >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+                      {entry.dailyPnL > 0 ? '+' : ''}{shortMoney(entry.dailyPnL)}
+                    </span>
                   </div>
-                  {entry.note && <div className="w-1 h-1 rounded-full bg-accent mx-auto" />}
+                  <div className="flex-1 flex flex-col justify-center">
+                    <span className="text-[9px] font-bold font-mono opacity-60 leading-none" style={{ color: entry.dailyRate >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+                      {entry.dailyRate >= 0 ? '+' : ''}{entry.dailyRate.toFixed(1)}%
+                    </span>
+                  </div>
                 </div>
-              )}
+              ) : null}
             </div>
           )
         })}
@@ -130,7 +170,7 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
 
 function shortMoney(v: number): string {
   const abs = Math.abs(v)
-  if (abs >= 1000000) return (v / 1000000).toFixed(1) + 'M'
-  if (abs >= 1000) return (v / 1000).toFixed(1) + 'K'
-  return v.toString()
+  if (abs >= 1000000) return Math.floor(v / 1000000) + 'M'
+  if (abs >= 1000) return Math.floor(v / 1000) + 'K'
+  return Math.floor(v).toString()
 }

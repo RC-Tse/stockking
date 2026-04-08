@@ -170,6 +170,7 @@ export async function GET(req: NextRequest) {
           pnl: Math.round(unrealizedPnL),          // 目前已改為「當前部位總未實現損益」
           pnl_pct: Math.round(pnlPct * 100) / 100,  // (未實現損益 / 總成本)
           realized_pnl: Math.round(dailyRealizedPnl), // 當日已實現
+          net_market_value: Math.round(totalNetMV),
           details: details as any[],
           note: todaysTxs.length > 0 ? `交易: ${todaysTxs.map(t => `${t.action} ${t.symbol}`).join(', ')}` : ''
         }
