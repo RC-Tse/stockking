@@ -116,34 +116,43 @@ export default function CalendarTab({ entries, onRefresh }: Props) {
           const isToday = year === now.getFullYear() && month === (now.getMonth()+1) && d === now.getDate()
           const hasNote = entry?.note && entry.note.length > 0
           
+          // Calculate Heatmap Intensity: Max at 10%
+          const dailyRate = entry?.dailyRate || 0
+          const intensity = Math.min(Math.abs(dailyRate) / 10, 1)
+          const bgColor = dailyRate > 0 
+            ? `rgba(239, 68, 68, ${intensity})` // Red-500 #EF4444
+            : dailyRate < 0 
+              ? `rgba(34, 197, 94, ${intensity})` // Green-500 #22C55E
+              : 'var(--bg-surface)'
+          
           return (
             <div key={d} 
               className={`aspect-square rounded-lg flex flex-col p-1 border transition-all ${isToday ? 'border-accent shadow-[0_0_10px_var(--accent-dim)]' : 'border-white/5'}`}
-              style={{ background: 'var(--bg-surface)' }}>
+              style={{ background: bgColor }}>
               
               <div className="flex justify-between items-start mb-0.5">
                 <span className="text-[9px] font-bold" style={{ color: isToday ? 'var(--accent)' : 'var(--t3)' }}>{d}</span>
-                {hasNote && <div className="w-1 h-1 rounded-full bg-yellow-500 shadow-[0_0_4px_rgba(234,179,8,0.5)]" />}
+                {hasNote && <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 shadow-[0_0_6px_rgba(234,179,8,0.8)] border border-black/20" />}
               </div>
 
               {entry && (Math.abs(entry.dailyPnL) > 0.01 || entry.hasRealized) ? (
                 <div className="flex-1 flex flex-col justify-center text-center">
                   {entry.hasRealized && (
                     <div className="flex-1 flex flex-col justify-center">
-                      <span className="text-[8px] opacity-40 font-black scale-90 leading-none">REALIZED</span>
+                      <span className="text-[8px] opacity-60 font-black scale-75 leading-none">REALIZED</span>
                       <span className="text-[9px] font-black font-mono leading-none" style={{ color: entry.realized_pnl > 0 ? 'var(--red)' : 'var(--grn)' }}>
                         {entry.realized_pnl > 0 ? '+' : ''}{shortMoney(entry.realized_pnl)}
                       </span>
                     </div>
                   )}
                   <div className="flex-1 flex flex-col justify-center">
-                    <span className="text-[8px] opacity-30 font-black scale-75 leading-none mb-px">DAILY</span>
+                    <span className="text-[8px] opacity-50 font-black scale-75 leading-none mb-px">DAILY</span>
                     <span className="text-[10px] font-black font-mono leading-none" style={{ color: entry.dailyPnL >= 0 ? 'var(--red)' : 'var(--grn)' }}>
                       {entry.dailyPnL > 0 ? '+' : ''}{shortMoney(entry.dailyPnL)}
                     </span>
                   </div>
                   <div className="flex-1 flex flex-col justify-center">
-                    <span className="text-[9px] font-bold font-mono opacity-60 leading-none" style={{ color: entry.dailyRate >= 0 ? 'var(--red)' : 'var(--grn)' }}>
+                    <span className="text-[9px] font-bold font-mono opacity-80 leading-none" style={{ color: entry.dailyRate >= 0 ? 'var(--red)' : 'var(--grn)' }}>
                       {entry.dailyRate >= 0 ? '+' : ''}{entry.dailyRate.toFixed(1)}%
                     </span>
                   </div>
