@@ -380,16 +380,18 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
             </div>
           </div>
 
-          {/* 右側固定 Y 軸遮罩面板 - 包含固定刻度 */}
+          {/* 右側固定 Y 軸 - 懸浮刻度 (無背景遮罩) */}
           <div 
             className="absolute right-0 top-0 bottom-0 w-[42px] z-20 pointer-events-none border-l border-white/5 flex flex-col justify-between py-[46px] px-1"
-            style={{ 
-              backgroundColor: '#000000', // 完美匹配 card-base 與深色主題
-              boxShadow: '-8px 0 15px rgba(0,0,0,0.6)' 
-            }}
           >
             {yAxisMetrics.ticks.map((t, i) => (
-              <div key={i} className="text-[9px] font-black text-[var(--t3)] text-right font-mono pr-1">
+              <div 
+                key={i} 
+                className="text-[9px] font-black text-[var(--t1)] text-right font-mono pr-1"
+                style={{ 
+                  textShadow: '0px 0px 4px rgba(0, 0, 0, 0.9), 0px 0px 8px rgba(0, 0, 0, 0.6)'
+                }}
+              >
                 {t.toFixed(0)}
               </div>
             ))}
