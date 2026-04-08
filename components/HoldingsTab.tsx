@@ -35,7 +35,7 @@ interface Props {
 }
 
 export default function HoldingsTab({ onRefresh }: Props) {
-  const { stats } = usePortfolio()
+  const { stats, settings } = usePortfolio()
   const { holdings, fullHistoryStats, allTimeRealized: totalRealized } = stats
   
   const currentYear = new Date().getFullYear().toString()
