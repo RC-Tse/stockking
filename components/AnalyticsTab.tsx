@@ -361,7 +361,7 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart 
                   data={enrichedStockHistory} 
-                  margin={{ top: 10, right: 60, left: 0, bottom: 5 }}
+                  margin={{ top: 10, right: 45, left: 0, bottom: 5 }}
                   onMouseMove={handleMouseMove}
                   onMouseLeave={() => setActivePoint(null)}
                 >
@@ -382,15 +382,15 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
 
           {/* 右側固定 Y 軸遮罩面板 - 包含固定刻度 */}
           <div 
-            className="absolute right-0 top-0 bottom-0 w-[55px] z-20 pointer-events-none border-l border-white/5 flex flex-col justify-between py-[46px] px-1"
+            className="absolute right-0 top-0 bottom-0 w-[42px] z-20 pointer-events-none border-l border-white/5 flex flex-col justify-between py-[46px] px-1"
             style={{ 
-              backgroundColor: '#161618', // 配合 card-base 的深色背景
-              boxShadow: '-10px 0 20px rgba(0,0,0,0.5)' 
+              backgroundColor: '#000000', // 完美匹配 card-base 與深色主題
+              boxShadow: '-8px 0 15px rgba(0,0,0,0.6)' 
             }}
           >
             {yAxisMetrics.ticks.map((t, i) => (
-              <div key={i} className="text-[9px] font-black text-[var(--t3)] text-right font-mono">
-                {t.toFixed(1)}
+              <div key={i} className="text-[9px] font-black text-[var(--t3)] text-right font-mono pr-1">
+                {t.toFixed(0)}
               </div>
             ))}
           </div>
@@ -411,19 +411,6 @@ export default function AnalyticsTab({ holdings, transactions, quotes }: Props) 
             </div>
           )}
 
-          {/* 最新價格標記 - 位於遮罩板上 */}
-          {!isScrubbing && enrichedStockHistory.length > 0 && (
-            <div 
-              className="absolute right-0 pointer-events-none z-30 flex items-center pr-[55px]"
-              style={{ 
-                bottom: '12px' 
-              }}
-            >
-              <div className="bg-white/5 text-white/30 text-[9px] font-black px-1.5 py-0.5 rounded border border-white/5 whitespace-nowrap mr-1">
-                LIVE
-              </div>
-            </div>
-          )}
         </div>
 
         {selectedHolding && (
