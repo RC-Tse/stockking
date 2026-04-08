@@ -330,26 +330,4 @@ function EditForm({ tx, settings, onCancel, onSaved }: any) {
   )
 }
 
-function ExportModal({ onClose }: any) {
-  const [range, setRange] = useState('all'), [start, setStart] = useState(''), [end, setEnd] = useState(''), [loading, setLoading] = useState(false)
-  const handleExport = async () => {
-    setLoading(true)
-    try {
-      const res = await fetch(`/api/export?start_date=${start||'2000-01-01'}&end_date=${end||new Date().toISOString().split('T')[0]}`)
-      const blob = await res.blob(), url = window.URL.createObjectURL(blob), a = document.createElement('a')
-      a.href = url; a.download = `交易紀錄.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a); alert('報表導出成功'); onClose()
-    } catch(e) { alert('導出失敗') } finally { setLoading(false) }
-  }
-  return (
-    <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="glass w-full max-w-sm p-8 space-y-8 border-white/10 animate-in zoom-in-95">
-        <div className="text-center space-y-1"><h3 className="font-black text-xl text-[var(--t1)]">導出交易紀錄</h3><p className="text-xs text-[var(--t3)]">產生一份 Excel 列表下載</p></div>
-        <div className="grid grid-cols-2 gap-2.5">{['month','year','all','custom'].map(o=><button key={o} onClick={()=>setRange(o)} className={`py-3.5 rounded-xl text-xs font-black border transition-all ${range===o?'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20':'bg-white/5 text-[var(--t2)] border-transparent active:bg-white/10'}`}>{o==='month'?'本月':o==='year'?'今年':o==='all'?'全部':'自訂'}</button>)}</div>
-        {range==='custom'&&<div className="space-y-3 animate-slide-up"><div className="space-y-1"><Label>起始日期</Label><DatePicker value={start} onChange={setStart}/></div><div className="space-y-1"><Label>結束日期</Label><DatePicker value={end} onChange={setEnd}/></div></div>}
-        <div className="flex gap-3 pt-2"><button onClick={handleExport} disabled={loading} className="flex-[3] btn-primary py-4 text-base shadow-lg shadow-accent/10">{loading?'處理中...':'確認導出'}</button><button onClick={onClose} className="flex-1 btn-secondary py-4 text-base">取消</button></div>
-      </div>
-    </div>
-  )
-}
-
-function Label({ children }: { children: React.ReactNode }) { return <label className="text-[11px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-[0.15em] ml-1 mb-1.5 block">{children}</label> }
+function Label({ children }: { children: React.ReactNode }) { return <label className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-[0.15em] ml-1 mb-1.5 block">{children}</label> }
