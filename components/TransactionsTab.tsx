@@ -177,24 +177,24 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
   return (
     <div className="p-4 space-y-6 pb-32 tabular-nums">
       <div className="flex items-center gap-2">
-        <div className="flex-1 flex bg-[#232429] p-1.5 rounded-2xl border border-[#d4af37]/20 shadow-xl">
+        <div className="flex-1 flex bg-[var(--bg-card)] p-1.5 rounded-2xl border border-[var(--border-bright)] shadow-xl">
           {([{id:'SELF',label:'手動交易'},{id:'REALIZED',label:'已實交易'}] as const).map(t => (
-            <button key={t.id} onClick={()=>setTab(t.id)} className={`flex-1 py-2.5 text-sm font-black rounded-xl transition-all relative ${tab===t.id?'text-accent bg-white/5 shadow-inner':'text-[#EAD8B1] opacity-60'}`}>{t.label}{tab===t.id && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-accent rounded-full mb-1" />}</button>
+            <button key={t.id} onClick={()=>setTab(t.id)} className={`flex-1 py-2.5 text-sm font-black rounded-xl transition-all relative ${tab===t.id?'text-accent bg-white/5 shadow-inner':'text-[var(--t2)] opacity-60'}`}>{t.label}{tab===t.id && <div className="absolute bottom-0 inset-x-4 h-0.5 bg-accent rounded-full mb-1" />}</button>
           ))}
         </div>
-        <button onClick={()=>setExportOpen(true)} className="w-12 h-12 flex items-center justify-center bg-[#232429] border border-[#d4af37]/30 rounded-2xl active:bg-white/10 text-accent transition-all shadow-xl"><Download size={20}/></button>
+        <button onClick={()=>setExportOpen(true)} className="w-12 h-12 flex items-center justify-center bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-2xl active:bg-white/10 text-accent transition-all shadow-xl"><Download size={20}/></button>
       </div>
 
       {tab === 'REALIZED' ? (
         <div className="space-y-6 animate-slide-up">
           <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar">
             {['all','year','3months', 'month', 'custom'].map(opt => (
-              <button key={opt} onClick={()=>setRangeMode(opt as any)} className={`px-4 py-2.5 rounded-xl text-xs font-black border transition-all whitespace-nowrap ${rangeMode===opt?'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20':'bg-[#232429] text-[#EAD8B1] opacity-60 border-[#d4af37]/20'}`}>{opt==='all'?'全部':opt==='year'?'今年':opt==='3months'?'近三個月':opt==='month'?'本月':'自訂'}</button>
+              <button key={opt} onClick={()=>setRangeMode(opt as any)} className={`px-4 py-2.5 rounded-xl text-xs font-black border transition-all whitespace-nowrap ${rangeMode===opt?'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20':'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)]'}`}>{opt==='all'?'全部':opt==='year'?'今年':opt==='3months'?'近三個月':opt==='month'?'本月':'自訂'}</button>
             ))}
           </div>
           {rangeMode === 'custom' && <div className="flex items-center gap-2 animate-slide-up"><DatePicker value={customStart} onChange={setCustomStart} className="flex-1"/><span className="opacity-20">~</span><DatePicker value={customEnd} onChange={setCustomEnd} className="flex-1"/></div>}
 
-          <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl p-6 space-y-6 shadow-2xl">
+          <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-6 space-y-6 shadow-2xl">
             <div className="grid grid-cols-2 gap-y-6 gap-x-4">
               <StatItem label="總買入額" value={fmtMoney(realizedData!.summary.totalBuy)} sub={`${realizedData!.summary.buyCount}筆`}/>
               <StatItem label="總賣出額" value={fmtMoney(realizedData!.summary.totalSell)} sub={`${realizedData!.summary.sellCount}筆`}/>
@@ -202,7 +202,7 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
               <StatItem label="總交易稅" value={fmtMoney(realizedData!.summary.totalTax)} sub={`${realizedData!.summary.sellCount}筆`}/>
             </div>
             <div className="pt-6 border-t border-white/5 flex justify-between items-end">
-              <span className="text-[11px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest">已實現損益合計</span>
+              <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">已實現損益合計</span>
               <span className={`font-black font-mono text-2xl ${realizedData!.summary.totalRealized>=0?'text-red-400':'text-green-400'}`}>{realizedData!.summary.totalRealized>=0?'+':''}{fmtMoney(realizedData!.summary.totalRealized)}</span>
             </div>
           </div>
@@ -215,13 +215,13 @@ export default function TransactionsTab({ txs, settings, onRefresh }: Props) {
         </div>
       ) : (
         <div className="space-y-6 animate-slide-up">
-          <div className="px-1"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="搜尋股票代碼或名稱.." className="w-full bg-[#232429] border border-[#d4af37]/30 rounded-2xl py-4 px-6 text-[15px] font-black text-[#EAD8B1] outline-none focus:border-accent shadow-xl placeholder:opacity-30 transition-all"/></div>
+          <div className="px-1"><input value={filter} onChange={e=>setFilter(e.target.value)} placeholder="搜尋股票代碼或名稱.." className="w-full bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-2xl py-4 px-6 text-[15px] font-black text-[var(--t2)] outline-none focus:border-accent shadow-xl placeholder:opacity-30 transition-all"/></div>
           {Object.keys(groupedData).sort((a,b)=>b.localeCompare(a)).map(year => (
             <div key={year} className="space-y-4">
               <div className="flex items-center gap-3 px-2 opacity-40"><Calendar size={16} className="text-accent"/><span className="font-black text-lg text-[var(--t1)]">{year} 年</span><div className="h-px flex-1 bg-white/5"/></div>
               {Object.keys(groupedData[year]).sort((a,b)=>Number(b)-Number(a)).map(month => (
                 <div key={month} className="space-y-2">
-                  <button onClick={()=>{const k=`${year}-${month}`; setExpandedMonths(p=>({...p, [k]:!p[k]}))}} className={`w-full flex justify-between p-5 bg-[#232429] border-[0.5px] ${expandedMonths[`${year}-${month}`] ? 'border-[#d4af37]/60 shadow-lg' : 'border-[#d4af37]/20'} rounded-2xl active:bg-white/5 transition-all shadow-xl`}><div className="flex items-center gap-3"><span className="font-black text-[18px] text-[var(--t1)]">{month} 月</span><span className="text-[10px] px-2.5 py-1 rounded-full bg-white/10 text-[#EAD8B1] opacity-60 font-black tracking-widest">{groupedData[year][month].txs.length} 筆</span></div><div className={`font-mono font-black text-[18px] ${groupedData[year][month].pnl>=0?'text-red-400':'text-green-400'}`}>{groupedData[year][month].pnl>=0?'+':''}{fmtMoney(Math.round(groupedData[year][month].pnl))}</div></button>
+                  <button onClick={()=>{const k=`${year}-${month}`; setExpandedMonths(p=>({...p, [k]:!p[k]}))}} className={`w-full flex justify-between p-5 bg-[var(--bg-card)] border-[0.5px] ${expandedMonths[`${year}-${month}`] ? 'border-[var(--accent)] shadow-lg' : 'border-[var(--border-bright)]'} rounded-2xl active:bg-white/5 transition-all shadow-xl`}><div className="flex items-center gap-3"><span className="font-black text-[18px] text-[var(--t1)]">{month} 月</span><span className="text-[10px] px-2.5 py-1 rounded-full bg-white/10 text-[var(--t2)] opacity-60 font-black tracking-widest">{groupedData[year][month].txs.length} 筆</span></div><div className={`font-mono font-black text-[18px] ${groupedData[year][month].pnl>=0?'text-red-400':'text-green-400'}`}>{groupedData[year][month].pnl>=0?'+':''}{fmtMoney(Math.round(groupedData[year][month].pnl))}</div></button>
                   {expandedMonths[`${year}-${month}`] && <div className="space-y-3 pt-1">{groupedData[year][month].txs.map((tx:any)=><TxRow key={tx.id} tx={tx} settings={settings} onDelete={(id:number)=>setDeletingId(id)} onUpdated={onRefresh}/>)}</div>}
                 </div>
               ))}
@@ -239,10 +239,10 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
   const [name, setName] = useState(getStockName(s.symbol))
   useEffect(() => { fetch(`/api/stockname?symbol=${s.symbol}`).then(res => res.json()).then(data => { if (data.name_zh) setName(data.name_zh) }) }, [s.symbol])
   return (
-    <div className={`bg-[#232429] border-[0.5px] ${expanded?'border-[#d4af37] ring-1 ring-[#d4af37]/30 shadow-2xl':'border-[#d4af37]/20'} rounded-2xl overflow-hidden transition-all shadow-xl`}>
+    <div className={`bg-[var(--bg-card)] border-[0.5px] ${expanded?'border-[var(--accent)] ring-1 ring-[var(--accent-bright)]/30 shadow-2xl':'border-[var(--border-bright)]'} rounded-2xl overflow-hidden transition-all shadow-xl`}>
       <button onClick={onToggle} className="w-full p-5 text-left space-y-4 active:bg-white/5">
-        <div className="flex justify-between items-center"><div className="flex items-center gap-2"><span className="font-black text-[17px] text-[var(--t1)] tracking-tight truncate">{name}</span><span className="text-[12px] font-mono text-[#EAD8B1] opacity-60 mt-0.5">{codeOnly(s.symbol)}</span></div><span className={`font-black font-mono text-[17px] ${s.realized>=0?'text-red-400':'text-green-400'}`}>{s.realized>=0?'+':''}{fmtMoney(s.realized)}</span></div>
-        <div className="flex justify-between text-[11px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest"><span>投入 {fmtMoney(s.buy)}</span><span>回收 {fmtMoney(s.sell)}</span></div>
+        <div className="flex justify-between items-center"><div className="flex items-center gap-2"><span className="font-black text-[17px] text-[var(--t1)] tracking-tight truncate">{name}</span><span className="text-[12px] font-mono text-[var(--t2)] opacity-60 mt-0.5">{codeOnly(s.symbol)}</span></div><span className={`font-black font-mono text-[17px] ${s.realized>=0?'text-red-400':'text-green-400'}`}>{s.realized>=0?'+':''}{fmtMoney(s.realized)}</span></div>
+        <div className="flex justify-between text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest"><span>投入 {fmtMoney(s.buy)}</span><span>回收 {fmtMoney(s.sell)}</span></div>
       </button>
       {expanded && (
         <div className="bg-black/30 border-t border-white/5 p-5 space-y-6">
@@ -251,13 +251,13 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
               <div className="flex justify-between items-center">
                 <div className="flex items-center gap-2">
                   <span className={`px-2.5 py-0.5 rounded-full font-black text-[10px] border ${tx.action==='BUY'||tx.action==='DCA'?'bg-red-400/10 text-red-400 border-red-400/20':'bg-green-400/10 text-green-400 border-green-400/20'}`}>{tx.action==='SELL'?'賣出':'買入'}</span>
-                  <span className="text-[#EAD8B1] opacity-60 text-[11px] font-mono">{tx.trade_date}</span>
+                  <span className="text-[var(--t2)] opacity-60 text-[11px] font-mono">{tx.trade_date}</span>
                   {(tx.action === 'DCA' || tx.trade_type === 'DCA') && <span className="text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black text-[9px] uppercase tracking-tighter ml-1">DCA</span>}
                 </div>
-                <span className="font-black text-[#EAD8B1] opacity-90 text-[13px]">{(tx.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] opacity-20">@</span> {(tx.price ?? 0).toFixed(2)}</span>
+                <span className="font-black text-[var(--t2)] opacity-90 text-[13px]">{(tx.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] opacity-20">@</span> {(tx.price ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center pl-1">
-                <span className="text-[#EAD8B1] opacity-40 text-[10px] font-black uppercase tracking-widest leading-none">費 {fmtMoney(calcFee(tx.amount, settings, tx.action==='SELL', tx.action==='DCA' || tx.trade_type==='DCA'))}{tx.action==='SELL'&&` · 稅 ${fmtMoney(calcTax(tx.amount, tx.symbol, settings))}`}</span>
+                <span className="text-[var(--t2)] opacity-40 text-[10px] font-black uppercase tracking-widest leading-none">費 {fmtMoney(calcFee(tx.amount, settings, tx.action==='SELL', tx.action==='DCA' || tx.trade_type==='DCA'))}{tx.action==='SELL'&&` · 稅 ${fmtMoney(calcTax(tx.amount, tx.symbol, settings))}`}</span>
                 <span className={`font-mono font-black text-[14px] ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
                   {tx.net_amount>=0?'+':''}{fmtMoney(tx.type==='BUY' ? -Math.floor(tx.amount + calcFee(tx.amount, settings, false, tx.action==='DCA' || tx.trade_type==='DCA')) : Math.floor(tx.amount - calcFee(tx.amount, settings, true) - calcTax(tx.amount, tx.symbol, settings)))}
                 </span>
@@ -277,22 +277,22 @@ function RealizedStockCard({ s, expanded, onToggle, settings, onUpdated, onDelet
   )
 }
 
-function StatItem({ label, value, sub }: any) { return <div className="flex flex-col"><span className="text-[11px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest mb-1.5">{label}</span><span className="font-black font-mono text-[20px] text-[var(--t1)] leading-tight">{value}</span><span className="text-[10px] font-black text-[#EAD8B1] opacity-40 mt-1 uppercase tracking-tighter">{sub}</span></div> }
+function StatItem({ label, value, sub }: any) { return <div className="flex flex-col"><span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</span><span className="font-black font-mono text-[20px] text-[var(--t1)] leading-tight">{value}</span><span className="text-[10px] font-black text-[var(--t2)] opacity-40 mt-1 uppercase tracking-tighter">{sub}</span></div> }
 
 function TxRow({ tx, settings, onDelete, onUpdated }: any) {
   const [open, setOpen] = useState(false), [isEditing, setIsEditing] = useState(false)
-  if (isEditing) return <div className="p-5 card-base border-accent/40 shadow-2xl animate-slide-up"><EditForm tx={tx} settings={settings} onCancel={()=>setIsEditing(false)} onSaved={()=>{setIsEditing(false);onUpdated()}}/></div>
+  if (isEditing) return <div className="p-5 bg-[var(--bg-card)] border-[var(--border-bright)] rounded-2xl shadow-2xl animate-slide-up"><EditForm tx={tx} settings={settings} onCancel={()=>setIsEditing(false)} onSaved={()=>{setIsEditing(false);onUpdated()}}/></div>
   return (
-    <div className="bg-[#232429] border-[0.5px] border-[#d4af37]/20 rounded-2xl overflow-hidden shadow-xl">
+    <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl overflow-hidden shadow-xl">
       <button onClick={()=>setOpen(!open)} className="w-full flex items-center justify-between p-5 text-left active:bg-white/5 transition-all">
         <div className="flex-1 min-w-0">
           <div className="flex items-baseline gap-2">
             <span className="font-black text-[var(--t1)] text-[17px] tracking-tight truncate">{tx.name_zh || getStockName(tx.symbol)}</span>
-            <span className="text-[12px] font-mono text-[#EAD8B1] opacity-40">{codeOnly(tx.symbol)}</span>
+            <span className="text-[12px] font-mono text-[var(--t2)] opacity-40">{codeOnly(tx.symbol)}</span>
           </div>
-          <div className="text-[11px] font-black text-[#EAD8B1] opacity-60 mt-1.5 flex items-center gap-2 uppercase tracking-widest">
+          <div className="text-[11px] font-black text-[var(--t2)] opacity-60 mt-1.5 flex items-center gap-2 uppercase tracking-widest">
             <span>{tx.trade_date} · {(tx.shares ?? 0).toLocaleString()} 股</span>
-            {(tx.action === 'DCA' || tx.trade_type === 'DCA') && <span className="text-yellow-500/80 border border-yellow-500/20 px-1.5 py-0.5 rounded font-black text-[8px] leading-none mb-px">DCA</span>}
+            {(tx.action === 'DCA' || tx.trade_type === 'DCA') && <span className="text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black text-[8px] leading-none mb-px">DCA</span>}
           </div>
         </div>
         <div className={`text-right font-black font-mono text-[17px] shrink-0 ${tx.net_amount>=0?'text-red-400':'text-green-400'}`}>
@@ -306,7 +306,7 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
             <DetailItem label="價格" value={(tx.price ?? 0).toFixed(2)}/>
             <DetailItem label="費用" value={fmtMoney(calcFee(tx.amount, settings, tx.action==='SELL', tx.action==='DCA' || tx.trade_type==='DCA') + (tx.action==='SELL'?calcTax(tx.amount, tx.symbol, settings):0))}/>
           </div>
-          {tx.note && <div className="p-4 rounded-xl bg-white/5 text-[12px] text-[#EAD8B1] opacity-70 italic leading-relaxed border border-white/5">"{tx.note}"</div>}
+          {tx.note && <div className="p-4 rounded-xl bg-white/5 text-[12px] text-[var(--t2)] opacity-70 italic leading-relaxed border border-white/5">"{tx.note}"</div>}
           <div className="flex gap-3 pt-1"><button onClick={()=>setIsEditing(true)} className="flex-[3] btn-primary py-3 flex items-center justify-center gap-2 text-sm"><Pencil size={16}/>編輯</button><button onClick={()=>onDelete(tx.id)} className="flex-1 btn-danger py-3 flex items-center justify-center active:scale-95 transition-all"><Trash2 size={18}/></button></div>
         </div>
       )}
@@ -314,7 +314,7 @@ function TxRow({ tx, settings, onDelete, onUpdated }: any) {
   )
 }
 
-function DetailItem({ label, value }: any) { return <div><div className="text-[10px] font-black text-[#EAD8B1] opacity-60 uppercase tracking-widest mb-1.5">{label}</div><div className="text-[15px] font-bold text-[var(--t1)] font-mono">{value}</div></div> }
+function DetailItem({ label, value }: any) { return <div><div className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</div><div className="text-[15px] font-bold text-[var(--t1)] font-mono">{value}</div></div> }
 
 function EditForm({ tx, settings, onCancel, onSaved }: any) {
   const [loading, setLoading] = useState(false)
