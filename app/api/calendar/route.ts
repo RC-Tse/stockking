@@ -16,7 +16,33 @@ export async function GET(request: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  // 1. Fetch Transactions & Settings
+  // 1. Try Cache First (daily_snapshots)
+  const firstDay = `${year}-${String(month).padStart(2, '0')}-01`
+  const lastDay = `${year}-${String(month).padStart(2, '0')}-${new Date(year, month, 0).getDate()}`
+  
+  const { data: cached } = await supabase
+    .from('daily_snapshots')
+    .select('*')
+    .eq('user_id', user.id)
+    .gte('snapshot_date', firstDay)
+    .lte('snapshot_date', lastDay)
+    .order('snapshot_date', { ascending: true })
+
+  if (cached && cached.length >= new Date(year, month, 0).getDate()) {
+    return NextResponse.json(cached.map(row => ({
+      entry_date: row.snapshot_date,
+      daily_pnl: Number(row.daily_pnl),
+      daily_pnl_pct: Number(row.daily_pnl_pct),
+      realized_pnl: Number(row.realized_pnl),
+      pnl: Number(row.gross_mv - row.total_cost),
+      pnl_pct: Number(row.total_cost) ? (Number(row.gross_mv - row.total_cost) / Number(row.total_cost) * 100) : 0,
+      net_market_value: Number(row.gross_mv),
+      details: row.daily_stock_list_json,
+      hasTransactions: (row.daily_stock_list_json as any[]).some(d => d.has_tx_today) // Inferred
+    })))
+  }
+
+  // 2. Fetch Transactions & Settings for calculation
   const [txRes, setRes] = await Promise.all([
     supabase.from('transactions').select('*').eq('user_id', user.id).order('trade_date', { ascending: true }).order('id', { ascending: true }),
     supabase.from('settings').select('*').eq('user_id', user.id).single()
@@ -32,156 +58,121 @@ export async function GET(request: Request) {
     txMap.get(t.trade_date)!.push(t)
   }
 
-  // 2. Loop Setup
+  // 3. FIFO Master Loop
   const startDate = new Date(txs[0].trade_date)
   const endDate = new Date(year, month, 0)
-  
   const inventory: Record<string, { shares: number; origPrincipal: number; origFee: number; matchedCost: number }[]> = {}
-  const results: Record<string, CalendarEntry> = {}
-  const origin = new URL(request.url).origin
+  const stockState: Record<string, { prevNetMV: number; prevCost: number }> = {}
 
   let prevTotalMV = 0
   let prevTotalCost = 0
   let hasPrevHistory = false
-  
-  // Track per-stock state to calculate daily deltas
-  const stockState: Record<string, { prevNetMV: number; prevCost: number }> = {}
+  const results: CalendarEntry[] = []
+  const snapshotsToUpsert: any[] = []
 
   const cur = new Date(startDate)
+  const origin = new URL(request.url).origin
+
   while (cur <= endDate) {
     const dateStr = cur.toISOString().split('T')[0]
     const txsToday = txMap.get(dateStr) || []
     
     let realizedToday = 0
     let costChangeToday = 0
-    const stockContributionToday: Record<string, { costChange: number; realized: number }> = {}
+    const stockContribution: Record<string, { costChange: number; realized: number }> = {}
 
-    // Process Transactions
     for (const tx of txsToday) {
       if (!inventory[tx.symbol]) inventory[tx.symbol] = []
       const lots = inventory[tx.symbol]
-      if (!stockContributionToday[tx.symbol]) stockContributionToday[tx.symbol] = { costChange: 0, realized: 0 }
+      if (!stockContribution[tx.symbol]) stockContribution[tx.symbol] = { costChange: 0, realized: 0 }
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.amount, settings, false, isDca)
         lots.push({ shares: tx.shares, origPrincipal: tx.amount, origFee: f, matchedCost: 0 })
-        const inc = tx.amount + f
-        costChangeToday += inc
-        stockContributionToday[tx.symbol].costChange += inc
+        costChangeToday += (tx.amount + f)
+        stockContribution[tx.symbol].costChange += (tx.amount + f)
       } else if (tx.action === 'SELL') {
         let rem = tx.shares
         let matchedCostTotal = 0
         while (rem > 0 && lots.length > 0) {
           const lot = lots[0]
           const take = Math.min(lot.shares, rem)
-          let lotMatchedCost = 0
-          const originalTotalLotCost = lot.origPrincipal + lot.origFee
           if (take === lot.shares) {
-            lotMatchedCost = originalTotalLotCost - lot.matchedCost
+            matchedCostTotal += (lot.origPrincipal + lot.origFee - lot.matchedCost)
             lots.shift()
           } else {
-            const ratio = take / lot.shares
-            lotMatchedCost = Math.floor((originalTotalLotCost - lot.matchedCost) * ratio)
+            const lotMatched = Math.floor((lot.origPrincipal + lot.origFee - lot.matchedCost) * (take / lot.shares))
+            lot.matchedCost += lotMatched
             lot.shares -= take
-            lot.matchedCost += lotMatchedCost
+            matchedCostTotal += lotMatched
           }
-          matchedCostTotal += lotMatchedCost
           rem -= take
         }
-        const sellFee = calcFee(tx.amount, settings, true)
-        const sellTax = calcTax(tx.amount, tx.symbol, settings)
+        const sellFee = calcFee(tx.amount, settings, true), sellTax = calcTax(tx.amount, tx.symbol, settings)
         const pnl = Math.floor(tx.amount - sellFee - sellTax) - matchedCostTotal
         realizedToday += pnl
-        stockContributionToday[tx.symbol].realized += pnl
+        stockContribution[tx.symbol].realized += pnl
         costChangeToday -= matchedCostTotal
-        stockContributionToday[tx.symbol].costChange -= matchedCostTotal
+        stockContribution[tx.symbol].costChange -= matchedCostTotal
       }
     }
 
-    // Daily Market Valuation
-    let curTotalMV = 0
-    let curTotalCost = 0
+    let curTotalMV = 0, curTotalCost = 0
     const details: any[] = []
-    
-    // We fetch quotes for all symbols ever held up to today to ensure delta calculation is correct
-    const heldSymbols = Object.keys(inventory).filter(s => inventory[s].reduce((acc, l) => acc + l.shares, 0) > 0)
+    const heldSymbols = Object.keys(inventory).filter(s => inventory[s].reduce((a, l) => a + l.shares, 0) > 0)
     
     if (heldSymbols.length > 0) {
       const qRes = await fetch(`${origin}/api/stocks?symbols=${heldSymbols.join(',')}&date=${dateStr}`)
-      const quotes: Record<string, Quote> = qRes.ok ? await qRes.json() : {}
-
+      const quotes = qRes.ok ? await qRes.json() : {}
       for (const sym of heldSymbols) {
-        const q = quotes[sym]
-        const price = q?.bid_price || q?.price || 0
-        const shares = inventory[sym].reduce((sum, l) => sum + l.shares, 0)
-        const mv = Math.floor(price * shares)
-        const sellFee = calcFee(mv, settings, true)
-        const sellTax = calcTax(mv, sym, settings)
-        const netMV = mv - sellFee - sellTax
-        const cost = inventory[sym].reduce((sum, l) => sum + (l.origPrincipal + l.origFee - l.matchedCost), 0)
+        const q = quotes[sym], shares = inventory[sym].reduce((s, l) => s + l.shares, 0), price = q?.bid_price || q?.price || 0
+        const mv = Math.floor(price * shares), fee = calcFee(mv, settings, true), tax = calcTax(mv, sym, settings)
+        const netMV = mv - fee - tax, cost = inventory[sym].reduce((s, l) => s + (l.origPrincipal + l.origFee - l.matchedCost), 0)
         
         const prev = stockState[sym] || { prevNetMV: 0, prevCost: 0 }
-        const contr = stockContributionToday[sym] || { costChange: 0, realized: 0 }
+        const contr = stockContribution[sym] || { costChange: 0, realized: 0 }
+        const sPnl = !hasPrevHistory ? (netMV - cost) : ((netMV - prev.prevNetMV) - contr.costChange + contr.realized)
         
-        let stockDailyPnL = 0
-        if (!hasPrevHistory) {
-            stockDailyPnL = netMV - cost
-        } else {
-            stockDailyPnL = (netMV - prev.prevNetMV) - contr.costChange + contr.realized
-        }
-        
-        curTotalMV += netMV
-        curTotalCost += cost
-        
+        curTotalMV += netMV; curTotalCost += cost
         details.push({
-          symbol: sym,
-          name: q?.name_zh || getStockName(sym),
-          shares: shares,
-          price: price,
-          change: q?.change || 0,
-          change_pct: q?.change_pct || 0,
-          cost: cost,
-          mv: netMV,
-          stock_daily_pnl: stockDailyPnL,
-          stock_daily_pnl_pct: (prev.prevNetMV || cost) ? (stockDailyPnL / (prev.prevNetMV || cost) * 100) : 0
+          symbol: sym, name: q?.name_zh || getStockName(sym), shares, price,
+          change: q?.change || 0, change_pct: q?.change_pct || 0,
+          cost, mv: netMV, stock_daily_pnl: sPnl,
+          stock_daily_pnl_pct: (prev.prevNetMV || cost) ? (sPnl / (prev.prevNetMV || cost) * 100) : 0,
+          has_tx_today: txsToday.some(t => t.symbol === sym)
         })
-        
         stockState[sym] = { prevNetMV: netMV, prevCost: cost }
       }
     }
 
-    // Daily Aggregates
-    let daily_pnl = 0
-    if (!hasPrevHistory) {
-      if (curTotalCost > 0 || txsToday.length > 0) {
-         daily_pnl = curTotalMV - curTotalCost
-         hasPrevHistory = true
-      }
-    } else {
-      daily_pnl = (curTotalMV - prevTotalMV) - costChangeToday + realizedToday
+    let daily_pnl = !hasPrevHistory ? (curTotalMV - curTotalCost) : ((curTotalMV - prevTotalMV) - costChangeToday + realizedToday)
+    if (!hasPrevHistory && (curTotalCost > 0 || txsToday.length > 0)) hasPrevHistory = true
+
+    const isCurrentMonth = cur.getFullYear() === year && (cur.getMonth() + 1) === month
+    if (isCurrentMonth) {
+      const sortedDetails = details.sort((a, b) => b.cost - a.cost)
+      results.push({
+        entry_date: dateStr, daily_pnl, daily_pnl_pct: (prevTotalMV || curTotalCost) ? (daily_pnl / (prevTotalMV || curTotalCost) * 100) : 0,
+        realized_pnl: realizedToday, pnl: curTotalMV - curTotalCost, pnl_pct: curTotalCost ? (curTotalMV - curTotalCost) / curTotalCost * 100 : 0,
+        net_market_value: curTotalMV, note: txsToday.find(t => t.note)?.note || '', hasTransactions: txsToday.length > 0,
+        details: sortedDetails
+      })
+      snapshotsToUpsert.push({
+        user_id: user.id, snapshot_date: dateStr, gross_mv: curTotalMV, total_cost: curTotalCost,
+        daily_pnl, daily_pnl_pct: (prevTotalMV || curTotalCost) ? (daily_pnl / (prevTotalMV || curTotalCost) * 100) : 0,
+        realized_pnl: realizedToday, daily_stock_list_json: sortedDetails
+      })
     }
 
-    // Record if in target month
-    if (cur.getFullYear() === year && (cur.getMonth() + 1) === month) {
-      results[dateStr] = {
-        entry_date: dateStr,
-        daily_pnl: daily_pnl,
-        daily_pnl_pct: (prevTotalMV || curTotalCost) ? (daily_pnl / (prevTotalMV || curTotalCost) * 100) : 0,
-        realized_pnl: realizedToday,
-        pnl: curTotalMV - curTotalCost,
-        pnl_pct: curTotalCost ? (curTotalMV - curTotalCost) / curTotalCost * 100 : 0,
-        net_market_value: curTotalMV,
-        note: txsToday.find(t => t.note)?.note || '',
-        hasTransactions: txsToday.length > 0,
-        details: details.sort((a,b) => b.cost - a.cost)
-      } as CalendarEntry
-    }
-
-    prevTotalMV = curTotalMV
-    prevTotalCost = curTotalCost
+    prevTotalMV = curTotalMV; prevTotalCost = curTotalCost
     cur.setDate(cur.getDate() + 1)
   }
 
-  return NextResponse.json(Object.values(results))
+  // Final Background Cache Save
+  if (snapshotsToUpsert.length > 0) {
+    supabase.from('daily_snapshots').upsert(snapshotsToUpsert).then(({error}) => { if(error) console.error('Snapshot error:', error) })
+  }
+
+  return NextResponse.json(results)
 }
