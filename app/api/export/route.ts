@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
 
   const start_date = req.nextUrl.searchParams.get('start_date')
   const end_date = req.nextUrl.searchParams.get('end_date')
+  const customFilename = req.nextUrl.searchParams.get('filename')
 
   if (!start_date || !end_date) {
     return NextResponse.json({ error: 'Missing date range' }, { status: 400 })
@@ -32,6 +33,10 @@ export async function GET(req: NextRequest) {
   const { data: sr } = await supabase.from('settings').select('*').eq('user_id', user.id).single()
   const settings: any = sr || { buy_fee_rate: 0.001425, buy_discount: 0.285, sell_fee_rate: 0.001425, sell_discount: 0.285, dca_fee_min: 1, tax_stock: 0.003, tax_etf: 0.001 }
 
+  // Fetch all stock names for accurate display
+  const { data: cachedNames } = await supabase.from('stock_names').select('symbol, name_zh')
+  const nameMap = Object.fromEntries(cachedNames?.map((n: any) => [n.symbol, n.name_zh]) || [])
+
   const buildExportTx = (t: any) => {
     const isDca = t.trade_type === 'DCA' || t.action === 'DCA'
     const f = Math.max(isDca ? settings.dca_fee_min : 1, Math.floor(t.amount * (t.action === 'SELL' ? settings.sell_fee_rate * settings.sell_discount : settings.buy_fee_rate * settings.buy_discount)))
@@ -48,7 +53,7 @@ export async function GET(req: NextRequest) {
     return {
       '日期': t.trade_date,
       '股票代碼': t.symbol.replace('.TW','').replace('.TWO',''),
-      '股票名稱': t.name_zh || getStockName(t.symbol),
+      '股票名稱': nameMap[t.symbol] || t.name_zh || getStockName(t.symbol),
       '動作': (t.action === 'BUY' || t.action === 'DCA') ? '買入' : '賣出',
       '定期定額': isDca ? '是' : '',
       '整張/零股': t.shares % 1000 === 0 ? '整張' : '零股',
@@ -112,7 +117,7 @@ export async function GET(req: NextRequest) {
 
     const row = {
       '股票代碼': sym.replace('.TW','').replace('.TWO',''),
-      '股票名稱': getStockName(sym),
+      '股票名稱': nameMap[sym] || getStockName(sym),
       '買入總成本': Math.floor(s.buyCost),
       '賣出總收入': Math.floor(s.sellRev),
       '已實現損益': Math.floor(s.sellRev - (s.buyCost - heldCost)),
@@ -136,7 +141,7 @@ export async function GET(req: NextRequest) {
 
   // 檔名 YYYYMMDD
   const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
-  const filename = `交易紀錄_${today}.xlsx`
+  const filename = customFilename || `交易紀錄_${today}.xlsx`
 
   const wb = XLSX.utils.book_new()
   const ws1 = XLSX.utils.json_to_sheet(allTxDetails)

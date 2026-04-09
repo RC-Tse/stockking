@@ -98,9 +98,16 @@ export default function TransactionsTab({ onRefresh }: Props) {
 
   return (
     <div className="p-4 space-y-6 tabular-nums pb-32">
-      <div className="flex bg-[var(--bg-card)] p-1.5 rounded-2xl border border-[var(--border-bright)] shadow-xl relative z-10">
+      <div className="flex bg-[var(--bg-card)] p-1.5 rounded-2xl border border-[var(--border-bright)] shadow-xl relative z-10 items-center gap-1.5">
         <button onClick={() => setTab('SELF')} className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all ${tab === 'SELF' ? 'bg-accent text-bg-base shadow-lg shadow-accent/20' : 'text-[var(--t2)] opacity-40 hover:opacity-100'}`}>手動紀錄</button>
         <button onClick={() => setTab('REALIZED')} className={`flex-1 py-3 text-[13px] font-black rounded-xl transition-all ${tab === 'REALIZED' ? 'bg-accent text-bg-base shadow-lg shadow-accent/20' : 'text-[var(--t2)] opacity-40 hover:opacity-100'}`}>已實現損益</button>
+        <button 
+          onClick={() => setExportOpen(true)} 
+          className="w-12 h-12 flex items-center justify-center bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-accent active:scale-90 transition-all shadow-md group"
+          title="匯出報表"
+        >
+          <Download size={20} className="group-hover:translate-y-0.5 transition-transform" />
+        </button>
       </div>
 
       {tab === 'REALIZED' ? (
@@ -108,7 +115,6 @@ export default function TransactionsTab({ onRefresh }: Props) {
           <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-5 shadow-2xl">
             <div className="flex items-center justify-between mb-6">
               <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-[0.2em]">統計區間</span>
-              <button onClick={() => setExportOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-xl text-[11px] font-black text-accent active:scale-95 transition-all shadow-md"><Download size={14}/> 匯出報表</button>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {['month', '3months', 'year', 'all'].map(m => (
@@ -274,22 +280,107 @@ function EditForm({ tx, onCancel, onSaved }: any) {
 }
 
 function ExportModal({ onClose }: any) {
-  const [range, setRange] = useState('all'), [start, setStart] = useState(''), [end, setEnd] = useState(''), [loading, setLoading] = useState(false)
+  const [range, setRange] = useState('month'), [start, setStart] = useState(''), [end, setEnd] = useState(''), [loading, setLoading] = useState(false)
+  
+  const getRangeInfo = () => {
+    const today = new Date(), todayStr = today.toISOString().split('T')[0]
+    let s = '2000-01-01', e = todayStr, desc = '全部'
+    
+    if (range === 'month') {
+      s = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
+      desc = '本月'
+    } else if (range === '3months') {
+      s = new Date(today.getFullYear(), today.getMonth() - 2, 1).toISOString().split('T')[0]
+      desc = '三個月'
+    } else if (range === '6months') {
+      s = new Date(today.getFullYear(), today.getMonth() - 5, 1).toISOString().split('T')[0]
+      desc = '六個月'
+    } else if (range === 'year') {
+      const lastYear = new Date()
+      lastYear.setFullYear(today.getFullYear() - 1)
+      s = lastYear.toISOString().split('T')[0]
+      desc = '一年'
+    } else if (range === 'this_year') {
+      s = `${today.getFullYear()}-01-01`
+      desc = '今年'
+    } else if (range === 'custom') {
+      s = start; e = end; desc = '自訂區間'
+    }
+    return { s, e, desc }
+  }
+
   const handleExport = async () => {
     setLoading(true)
+    const { s, e, desc } = getRangeInfo()
+    if (range === 'custom' && (!s || !e)) { alert('請選擇完整日期區間'); setLoading(false); return }
+    
+    const dateTag = new Date().toISOString().split('T')[0].replace(/-/g, '')
+    const filename = `存股紀錄_${dateTag}_${desc}.xlsx`
+    
     try {
-      const res = await fetch(`/api/export?start_date=${start||'2000-01-01'}&end_date=${end||new Date().toISOString().split('T')[0]}`)
+      const res = await fetch(`/api/export?start_date=${s}&end_date=${e}&filename=${encodeURIComponent(filename)}`)
       const blob = await res.blob(), url = window.URL.createObjectURL(blob), a = document.createElement('a')
-      a.href = url; a.download = `交易紀錄.xlsx`; document.body.appendChild(a); a.click(); document.body.removeChild(a); alert('報表導出成功'); onClose()
+      a.href = url; a.download = filename; document.body.appendChild(a); a.click(); document.body.removeChild(a); alert('報表導出成功'); onClose()
     } catch(e) { alert('導出失敗') } finally { setLoading(false) }
   }
+
+  const options = [
+    { id: 'month', label: '本月' },
+    { id: '3months', label: '三個月' },
+    { id: '6months', label: '六個月' },
+    { id: 'year', label: '一年' },
+    { id: 'this_year', label: '今年' },
+    { id: 'all', label: '全部' },
+    { id: 'custom', label: '自訂' },
+  ]
+
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-black/85 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="glass w-full max-w-sm p-8 space-y-8 border-white/10 animate-in zoom-in-95">
-        <div className="text-center space-y-1"><h3 className="font-black text-xl text-[var(--t1)]">導出交易紀錄</h3><p className="text-xs text-[var(--t3)]">產生一份 Excel 列表下載</p></div>
-        <div className="grid grid-cols-2 gap-2.5">{['month','year','all','custom'].map(o=><button key={o} onClick={()=>setRange(o)} className={`py-3.5 rounded-xl text-xs font-black border transition-all ${range===o?'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20':'bg-white/5 text-[var(--t2)] border-transparent active:bg-white/10'}`}>{o==='month'?'本月':o==='year'?'今年':o==='all'?'全部':'自訂'}</button>)}</div>
-        {range==='custom'&&<div className="space-y-3 animate-slide-up"><div className="space-y-1"><Label>起始日期</Label><DatePicker value={start} onChange={setStart}/></div><div className="space-y-1"><Label>結束日期</Label><DatePicker value={end} onChange={setEnd}/></div></div>}
-        <div className="flex gap-3 pt-2"><button onClick={handleExport} disabled={loading} className="flex-[3] btn-primary py-4 text-base shadow-lg shadow-accent/10">{loading?'處理中...':'確認導出'}</button><button onClick={onClose} className="flex-1 btn-secondary py-4 text-base">取消</button></div>
+      <div className="glass w-full max-w-sm p-8 space-y-8 border-white/10 animate-in zoom-in-95 rounded-[2.5rem] shadow-[0_0_50px_rgba(0,0,0,0.5)]">
+        <div className="text-center space-y-2">
+          <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-accent/20">
+            <Download className="text-accent" size={32} />
+          </div>
+          <h3 className="font-black text-2xl text-[var(--t1)]">導出紀錄</h3>
+          <p className="text-xs text-[var(--t3)] font-medium opacity-60">選擇匯出時間區間，產出 Excel 報表</p>
+        </div>
+        
+        <div className="grid grid-cols-3 gap-2">
+          {options.map(o => (
+            <button 
+              key={o.id} 
+              onClick={() => setRange(o.id)} 
+              className={`py-3 rounded-2xl text-[11px] font-black border transition-all active:scale-95 ${
+                range === o.id ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-white/5 text-[var(--t2)] border-transparent hover:bg-white/10'
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
+        </div>
+
+        {range === 'custom' && (
+          <div className="space-y-4 animate-slide-up p-5 rounded-3xl bg-black/20 border border-white/5">
+            <div className="space-y-2"><Label>起始日期</Label><DatePicker value={start} onChange={setStart}/></div>
+            <div className="space-y-2"><Label>結束日期</Label><DatePicker value={end} onChange={setEnd}/></div>
+          </div>
+        )}
+
+        <div className="flex gap-4 pt-4">
+          <button 
+            onClick={handleExport} 
+            disabled={loading} 
+            className="flex-[3] btn-primary py-4.5 text-base font-black shadow-lg shadow-accent/10 active:scale-95 transition-all disabled:opacity-50"
+          >
+            {loading ? '產生中...' : '確認匯出'}
+          </button>
+          <button 
+            onClick={onClose} 
+            className="flex-1 btn-secondary py-4.5 text-base font-black active:scale-95 transition-all"
+          >
+            取消
+          </button>
+        </div>
       </div>
     </div>
   )
