@@ -36,8 +36,9 @@ export async function POST(req: NextRequest) {
   const s: UserSettings = sr ?? DEFAULT_SETTINGS
   const sym = symbol.trim().toUpperCase()
   const amount = Number(shares) * Number(price)
-  const fee = calcFee(amount, s, action === 'SELL', action === 'DCA')
-  const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
+  const fee = calcFee(Number(shares), Number(price), s, action === 'SELL', action === 'DCA')
+  const tax = action === 'SELL' ? calcTax(Number(shares), Number(price), sym, s) : 0
+
   
   // 交易原則：Math.floor(成交價 * 股數 +/- 手續費 +/- 交易稅)
   const net_amount = (action === 'BUY' || action === 'DCA') 
@@ -88,8 +89,9 @@ export async function PUT(req: NextRequest) {
     ? newAction 
     : current.action
   const amount = Number(shares) * Number(price)
-  const fee = calcFee(amount, s, action === 'SELL', action === 'DCA')
-  const tax = action === 'SELL' ? calcTax(amount, sym, s) : 0
+  const fee = calcFee(Number(shares), Number(price), s, action === 'SELL', action === 'DCA')
+  const tax = action === 'SELL' ? calcTax(Number(shares), Number(price), sym, s) : 0
+
   
   // 交易原則：Math.floor(成交價 * 股數 +/- 手續費 +/- 交易稅)
   const net_amount = (action === 'BUY' || action === 'DCA') 

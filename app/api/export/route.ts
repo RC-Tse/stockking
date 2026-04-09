@@ -191,6 +191,10 @@ export async function GET(req: NextRequest) {
   const ws2 = XLSX.utils.json_to_sheet(txPairs)
   XLSX.utils.book_append_sheet(wb, ws2, '交易明細')
 
+  const today = new Date();
+  const dateString = today.toISOString().slice(0, 10).replace(/-/g, '');
+  const filename = customFilename || `交易紀錄_${dateString}.xlsx`;
+
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
   return new NextResponse(buf, {
     headers: {

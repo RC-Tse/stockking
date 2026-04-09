@@ -87,8 +87,9 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
   const actualShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = typeof price === 'number' ? price : 0
   const amount = actualShares * safePrice
-  const fee = safePrice > 0 ? calcFee(amount, settings, action === 'SELL', isDca) : 0
-  const tax = safePrice > 0 && action === 'SELL' ? calcTax(amount, symbol, settings) : 0
+  const fee = safePrice > 0 ? calcFee(actualShares, safePrice, settings, action === 'SELL', isDca) : 0
+  const tax = safePrice > 0 && action === 'SELL' ? calcTax(actualShares, safePrice, symbol, settings) : 0
+
   const net = action === 'BUY' ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
 
   async function submitOrder() {
