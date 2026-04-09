@@ -131,6 +131,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   const formatTick = (ts: number) => {
     const d = new Date(ts)
+    let effectiveRange = stockRange
+    if (effectiveRange === 'CUSTOM') {
+      const start = new Date(customStockStart).getTime()
+      const end = new Date(customStockEnd).getTime()
+      const diffMonths = (end - start) / (1000 * 60 * 60 * 24 * 30.44)
+      if (diffMonths >= 11) effectiveRange = '1Y'
+    }
+
+    if (effectiveRange === '1Y' || effectiveRange === 'ALL') {
+      return `${d.getMonth() + 1}月`
+    }
     return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
@@ -139,7 +150,22 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     const data = enrichedStockHistory
     const results: number[] = []
     const seenDates = new Set<string>()
-    const targetDays = [1, 10, 20]
+    
+    let effectiveRange = stockRange
+    if (effectiveRange === 'CUSTOM') {
+      const start = new Date(customStockStart).getTime()
+      const end = new Date(customStockEnd).getTime()
+      const diffMonths = (end - start) / (1000 * 60 * 60 * 24 * 30.44)
+      if (diffMonths <= 1.5) effectiveRange = '1M'
+      else if (diffMonths <= 4.5) effectiveRange = '3M'
+      else if (diffMonths <= 11) effectiveRange = '6M'
+      else effectiveRange = '1Y'
+    }
+    
+    let targetDays = [1]
+    if (effectiveRange === '1M') targetDays = [1, 10, 20]
+    else if (effectiveRange === '3M') targetDays = [1, 15]
+    else targetDays = [1] // 6M, 1Y, ALL
 
     // 取得所有出現過的月份
     const months = Array.from(new Set(data.map(d => d.date.substring(0, 7))))
@@ -156,7 +182,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       })
     })
     return results.sort((a,b) => a - b)
-  }, [enrichedStockHistory])
+  }, [enrichedStockHistory, stockRange, customStockStart, customStockEnd])
 
   // 計算全域價格極值與固定刻度
   const yAxisMetrics = useMemo(() => {
