@@ -88,8 +88,8 @@ export default function HoldingsTab({ onRefresh }: Props) {
   const realizedPct = realizedCostBasis ? (totalRealized / realizedCostBasis) * 100 : 0
   
   const totalPnl = totalRealized + unrealizedPnl
-  const yearAchieved = 0 // Will sync in goal redesign
-  const totalAchieved = 0
+  const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : 0
+  const totalAchieved = settings.total_goal > 0 ? (totalPnl / settings.total_goal) * 100 : 0
 
   const pieData = useMemo(() => {
     return holdings.map(h => ({
@@ -152,14 +152,9 @@ export default function HoldingsTab({ onRefresh }: Props) {
       <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-5 relative overflow-hidden animate-slide-up shadow-2xl">
         <div className="flex items-center justify-between mb-6">
           <span className="text-base font-black text-[var(--t2)] uppercase tracking-[0.2em]">持股概覽 · {holdings.length} 檔</span>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setShowData(!showData)} className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all">
-              {showData ? <Eye size={14} /> : <EyeOff size={14} />}
-            </button>
-            <button onClick={() => window.location.reload()} className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-95 transition-all">
-              <RefreshCw size={14} />
-            </button>
-          </div>
+          <button onClick={() => setShowData(!showData)} className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-90 active:opacity-70 transition-all">
+            {showData ? <Eye size={16} /> : <EyeOff size={16} />}
+          </button>
         </div>
 
         <div className="space-y-6">
@@ -385,12 +380,26 @@ function DetailBox({ label, value }: { label: string, value: string }) {
 
 function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: any) {
   const isNegative = current < 0
+  const isYearly = label === "年度獲利目標"
+
+  const showInfo = () => {
+    alert("年度獲利定義：\n由該年度內已實現損益（已賣出）加上目前手中持股的未實現損益（漲跌幅）組成，反映了您整年的投資總績效。")
+  }
+
   return (
     <div className="space-y-2.5">
       <div className="flex justify-between items-end">
-        <span className="text-[13px] font-black text-[var(--t2)] opacity-90 flex items-center gap-2">
-          <Icon size={14} className="text-accent" /> {label}
-        </span>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[13px] font-black text-[var(--t2)] opacity-90 flex items-center gap-2">
+            <Icon size={14} className="text-accent" /> {label}
+          </span>
+          {isYearly && (
+            <button 
+              onClick={showInfo}
+              className="w-3.5 h-3.5 rounded-full border border-accent/30 flex items-center justify-center text-[9px] text-accent font-black hover:bg-accent/10 active:scale-90 transition-all shrink-0 mb-0.5"
+            >i</button>
+          )}
+        </div>
         {goal > 0 ? (
           <div className="flex flex-col items-end">
             <span className={`text-[13px] font-black font-mono ${isNegative ? 'text-red-400' : 'text-accent'}`}>

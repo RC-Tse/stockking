@@ -12,7 +12,8 @@ import {
   ClipboardList, 
   Settings2, 
   Plus,
-  LineChart
+  LineChart,
+  RefreshCw
 } from 'lucide-react'
 import { PortfolioProvider, usePortfolio } from './providers/PortfolioContext'
 import HoldingsTab      from './HoldingsTab'
@@ -129,16 +130,24 @@ function DashboardInner({ user, tab, setTab, refresh, loading, drawerOpen, setDr
               <path d="M2 19h20M3 9l4 4 5-8 5 8 4-4 1 10H2L3 9z"/>
             </svg>
           </div>
-          <div className="flex-1 flex flex-col items-center">
+          <div className="flex-1 flex flex-col items-center pl-8">
             <span className="text-[18px] font-black text-[var(--t1)] leading-tight">{fmtMoney(totalMV)}</span>
             <span className={`text-[11px] font-bold ${totalPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
               {totalPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(totalPnl))} ({pnlPct.toFixed(1)}%)
             </span>
           </div>
-          <button onClick={signOut}
-            className="shrink-0 w-8 h-8 rounded-full border-2 border-[var(--accent-dim)] overflow-hidden bg-[var(--bg-surface)] flex items-center justify-center text-[10px] font-black text-accent">
-            {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name?.[0] || 'U'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button 
+              onClick={() => window.location.reload()}
+              className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-90 active:opacity-70 transition-all"
+            >
+              <RefreshCw size={14} />
+            </button>
+            <button onClick={signOut}
+              className="shrink-0 w-8 h-8 rounded-full border-2 border-[var(--accent-dim)] overflow-hidden bg-[var(--bg-surface)] flex items-center justify-center text-[10px] font-black text-accent active:scale-90 transition-all">
+              {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name?.[0] || 'U'}
+            </button>
+          </div>
         </div>
       </header>
 
