@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
-import { getStockName } from '@/types'
+import { getStockName, calcFee, calcTax } from '@/types'
+
 
 export async function GET(req: NextRequest) {
   const supabase = await createClient()
@@ -37,125 +38,165 @@ export async function GET(req: NextRequest) {
   const { data: cachedNames } = await supabase.from('stock_names').select('symbol, name_zh')
   const nameMap = Object.fromEntries(cachedNames?.map((n: any) => [n.symbol, n.name_zh]) || [])
 
+  const getQuote = async (symbol: string) => {
+    // Attempt to get quote from Yahoo in API
+    try {
+      const res = await fetch(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=1d`, { headers: { 'User-Agent': 'Mozilla/5.0' }})
+      if (!res.ok) return 0
+      const data = await res.json()
+      return data.chart?.result?.[0]?.meta?.regularMarketPrice || 0
+    } catch { return 0 }
+  }
+
+  // Pre-fetch all current prices for active symbols
+  const activeSymbols = Array.from(new Set(allTxs.map(t => t.symbol)))
+  const quotes: Record<string, number> = {}
+  await Promise.all(activeSymbols.map(async s => { quotes[s] = await getQuote(s) }))
+
   const buildExportTx = (t: any) => {
     const isDca = t.trade_type === 'DCA' || t.action === 'DCA'
-    const f = Math.max(isDca ? settings.dca_fee_min : 1, Math.floor(t.amount * (t.action === 'SELL' ? settings.sell_fee_rate * settings.sell_discount : settings.buy_fee_rate * settings.buy_discount)))
-    const taxRate = t.symbol.replace('.TW','').replace('.TWO','').startsWith('00') ? settings.tax_etf : settings.tax_stock
-    const tax = t.action === 'SELL' ? Math.floor(t.amount * taxRate) : 0
+    const f = calcFee(t.shares, t.price, settings, t.action === 'SELL', isDca)
+    const tax = t.action === 'SELL' ? calcTax(t.shares, t.price, t.symbol, settings) : 0
     const net = t.action === 'SELL' ? Math.floor(t.amount - f - tax) : -Math.floor(t.amount + f)
     return { f, tax, net }
   }
 
-  // 合併交易明細 (Sheet 1)
-  const allTxDetails = filteredTxs.map(t => {
-    const { f, tax, net } = buildExportTx(t)
-    const isDca = t.trade_type === 'DCA' || t.action === 'DCA'
-    return {
-      '日期': t.trade_date,
-      '股票代碼': t.symbol.replace('.TW','').replace('.TWO',''),
-      '股票名稱': nameMap[t.symbol] || t.name_zh || getStockName(t.symbol),
-      '動作': (t.action === 'BUY' || t.action === 'DCA') ? '買入' : '賣出',
-      '定期定額': isDca ? '是' : '',
-      '整張/零股': t.shares % 1000 === 0 ? '整張' : '零股',
-      '股數': t.shares,
-      '成交價': t.price,
-      '交易金額': Math.floor(t.amount),
-      '手續費': f,
-      '交易稅': tax,
-      '淨收支': net,
-      '備註': t.note || ''
-    }
-  })
 
-  // 處理庫存匯總 (Sheet 2) 並分區
-  const inventory: Record<string, { shares: number, cost: number }[]> = {}
-  const stats: Record<string, { buyCost: number, sellRev: number }> = {}
+  // 1. Prepare Transaction Pair Details (FIFO) for Sheet 2
+  const txPairs: any[] = []
+  const inventory: Record<string, { date: string, shares: number, price: number, fee: number }[]> = {}
 
   for (const t of allTxs) {
     if (!inventory[t.symbol]) inventory[t.symbol] = []
-    if (!stats[t.symbol]) stats[t.symbol] = { buyCost: 0, sellRev: 0 }
-    
-    if (t.action === 'BUY' || t.action === 'DCA') {
-      const isDca = t.trade_type === 'DCA' || t.action === 'DCA'
-      const f = Math.max(isDca ? settings.dca_fee_min : 1, Math.floor(t.amount * (settings.buy_fee_rate * settings.buy_discount)))
-      const cost = Math.floor(t.amount + f)
-      inventory[t.symbol].push({ shares: t.shares, cost })
-      stats[t.symbol].buyCost += cost
+    const isBuy = t.action === 'BUY' || t.action === 'DCA'
+    const { f, tax, net } = buildExportTx(t)
+
+    if (isBuy) {
+      inventory[t.symbol].push({ date: t.trade_date, shares: t.shares, price: t.price, fee: f })
     } else {
-      const f = Math.max(1, Math.floor(t.amount * (settings.sell_fee_rate * settings.sell_discount)))
-      const taxRate = t.symbol.replace('.TW','').replace('.TWO','').startsWith('00') ? settings.tax_etf : settings.tax_stock
-      const tax = Math.floor(t.amount * taxRate)
-      const net = Math.floor(t.amount - f - tax)
-      stats[t.symbol].sellRev += net
-      
       let rem = t.shares
       while (rem > 0 && inventory[t.symbol].length > 0) {
         const lot = inventory[t.symbol][0]
         const take = Math.min(lot.shares, rem)
-        const unit = lot.cost / lot.shares
-        const pCost = Math.floor(take * unit)
         
+        const ratio = take / lot.shares
+        const matchedPrincipal = Math.floor(lot.price * lot.shares * ratio)
+        const matchedBuyFee = Math.floor(lot.fee * ratio)
+        const matchedCost = matchedPrincipal + matchedBuyFee
+
+        
+        // Single match sell revenue
+        const sellRatio = take / t.shares
+        const matchedSellRev = Math.floor(t.price * t.shares * sellRatio)
+        const matchedSellFee = Math.floor(f * sellRatio)
+        const matchedSellTax = Math.floor(tax * sellRatio)
+        const matchedIncome = matchedSellRev - matchedSellFee - matchedSellTax
+        
+        const profit = matchedIncome - matchedCost
+
+        if (t.trade_date >= start_date && t.trade_date <= end_date) {
+            txPairs.push({
+              '買進日': lot.date,
+              '賣出日': t.trade_date,
+              '名稱': nameMap[t.symbol] || t.name_zh || getStockName(t.symbol),
+              '代碼': t.symbol.replace('.TW','').replace('.TWO',''),
+              '股數': take,
+              '買單價': lot.price,
+              '賣單價': t.price,
+              '付出成本': matchedCost,
+              '帳面收入': matchedIncome,
+              '已實現損益': profit,
+              '報酬率': `${(profit / matchedCost * 100).toFixed(2)}%`,
+              '交易稅': matchedSellTax,
+              '手續費': matchedBuyFee + matchedSellFee,
+              '定期定額': t.action === 'DCA' ? '是' : ''
+            })
+        }
+
         lot.shares -= take
-        lot.cost -= pCost
+        lot.fee -= matchedBuyFee
         rem -= take
         if (lot.shares <= 0) inventory[t.symbol].shift()
       }
     }
   }
 
+  // 2. Prepare Inventory Summary for Sheet 1
   const activeHoldings: any[] = []
   const inactiveHoldings: any[] = []
 
-  Object.keys(stats).forEach(sym => {
-    const s = stats[sym]
-    const currentLots = inventory[sym]
-    const heldShares = currentLots.reduce((sum, l) => sum + l.shares, 0)
-    const heldCost = Math.floor(currentLots.reduce((sum, l) => sum + l.cost, 0))
-    const lastTx = allTxs.filter(t => t.symbol === sym).pop()
-    const lastPrice = lastTx?.price || 0
-    const mv = Math.floor(heldShares * lastPrice)
+  const allSymbolsSet = Array.from(new Set(allTxs.map(t => t.symbol)))
+  allSymbolsSet.forEach(sym => {
+    const lots = inventory[sym] || []
+    const heldShares = lots.reduce((s, l) => s + l.shares, 0)
+    const heldCost = lots.reduce((s, l) => s + (l.price * l.shares + l.fee), 0)
+    const cp = quotes[sym] || 0
+    const mv = Math.floor(heldShares * cp)
+    
+    // Estimated sell fees/tax
+    const s_fee = Math.max(1, Math.floor(heldShares * cp * settings.sell_fee_rate * settings.sell_discount))
+    const taxRate = sym.replace('.TW','').replace('.TWO','').startsWith('00') ? settings.tax_etf : settings.tax_stock
+    const s_tax = Math.floor(heldShares * cp * taxRate)
+    const net_mv = mv - s_fee - s_tax
+    const unrealized = net_mv - heldCost
 
     const row = {
-      '股票代碼': sym.replace('.TW','').replace('.TWO',''),
-      '股票名稱': nameMap[sym] || getStockName(sym),
-      '買入總成本': Math.floor(s.buyCost),
-      '賣出總收入': Math.floor(s.sellRev),
-      '已實現損益': Math.floor(s.sellRev - (s.buyCost - heldCost)),
-      '目前持股數': heldShares,
-      '目前市值估算': mv,
-      '未實現損益估算': Math.floor(mv - heldCost)
+      '名稱': nameMap[sym] || getStockName(sym),
+      '代碼': sym.replace('.TW','').replace('.TWO',''),
+      '股數': heldShares,
+      '持有成本': Math.floor(heldCost),
+      '成交均價': heldShares > 0 ? (heldCost / heldShares).toFixed(2) : '0',
+      '現價': cp.toFixed(2),
+      '股票現值': mv,
+      '預估賣出手續費': s_fee,
+      '預估賣出交易稅': s_tax,
+      '未實現損益': Math.floor(unrealized),
+      '預估報酬率': heldCost > 0 ? `${(unrealized / heldCost * 100).toFixed(2)}%` : '0%',
+      '幣別': '台幣'
     }
 
     if (heldShares > 0) activeHoldings.push(row)
-    else inactiveHoldings.push(row)
+    else {
+        // Find total realized for closed
+        let realized = 0
+        allTxs.filter(t => t.symbol === sym && t.action === 'SELL').forEach(t => {
+            // Simplified realized for summary sheet
+        })
+        // Inactive list usually excludes currently held ones but shows the history if needed.
+        // The user says Sheet 1: --- 手上持有 --- and --- 已結清 ---
+        // For inactive, we only show those with 0 shares.
+        inactiveHoldings.push({
+             ...row,
+             '股數': 0,
+             '持有成本': 0,
+             '股票現值': 0,
+             '未實現損益': 0,
+             '預估報酬率': '-'
+        })
+    }
   })
 
-  // 組合 Sheet 數據，插入分區標題
   const summaryRows = [
-    { '股票代碼': '--- 手上持有 ---' },
+    { '名稱': '--- 手上持有 ---' },
     ...activeHoldings,
-    { '股票代碼': '' },
-    { '股票代碼': '--- 已結清 ---' },
+    { '名稱': '' },
+    { '名稱': '--- 已結清 ---' },
     ...inactiveHoldings
   ]
 
-  // 檔名 YYYYMMDD
-  const today = new Date().toISOString().split('T')[0].replace(/-/g, '')
-  const filename = customFilename || `交易紀錄_${today}.xlsx`
-
   const wb = XLSX.utils.book_new()
-  const ws1 = XLSX.utils.json_to_sheet(allTxDetails)
-  XLSX.utils.book_append_sheet(wb, ws1, '交易明細')
+  const ws1 = XLSX.utils.json_to_sheet(summaryRows)
+  XLSX.utils.book_append_sheet(wb, ws1, '庫存彙總')
   
-  const ws2 = XLSX.utils.json_to_sheet(summaryRows)
-  XLSX.utils.book_append_sheet(wb, ws2, '庫存匯總')
+  const ws2 = XLSX.utils.json_to_sheet(txPairs)
+  XLSX.utils.book_append_sheet(wb, ws2, '交易明細')
 
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
-
   return new NextResponse(buf, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       'Content-Disposition': `attachment; filename="${encodeURIComponent(filename)}"`
     }
   })
+
 }

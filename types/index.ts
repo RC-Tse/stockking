@@ -145,20 +145,18 @@ export function codeOnly(symbol: string): string {
   return symbol.replace('.TW','').replace('.TWO','')
 }
 
-export function calcFee(amount: number, s: UserSettings, isSell = false, isDca = false): number {
-  // DCA: use fixed fee from settings directly (no rate calculation)
+export function calcFee(shares: number, price: number, s: UserSettings, isSell = false, isDca = false): number {
   if (isDca) return s.dca_fee_min
-  // Regular buy/sell: rate * discount, minimum 1 yuan
-  const rate = isSell
-    ? s.sell_fee_rate * s.sell_discount
-    : s.buy_fee_rate * s.buy_discount
-  return Math.max(1, Math.floor(amount * rate))
+  const rate = isSell ? s.sell_fee_rate : s.buy_fee_rate
+  const discount = isSell ? s.sell_discount : s.buy_discount
+  return Math.max(1, Math.floor(shares * price * rate * discount))
 }
 
-export function calcTax(amount: number, symbol: string, s: UserSettings): number {
+export function calcTax(shares: number, price: number, symbol: string, s: UserSettings): number {
   const rate = isEtf(symbol) ? s.tax_etf : s.tax_stock
-  return Math.floor(amount * rate)
+  return Math.floor(shares * price * rate)
 }
+
 
 export function fmtPrice(v: number): string {
   return v.toFixed(2)

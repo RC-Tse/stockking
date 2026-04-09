@@ -73,19 +73,26 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     ])
     const txData: Transaction[]  = txRes.ok  ? await txRes.json()  : []
     let setData: UserSettings  = setRes.ok ? await setRes.json() : DEFAULT_SETTINGS
-    // All settings now come from Supabase (dca_fee_min, year_goal_type, etc. have their own DB columns)
     
     setTxs(txData)
     setSettings(setData)
     setLoading(false)
+    
     const syms = Array.from(new Set(txData.map(t => t.symbol)))
     if (syms.length) {
       const qRes = await fetch(`/api/stocks?symbols=${syms.join(',')}`)
-      if (qRes.ok) {
-        setQuotes(await qRes.json())
-      }
+      if (qRes.ok) setQuotes(await qRes.json())
     }
   }, [])
+
+  const refreshQuotesOnly = useCallback(async () => {
+    const syms = Array.from(new Set(txs.map(t => t.symbol)))
+    if (syms.length) {
+      const qRes = await fetch(`/api/stocks?symbols=${syms.join(',')}`)
+      if (qRes.ok) setQuotes(await qRes.json())
+    }
+  }, [txs])
+
 
   useEffect(() => {
     refresh()
@@ -101,17 +108,19 @@ export default function DashboardClient({ user }: { user: AppUser }) {
 
   return (
     <PortfolioProvider transactions={txs} quotes={quotes} settings={settings}>
-      <DashboardInner 
+        <DashboardInner 
         user={user} tab={tab} setTab={setTab} 
-        refresh={refresh} loading={loading} 
+        refresh={refresh} refreshQuotesOnly={refreshQuotesOnly} loading={loading} 
         drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen}
         settings={settings} setSettings={setSettings}
       />
+
     </PortfolioProvider>
   )
 }
 
-function DashboardInner({ user, tab, setTab, refresh, loading, drawerOpen, setDrawerOpen, settings, setSettings }: any) {
+function DashboardInner({ user, tab, setTab, refresh, refreshQuotesOnly, loading, drawerOpen, setDrawerOpen, settings, setSettings }: any) {
+
   const { stats } = usePortfolio()
   const { totalPnl, pnlPct, totalNetMV: totalMV } = stats
   const router = useRouter()
@@ -138,11 +147,12 @@ function DashboardInner({ user, tab, setTab, refresh, loading, drawerOpen, setDr
           </div>
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => window.location.reload()}
+              onClick={refreshQuotesOnly}
               className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-90 active:opacity-70 transition-all"
             >
               <RefreshCw size={14} />
             </button>
+
             <button onClick={signOut}
               className="shrink-0 w-8 h-8 rounded-full border-2 border-[var(--accent-dim)] overflow-hidden bg-[var(--bg-surface)] flex items-center justify-center text-[10px] font-black text-accent active:scale-90 transition-all">
               {user.avatar ? <img src={user.avatar} className="w-full h-full object-cover" /> : user.name?.[0] || 'U'}

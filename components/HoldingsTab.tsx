@@ -55,9 +55,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
 
   // Derived Metrics from Context
   const {
-    closedHoldings,
-    yearPnl,
-    realizedCostBasis
+    closedHoldings
   } = useMemo(() => {
     const ch = Object.entries(fullHistoryStats)
       .filter(([sym]) => !holdings.find(h => h.symbol === sym))
@@ -69,30 +67,25 @@ export default function HoldingsTab({ onRefresh }: Props) {
         pnlPct: data.buy > 0 ? (data.realized / data.buy) * 100 : 0
       })).sort((a,b) => b.pnl - a.pnl)
 
-    // Simplified yearPnl for All-Time sync: in a more complex setup we could filter the history
-    // For now we keep the All-Time consistency as priority
-    const unrealizedPnlTotal = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
-    const yearlyProgressValue = stats.yearlyRealized + unrealizedPnlTotal
-
     return { 
-      closedHoldings: ch, 
-      yearPnl: yearlyProgressValue, 
-      realizedCostBasis: stats.totalRealizedCostBasis
+      closedHoldings: ch
     }
-  }, [fullHistoryStats, holdings, totalRealized, stats.yearlyRealized])
+  }, [fullHistoryStats, holdings])
 
-  const currentNetMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
-  const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
-  const unrealizedPnl = currentNetMV - currentCost
-  const unrealizedPct = currentCost ? (unrealizedPnl / currentCost) * 100 : 0
-  const realizedPct = realizedCostBasis ? (totalRealized / realizedCostBasis) * 100 : 0
+  const currentNetMV = stats.totalNetMV
+  const currentCost = stats.totalBuyCost
+  const unrealizedPnl = stats.totalUnrealizedPnl
+  const unrealizedPct = stats.totalBuyCost ? (stats.totalUnrealizedPnl / stats.totalBuyCost) * 100 : 0
+  const realizedPct = stats.historyBuyCost ? (stats.allTimeRealized / stats.historyBuyCost) * 100 : 0
   
-  const totalPnl = totalRealized + unrealizedPnl
+  const totalPnl = stats.totalPnl
   
-  const yearlyRealizedPct = stats.yearlyRealizedCostBasis ? (stats.yearlyRealized / stats.yearlyRealizedCostBasis) * 100 : 0
+  const yearlyRealizedPct = (stats.yearlyRealizedCostBasis) ? (stats.yearlyRealized / stats.yearlyRealizedCostBasis) * 100 : 0
+  const totalYearPnl = stats.yearlyRealized + stats.yearlyUnrealizedPnl
 
-  const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : 0
+  const yearAchieved = settings.year_goal > 0 ? (totalYearPnl / settings.year_goal) * 100 : 0
   const totalAchieved = settings.total_goal > 0 ? (totalPnl / settings.total_goal) * 100 : 0
+
 
   const pieData = useMemo(() => {
     return holdings.map(h => ({
@@ -183,13 +176,15 @@ export default function HoldingsTab({ onRefresh }: Props) {
             <StatBox label="今年已實現損益比" value={showData ? `${yearlyRealizedPct >= 0 ? '+' : ''}${yearlyRealizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={stats.yearlyRealized} />
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="已實現損益" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "••••••"} className="w-1/2 text-center" upDown={totalRealized} />
+            <StatBox label="已實現損益 (合計)" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "••••••"} className="w-1/2 text-center" upDown={totalRealized} />
             <StatBox label="已實現損益比" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
           </div>
+
           <div className="pt-6 border-t border-white/5 space-y-5">
-            <ProgressBar label="年度獲利目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
+            <ProgressBar label="年度獲利目標" icon={Target} current={totalYearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
             <ProgressBar label="總損益目標" icon={Trophy} current={totalPnl} goal={settings.total_goal} achieved={totalAchieved} showData={showData} />
           </div>
+
         </div>
       </div>
 
@@ -554,9 +549,10 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   const safePrice = Number(price) || 0
   const amount = finalShares * safePrice
   const actionToSave = isBuy ? (isDcaOpt ? 'DCA' : 'BUY') : 'SELL'
-  const fee = calcFee(amount, settings, !isBuy, actionToSave === 'DCA')
-  const tax = t.action === 'SELL' ? calcTax(amount, t.symbol, settings) : 0
+  const fee = calcFee(finalShares, safePrice, settings, !isBuy, actionToSave === 'DCA')
+  const tax = t.action === 'SELL' ? calcTax(finalShares, safePrice, t.symbol, settings) : 0
   const net = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
+
   const isValid = finalShares > 0 && safePrice > 0 && (
     date !== t.trade_date || 
     finalShares !== t.shares || 
