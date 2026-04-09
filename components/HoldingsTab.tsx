@@ -89,11 +89,12 @@ export default function HoldingsTab({ onRefresh }: Props) {
 
   const pieData = useMemo(() => {
     return holdings.map(h => ({
-      name: getStockName(h.symbol),
+      name: quotes[h.symbol]?.name_zh || getStockName(h.symbol),
       symbol: h.symbol,
       value: chartMode === 'cost' ? h.total_cost : h.net_market_value
     })).sort((a, b) => b.value - a.value)
-  }, [holdings, chartMode])
+  }, [holdings, chartMode, quotes])
+
 
   const chartTotal = useMemo(() => {
     return chartMode === 'cost' ? currentCost : currentNetMV
@@ -734,27 +735,28 @@ function ActiveLotRow({ lot, h, settings, onUpdated, onDelete }: any) {
       </div>
       
       <div className="grid grid-cols-4 gap-2">
-        <div className="flex flex-col">
-          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">持有成本</span>
-          <span className="text-[11px] font-black font-mono text-[var(--t1)]">{fmtMoney(cost)}</span>
+        <div className="flex flex-col text-center">
+          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">持有成本</span>
+          <span className="text-lg font-black font-mono text-[var(--t1)]">{fmtMoney(cost)}</span>
         </div>
-        <div className="flex flex-col">
-          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">當前市值</span>
-          <span className="text-[11px] font-black font-mono text-[var(--t1)]">{fmtMoney(mv)}</span>
+        <div className="flex flex-col text-center">
+          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">當前市值</span>
+          <span className={`text-lg font-black font-mono ${mv >= cost ? 'text-red-400' : 'text-green-400'}`}>{fmtMoney(mv)}</span>
         </div>
-        <div className="flex flex-col">
-          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">未實現損益</span>
-          <span className={`text-[11px] font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
+        <div className="flex flex-col text-center">
+          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">未實現損益</span>
+          <span className={`text-lg font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
             {isUp ? '+' : ''}{fmtMoney(pnl)}
           </span>
         </div>
-        <div className="flex flex-col text-right">
-          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">損益比 (%)</span>
-          <span className={`text-[11px] font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
+        <div className="flex flex-col text-center">
+          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">損益比 (%)</span>
+          <span className={`text-lg font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
             {isUp ? '+' : ''}{pnlPct.toFixed(2)}%
           </span>
         </div>
       </div>
+
     </div>
   )
 }
@@ -768,15 +770,16 @@ function MatchedPairRow({ m, symbol }: any) {
   return (
     <div className="card-base border-white/5 bg-black/20 overflow-hidden">
       {/* Pair Header */}
-      <div className="bg-white/5 px-4 py-2 flex justify-between items-center border-b border-white/5">
-        <span className="text-[10px] font-black text-[var(--t1)] uppercase tracking-widest">
+      <div className="bg-white/5 px-4 py-3 flex justify-between items-center border-b border-white/5">
+        <span className="text-lg font-black text-[var(--t1)] uppercase tracking-tight">
           沖銷 {m.shares.toLocaleString()} 股
         </span>
-        <div className={`flex items-center gap-2 font-mono font-black ${color}`}>
-          <span className="text-[11px]">{isUp ? '+' : ''}{fmtMoney(Math.round(profit))}</span>
-          <span className="text-[9px] opacity-70">({isUp ? '+' : ''}{profitPct.toFixed(2)}%)</span>
+        <div className={`flex items-baseline gap-2 font-mono font-black ${color}`}>
+          <span className="text-xl">{isUp ? '+' : ''}{fmtMoney(Math.round(profit))}</span>
+          <span className="text-sm opacity-70">({isUp ? '+' : ''}{profitPct.toFixed(2)}%)</span>
         </div>
       </div>
+
 
       {/* Symmetric Comparison */}
       <div className="flex divide-x divide-white/5">
