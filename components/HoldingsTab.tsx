@@ -501,17 +501,17 @@ function HoldingItem({ h, q, settings, fullHistoryStats, isExpanded, onToggle, o
           </div>
 
           {/* Realized Dashboard & Accordion */}
-          <div className="mx-4 mb-2 p-4 card-base border-white/5 bg-black/20">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex flex-col">
-                <span className="text-[9px] font-black text-[var(--t2)] opacity-50 uppercase tracking-widest mb-0.5">已沖銷損益</span>
-                <span className={`text-sm font-black font-mono ${realizedPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+          <div className="mx-4 mb-2 p-5 card-base border-accent/20 bg-black/40 shadow-2xl">
+            <div className="flex justify-between items-center mb-6">
+              <div className="w-1/2 text-center flex flex-col items-center border-r border-white/5">
+                <span className="text-[10px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1.5">已沖銷損益</span>
+                <span className={`text-2xl font-black font-mono ${realizedPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {realizedPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(realizedPnl))}
                 </span>
               </div>
-              <div className="text-right flex flex-col items-end">
-                <span className="text-[9px] font-black text-[var(--t2)] opacity-50 uppercase tracking-widest mb-0.5">已沖銷報酬率</span>
-                <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${realizedPnl >= 0 ? 'bg-red-400/10 text-red-400' : 'bg-green-400/10 text-green-400'}`}>
+              <div className="w-1/2 text-center flex flex-col items-center">
+                <span className="text-[10px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1.5">已沖銷報酬率</span>
+                <span className={`text-2xl font-black font-mono ${realizedPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
                   {realizedPnl >= 0 ? '+' : ''}{realizedPct.toFixed(2)}%
                 </span>
               </div>
@@ -519,26 +519,31 @@ function HoldingItem({ h, q, settings, fullHistoryStats, isExpanded, onToggle, o
 
             <button 
               onClick={() => setClearedExpanded(!clearedExpanded)}
-              className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/5 transition-all group border border-white/5"
+              className="w-full h-12 flex items-center justify-center gap-2 rounded-2xl bg-white/5 hover:bg-white/10 active:bg-white/5 transition-all group border border-white/10"
             >
-              <span className="text-[10px] font-black text-[var(--t2)] uppercase tracking-widest">
-                {clearedExpanded ? '收合已沖銷明細' : `檢視其餘 ${clearedTxs.length} 筆已沖銷交易`}
+              <span className="text-[10px] font-black text-[var(--t2)] uppercase tracking-widest opacity-80 group-hover:opacity-100">
+                {clearedExpanded ? '隱藏交易歷程' : `展開其餘 ${clearedTxs.reduce((acc: number, t: any) => acc + (t.matches?.length || 0), 0)} 筆配對明細`}
               </span>
               <ChevronDown size={14} className={`text-accent transition-transform duration-300 ${clearedExpanded ? 'rotate-180' : ''}`} />
             </button>
           </div>
 
           {clearedExpanded && (
-            <div className="px-2 space-y-0.5 animate-slide-up">
+            <div className="px-4 space-y-3 animate-slide-up mt-4">
               {clearedTxs.length > 0 ? (
                 clearedTxs.map((t: any) => (
-                  <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />
+                  <div key={t.id} className="space-y-3">
+                    {t.matches.map((m: any, idx: number) => (
+                      <MatchedPairRow key={`${t.id}-${idx}`} m={m} symbol={h.symbol} />
+                    ))}
+                  </div>
                 ))
               ) : (
                 <div className="px-6 py-4 text-[11px] text-[var(--t3)] italic opacity-40 text-center">查無歷史沖銷紀錄</div>
               )}
             </div>
           )}
+
         </div>
       )}
     </div>
@@ -703,34 +708,119 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
 function ActiveLotRow({ lot, h, settings, onUpdated, onDelete }: any) {
   const [isEditing, setIsEditing] = useState(false)
   const isBuy = true
-  // For ActiveLotRow, we use the original id if available.
   const t = { ...lot, symbol: h.symbol, action: 'BUY', trade_date: lot.date }
-  const fee = calcFee(lot.shares, lot.price, settings, false)
-  const net = -(Math.floor(lot.shares * lot.price) + Math.floor(fee))
+  
+  const cost = Math.floor(lot.shares * lot.price) + Math.floor(lot.fee)
+  const mv = Math.floor(lot.shares * h.current_price)
+  const pnl = mv - cost
+  const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0
+  const isUp = pnl >= 0
 
   if (isEditing) return <div className="p-2"><TxRow t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} /></div>
 
   return (
-    <div className="group relative flex justify-between items-center px-6 py-4 hover:bg-white/5 transition-all">
-      <div className="flex flex-col gap-0.5">
-        <div className="text-[10px] text-[var(--t2)] font-mono opacity-50 tracking-tight">{lot.date}</div>
-        <div className="text-[14px] font-bold text-[var(--t2)] opacity-90 flex items-center gap-1.5">
-          {(lot.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] pb-0.5 text-accent font-black tracking-tighter uppercase leading-none opacity-40">剩餘</span>
-          <span className="text-[10px] text-[var(--t2)] opacity-40 font-light ml-1">@</span> {(lot.price ?? 0).toFixed(2)}
-        </div>
-      </div>
-      <div className="flex items-center gap-5">
-        <div className="text-[14px] font-black font-mono text-green-400">
-          {fmtMoney(net)}
+    <div className="group relative flex flex-col px-6 py-4 hover:bg-white/5 transition-all border-b border-white/5 last:border-0">
+      <div className="flex justify-between items-start mb-3">
+        <div className="flex flex-col">
+          <div className="text-[10px] text-[var(--t2)] font-mono opacity-50 tracking-tight mb-0.5">{lot.date}</div>
+          <div className="text-[14px] font-bold text-[var(--t1)] flex items-center gap-1.5">
+            {lot.shares.toLocaleString()} 股 <span className="text-[10px] text-accent opacity-40 font-black">@</span> {lot.price.toFixed(2)}
+          </div>
         </div>
         <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button onClick={() => setIsEditing(true)} className="p-2 rounded-lg bg-white/10 text-white hover:text-accent transition-colors shadow-lg"><Pencil size={13} /></button>
-          <button onClick={() => onDelete(lot.id)} className="p-2 rounded-lg bg-white/10 text-white hover:text-red-400 transition-colors shadow-lg"><Trash2 size={13} /></button>
+          <button onClick={() => setIsEditing(true)} className="p-2 rounded-lg bg-white/10 text-white hover:text-accent transition-all hover:scale-110"><Pencil size={13} /></button>
+          <button onClick={() => onDelete(lot.id)} className="p-2 rounded-lg bg-white/10 text-white hover:text-red-400 transition-all hover:scale-110"><Trash2 size={13} /></button>
+        </div>
+      </div>
+      
+      <div className="grid grid-cols-4 gap-2">
+        <div className="flex flex-col">
+          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">持有成本</span>
+          <span className="text-[11px] font-black font-mono text-[var(--t1)]">{fmtMoney(cost)}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">當前市值</span>
+          <span className="text-[11px] font-black font-mono text-[var(--t1)]">{fmtMoney(mv)}</span>
+        </div>
+        <div className="flex flex-col">
+          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">未實現損益</span>
+          <span className={`text-[11px] font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
+            {isUp ? '+' : ''}{fmtMoney(pnl)}
+          </span>
+        </div>
+        <div className="flex flex-col text-right">
+          <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-0.5">損益比 (%)</span>
+          <span className={`text-[11px] font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
+            {isUp ? '+' : ''}{pnlPct.toFixed(2)}%
+          </span>
         </div>
       </div>
     </div>
   )
 }
+
+function MatchedPairRow({ m, symbol }: any) {
+  const isUp = (m.sellNet - m.buyCost) >= 0
+  const profit = m.sellNet - m.buyCost
+  const profitPct = m.buyCost > 0 ? (profit / m.buyCost) * 100 : 0
+  const color = isUp ? 'text-red-400' : 'text-green-400'
+
+  return (
+    <div className="card-base border-white/5 bg-black/20 overflow-hidden">
+      {/* Pair Header */}
+      <div className="bg-white/5 px-4 py-2 flex justify-between items-center border-b border-white/5">
+        <span className="text-[10px] font-black text-[var(--t1)] uppercase tracking-widest">
+          沖銷 {m.shares.toLocaleString()} 股
+        </span>
+        <div className={`flex items-center gap-2 font-mono font-black ${color}`}>
+          <span className="text-[11px]">{isUp ? '+' : ''}{fmtMoney(Math.round(profit))}</span>
+          <span className="text-[9px] opacity-70">({isUp ? '+' : ''}{profitPct.toFixed(2)}%)</span>
+        </div>
+      </div>
+
+      {/* Symmetric Comparison */}
+      <div className="flex divide-x divide-white/5">
+        {/* Left: Buy */}
+        <div className="w-1/2 p-4 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <div className="w-1 h-3 bg-accent/30 rounded-full" />
+            <span className="text-[9px] font-black text-[var(--t2)] opacity-40 uppercase tracking-widest">買入</span>
+          </div>
+          <div className="space-y-0.5">
+            <div className="text-[12px] font-bold text-[var(--t1)] tracking-tight">{m.date}</div>
+            <div className="text-[11px] font-black font-mono text-[var(--t2)] opacity-80">
+              <span className="text-[9px] opacity-40 mr-1">單價</span> {m.buyPrice.toFixed(2)}
+            </div>
+          </div>
+          <div className="pt-1.5 border-t border-white/5">
+                <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase block mb-0.5">成交金額 (含費)</span>
+                <span className="text-[13px] font-black font-mono text-[var(--t1)]">{fmtMoney(m.buyCost)}</span>
+          </div>
+        </div>
+
+        {/* Right: Sell */}
+        <div className="w-1/2 p-4 space-y-2 text-right">
+          <div className="flex items-center justify-end gap-1.5">
+            <span className="text-[9px] font-black text-[var(--t2)] opacity-40 uppercase tracking-widest">賣出</span>
+            <div className="w-1 h-3 bg-red-400/30 rounded-full" />
+          </div>
+          <div className="space-y-0.5">
+            <div className="text-[12px] font-bold text-[var(--t1)] tracking-tight">{m.sellDate}</div>
+            <div className="text-[11px] font-black font-mono text-[var(--t2)] opacity-80">
+
+              <span className="text-[9px] opacity-40 mr-1">單價</span> {m.sellPrice.toFixed(2)}
+            </div>
+          </div>
+          <div className="pt-1.5 border-t border-white/5">
+                <span className="text-[8px] font-black text-[var(--t2)] opacity-30 uppercase block mb-0.5">淨收入 (扣稅費)</span>
+                <span className="text-[13px] font-black font-mono text-accent">{fmtMoney(m.sellNet)}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 
 
 

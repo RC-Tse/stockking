@@ -58,7 +58,8 @@ export function PortfolioProvider({
   }, [transactions])
 
   const stats = useMemo(() => {
-    const inventory: Record<string, { shares: number; principal: number; fee: number; origShares: number; date: string; id: number }[]> = {}
+    const inventory: Record<string, { shares: number; price: number; principal: number; fee: number; origShares: number; date: string; id: number }[]> = {}
+
     const fullHistoryStats: Record<string, any> = {}
     let allTimeRealized = 0
     let totalRealizedCostBasis = 0
@@ -95,7 +96,8 @@ export function PortfolioProvider({
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.shares, tx.price, settings, false, isDca)
-        lots.push({ shares: tx.shares, principal: Math.floor(tx.amount), fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
+        lots.push({ shares: tx.shares, price: tx.price, principal: Math.floor(tx.amount), fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
+
         if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: f, net: -Math.floor(tx.amount + f) })
 
       } else if (tx.action === 'SELL') {
@@ -125,14 +127,25 @@ export function PortfolioProvider({
             matchedFee = Math.floor(lot.fee * ratio)
           }
 
+          const matchedSellNet = Math.floor((tx.amount - f - t) * (take / tx.shares))
           matchedBuyCostTotal += (matchedPrincipal + matchedFee)
           matchedBuyFeeTotal += matchedFee
-          matches.push({ date: lot.date, shares: take })
+
+          matches.push({ 
+            date: lot.date, 
+            sellDate: tx.trade_date,
+            shares: take, 
+            buyPrice: lot.price, 
+            buyCost: matchedPrincipal + matchedFee,
+            sellPrice: tx.price,
+            sellNet: matchedSellNet
+          })
 
           lot.shares -= take
           lot.principal -= matchedPrincipal
           lot.fee -= matchedFee
           sellRem -= take
+
 
           if (lot.shares <= 0) lots.shift()
         }
