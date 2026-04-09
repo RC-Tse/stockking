@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName } from '@/types'
+import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName, codeOnly } from '@/types'
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
   ResponsiveContainer, Legend
@@ -313,7 +313,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               className="w-full bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t2)] outline-none focus:border-accent transition-all appearance-none cursor-pointer shadow-lg"
             >
               {holdings.map(h => (
-                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{getStockName(h.symbol)}</option>
+                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">{getStockName(h.symbol)} ({codeOnly(h.symbol)})</option>
               ))}
             </select>
 
