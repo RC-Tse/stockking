@@ -211,10 +211,10 @@ export function PortfolioProvider({
     })
 
     // Process Active Holdings
-    const hList: Holding[] = Object.entries(inventory)
-      .map(([sym, lots]) => {
+    const hList = Object.entries(inventory)
+      .flatMap(([sym, lots]) => {
         const netShares = lots.reduce((s, l) => s + l.shares, 0)
-        if (netShares <= 0) return null
+        if (netShares <= 0) return []
         
         const totalCost = lots.reduce((s, l) => s + (l.principal + l.fee), 0)
         const q = quotes[sym]
@@ -225,7 +225,7 @@ export function PortfolioProvider({
         const net_mv = Math.floor(mv - sell_fee - sell_tax)
         const upnl = net_mv - totalCost
 
-        return {
+        return [{
           symbol: sym,
           shares: netShares,
           avg_cost: totalCost / netShares,
@@ -238,9 +238,9 @@ export function PortfolioProvider({
           unrealized_pnl: Math.round(upnl),
           pnl_pct: totalCost ? (upnl / totalCost) * 100 : 0,
           lots: lots.map(l => ({ ...l })), // Deep copy for immutability
-        }
+        }]
       })
-      .filter((h): h is Holding => h !== null)
+
 
 
     const totalBuyCost = hList.reduce((s, h) => s + h.total_cost, 0)
