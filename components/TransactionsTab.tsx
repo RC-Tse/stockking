@@ -66,8 +66,9 @@ export default function TransactionsTab({ onRefresh }: Props) {
       if (inRangeHistory.length > 0) {
         const local = { buy: 0, sell: 0, realized: 0, fee: 0, tax: 0, count: inRangeHistory.length, history: s.history }
         inRangeHistory.forEach((h: any) => {
-          local.buy += h.realizedCost; local.sell += h.net; local.fee += (h.fee || 0); local.tax += (h.tax || 0); local.realized += h.profit
+          local.buy += h.realizedCost; local.sell += h.net; local.fee += ((h.fee || 0) + (h.matchedBuyFee || 0)); local.tax += (h.tax || 0); local.realized += h.profit
         })
+
         stats_map[sym] = local
       }
     })

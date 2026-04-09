@@ -475,8 +475,9 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
 
       {isExpanded && (
         <div className="bg-black/30 border-t border-white/5 pb-2 animate-slide-up">
-          <div className="px-6 py-2.5 text-[10px] font-black text-[var(--t2)] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">歷史交易明細</div>
+          <div className="px-6 py-2.5 text-[10px] font-black text-[var(--t2)] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">已沖銷明細</div>
           <div className="px-2 space-y-0.5">
+
             {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
           </div>
         </div>

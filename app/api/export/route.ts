@@ -64,7 +64,7 @@ export async function GET(req: NextRequest) {
 
   // 1. Prepare Transaction Pair Details (FIFO) for Sheet 2
   const txPairs: any[] = []
-  const inventory: Record<string, { date: string, shares: number, price: number, fee: number }[]> = {}
+  const inventory: Record<string, { date: string, shares: number, price: number, fee: number, principal: number }[]> = {}
 
   for (const t of allTxs) {
     if (!inventory[t.symbol]) inventory[t.symbol] = []
@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     const { f, tax, net } = buildExportTx(t)
 
     if (isBuy) {
-      inventory[t.symbol].push({ date: t.trade_date, shares: t.shares, price: t.price, fee: f })
+      inventory[t.symbol].push({ date: t.trade_date, shares: t.shares, price: t.price, fee: f, principal: Math.floor(t.amount) })
     } else {
       let rem = t.shares
       while (rem > 0 && inventory[t.symbol].length > 0) {
@@ -80,10 +80,9 @@ export async function GET(req: NextRequest) {
         const take = Math.min(lot.shares, rem)
         
         const ratio = take / lot.shares
-        const matchedPrincipal = Math.floor(lot.price * lot.shares * ratio)
+        const matchedPrincipal = Math.floor(lot.principal * ratio)
         const matchedBuyFee = Math.floor(lot.fee * ratio)
         const matchedCost = matchedPrincipal + matchedBuyFee
-
         
         // Single match sell revenue
         const sellRatio = take / t.shares
@@ -114,6 +113,7 @@ export async function GET(req: NextRequest) {
         }
 
         lot.shares -= take
+        lot.principal -= matchedPrincipal
         lot.fee -= matchedBuyFee
         rem -= take
         if (lot.shares <= 0) inventory[t.symbol].shift()
@@ -121,7 +121,25 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. Prepare Inventory Summary for Sheet 1
+  // 1. Prepare Transaction History for Sheet 1
+  const historyRows = allTxs.filter(t => t.trade_date >= start_date && t.trade_date <= end_date).map(t => {
+    const { f, tax, net } = buildExportTx(t)
+    const isBuy = t.action === 'BUY' || t.action === 'DCA'
+    return {
+      '日期': t.trade_date,
+      '股票代碼': t.symbol.replace('.TW','').replace('.TWO',''),
+      '名稱': nameMap[t.symbol] || t.name_zh || getStockName(t.symbol),
+      '動作': isBuy ? (t.action === 'DCA' ? '定期定額' : '買入') : '賣出',
+      '股數': t.shares,
+      '成交價': t.price,
+      '交易金額': Math.floor(t.amount),
+      '手續費': f,
+      '交易稅': tax,
+      '淨收支': net
+    }
+  })
+
+  // 2. Prepare Inventory Summary for Sheet 2
   const activeHoldings: any[] = []
   const inactiveHoldings: any[] = []
 
@@ -129,14 +147,13 @@ export async function GET(req: NextRequest) {
   allSymbolsSet.forEach(sym => {
     const lots = inventory[sym] || []
     const heldShares = lots.reduce((s, l) => s + l.shares, 0)
-    const heldCost = lots.reduce((s, l) => s + (l.price * l.shares + l.fee), 0)
+    const heldCost = lots.reduce((s, l) => s + (l.principal + l.fee), 0)
     const cp = quotes[sym] || 0
     const mv = Math.floor(heldShares * cp)
     
     // Estimated sell fees/tax
-    const s_fee = Math.max(1, Math.floor(heldShares * cp * settings.sell_fee_rate * settings.sell_discount))
-    const taxRate = sym.replace('.TW','').replace('.TWO','').startsWith('00') ? settings.tax_etf : settings.tax_stock
-    const s_tax = Math.floor(heldShares * cp * taxRate)
+    const s_fee = calcFee(heldShares, cp, settings, true)
+    const s_tax = calcTax(heldShares, cp, sym, settings)
     const net_mv = mv - s_fee - s_tax
     const unrealized = net_mv - heldCost
 
@@ -147,7 +164,7 @@ export async function GET(req: NextRequest) {
       '持有成本': Math.floor(heldCost),
       '成交均價': heldShares > 0 ? (heldCost / heldShares).toFixed(2) : '0',
       '現價': cp.toFixed(2),
-      '股票現值': mv,
+      '股票現值(含手續費)': Math.floor(net_mv),
       '預估賣出手續費': s_fee,
       '預估賣出交易稅': s_tax,
       '未實現損益': Math.floor(unrealized),
@@ -157,21 +174,9 @@ export async function GET(req: NextRequest) {
 
     if (heldShares > 0) activeHoldings.push(row)
     else {
-        // Find total realized for closed
-        let realized = 0
-        allTxs.filter(t => t.symbol === sym && t.action === 'SELL').forEach(t => {
-            // Simplified realized for summary sheet
-        })
-        // Inactive list usually excludes currently held ones but shows the history if needed.
-        // The user says Sheet 1: --- 手上持有 --- and --- 已結清 ---
-        // For inactive, we only show those with 0 shares.
         inactiveHoldings.push({
              ...row,
-             '股數': 0,
-             '持有成本': 0,
-             '股票現值': 0,
-             '未實現損益': 0,
-             '預估報酬率': '-'
+             '股數': 0, '持有成本': 0, '股票現值(含手續費)': 0, '未實現損益': 0, '預估報酬率': '-'
         })
     }
   })
@@ -185,15 +190,18 @@ export async function GET(req: NextRequest) {
   ]
 
   const wb = XLSX.utils.book_new()
+  
+  const ws0 = XLSX.utils.json_to_sheet(historyRows)
+  XLSX.utils.book_append_sheet(wb, ws0, '交易明細')
+
   const ws1 = XLSX.utils.json_to_sheet(summaryRows)
   XLSX.utils.book_append_sheet(wb, ws1, '庫存彙總')
   
   const ws2 = XLSX.utils.json_to_sheet(txPairs)
-  XLSX.utils.book_append_sheet(wb, ws2, '交易明細')
+  XLSX.utils.book_append_sheet(wb, ws2, '已沖銷明細')
 
-  const today = new Date();
-  const dateString = today.toISOString().slice(0, 10).replace(/-/g, '');
-  const filename = customFilename || `交易紀錄_${dateString}.xlsx`;
+  const dateTag = new Date().toISOString().split('T')[0].replace(/-/g, '')
+  const filename = customFilename || `交易紀錄_${dateTag}.xlsx`
 
   const buf = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' })
   return new NextResponse(buf, {

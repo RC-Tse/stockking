@@ -95,8 +95,9 @@ export function PortfolioProvider({
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.shares, tx.price, settings, false, isDca)
-        lots.push({ shares: tx.shares, principal: tx.amount, fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
+        lots.push({ shares: tx.shares, principal: Math.floor(tx.amount), fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
         if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: f, net: -Math.floor(tx.amount + f) })
+
       } else if (tx.action === 'SELL') {
         const f = calcFee(tx.shares, tx.price, settings, true)
         const t = calcTax(tx.shares, tx.price, tx.symbol, settings)
@@ -155,8 +156,9 @@ export function PortfolioProvider({
           stock.tax += t
           stock.realized += profit
           stock.count++
-          stock.history.push({ ...tx, type: 'SELL', matches, profit, net: sellProceeds, realizedCost, fee: f, tax: t })
+          stock.history.push({ ...tx, type: 'SELL', matches, profit, net: sellProceeds, realizedCost, fee: f, tax: t, matchedBuyFee: matchedBuyFeeTotal })
         }
+
       }
     }
 
@@ -179,8 +181,9 @@ export function PortfolioProvider({
         const lots = tempInv[t.symbol]
         if (t.action === 'BUY' || t.action === 'DCA') {
           const f = calcFee(t.shares, t.price, settings, false, t.action === 'DCA' || t.trade_type === 'DCA')
-          lots.push({ shares: t.shares, principal: t.amount, fee: f })
+          lots.push({ shares: t.shares, principal: Math.floor(t.amount), fee: f })
         } else if (t.action === 'SELL') {
+
           let rem = t.shares
           while (rem > 0 && lots.length > 0) {
             const take = Math.min(lots[0].shares, rem)
