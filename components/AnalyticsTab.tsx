@@ -375,8 +375,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                   onMouseMove={handleMouseMove}
                   onMouseLeave={() => setActivePoint(null)}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-                  <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t2)', opacity: 0.6}} axisLine={false} interval={0} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={true} />
+                  <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t2)', opacity: 0.6}} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} interval={0} />
                   <YAxis domain={[yAxisMetrics.min, yAxisMetrics.max]} orientation="right" tick={false} axisLine={false} tickLine={false} hide />
                   <Tooltip 
                     content={<StockTooltip />} 
