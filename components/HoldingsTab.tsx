@@ -72,14 +72,14 @@ export default function HoldingsTab({ onRefresh }: Props) {
     // Simplified yearPnl for All-Time sync: in a more complex setup we could filter the history
     // For now we keep the All-Time consistency as priority
     const unrealizedPnlTotal = holdings.reduce((s, h) => s + h.unrealized_pnl, 0)
-    const yearPnl = totalRealized + unrealizedPnlTotal 
+    const yearlyProgressValue = stats.yearlyRealized + unrealizedPnlTotal
 
     return { 
       closedHoldings: ch, 
-      yearPnl, 
+      yearPnl: yearlyProgressValue, 
       realizedCostBasis: stats.totalRealizedCostBasis
     }
-  }, [fullHistoryStats, holdings, totalRealized])
+  }, [fullHistoryStats, holdings, totalRealized, stats.yearlyRealized])
 
   const currentNetMV = holdings.reduce((s, h) => s + h.net_market_value, 0)
   const currentCost = holdings.reduce((s, h) => s + h.total_cost, 0)
