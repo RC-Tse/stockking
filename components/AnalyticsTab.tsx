@@ -139,7 +139,10 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       if (diffMonths >= 11) effectiveRange = '1Y'
     }
 
-    if (effectiveRange === '1Y' || effectiveRange === 'ALL') {
+    if (effectiveRange === 'ALL') {
+      return `${d.getMonth() + 1}`
+    }
+    if (effectiveRange === '1Y') {
       return `${d.getMonth() + 1}月`
     }
     return `${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
