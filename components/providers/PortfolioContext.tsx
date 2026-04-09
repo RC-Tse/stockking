@@ -6,6 +6,9 @@ import { Transaction, UserSettings, Holding, Quote, calcFee, calcTax } from '@/t
 interface PortfolioStats {
   holdings: Holding[]
   allTimeRealized: number
+  totalRealizedCostBasis: number
+  yearlyRealized: number
+  yearlyRealizedCostBasis: number
   totalBuyCost: number
   totalNetMV: number
   totalUnrealizedPnl: number
@@ -41,7 +44,11 @@ export function PortfolioProvider({
     const inventory: Record<string, { shares: number; principal: number; fee: number; origShares: number; date: string; id: number }[]> = {}
     const fullHistoryStats: Record<string, any> = {}
     let allTimeRealized = 0
+    let totalRealizedCostBasis = 0
+    let yearlyRealized = 0
+    let yearlyRealizedCostBasis = 0
     let totalBuyTotal = 0 // Used for ROI denominator
+    const currentYear = new Date().getFullYear().toString()
 
     const sorted = [...transactions].sort((a, b) => {
       if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
@@ -102,6 +109,12 @@ export function PortfolioProvider({
         const realizedCost = Math.round(matchedBuyCostTotal)
         const profit = sellProceeds - realizedCost
         allTimeRealized += profit
+        totalRealizedCostBasis += realizedCost
+
+        if (tx.trade_date.startsWith(currentYear)) {
+          yearlyRealized += profit
+          yearlyRealizedCostBasis += realizedCost
+        }
 
         stock.buy += realizedCost
         stock.sell += sellProceeds
@@ -153,6 +166,9 @@ export function PortfolioProvider({
     return {
       holdings: hList,
       allTimeRealized,
+      totalRealizedCostBasis,
+      yearlyRealized,
+      yearlyRealizedCostBasis,
       totalBuyCost,
       totalNetMV,
       totalUnrealizedPnl,

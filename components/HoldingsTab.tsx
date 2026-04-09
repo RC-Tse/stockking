@@ -77,7 +77,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
     return { 
       closedHoldings: ch, 
       yearPnl, 
-      realizedCostBasis: Object.values(fullHistoryStats).reduce((s, a:any) => s + a.buy, 0)
+      realizedCostBasis: stats.totalRealizedCostBasis
     }
   }, [fullHistoryStats, holdings, totalRealized])
 
@@ -88,6 +88,9 @@ export default function HoldingsTab({ onRefresh }: Props) {
   const realizedPct = realizedCostBasis ? (totalRealized / realizedCostBasis) * 100 : 0
   
   const totalPnl = totalRealized + unrealizedPnl
+  
+  const yearlyRealizedPct = stats.yearlyRealizedCostBasis ? (stats.yearlyRealized / stats.yearlyRealizedCostBasis) * 100 : 0
+
   const yearAchieved = settings.year_goal > 0 ? (yearPnl / settings.year_goal) * 100 : 0
   const totalAchieved = settings.total_goal > 0 ? (totalPnl / settings.total_goal) * 100 : 0
 
@@ -173,11 +176,15 @@ export default function HoldingsTab({ onRefresh }: Props) {
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
             <StatBox label="未實現損益" value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}` : "••••••"} className="w-1/2 text-center" upDown={unrealizedPnl} />
-            <StatBox label="未實現投報" value={showData ? `${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
+            <StatBox label="未實現損益比" value={showData ? `${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
+          </div>
+          <div className="flex items-center border-t border-white/5 pt-6">
+            <StatBox label="今年已實現損益" value={showData ? `${stats.yearlyRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(stats.yearlyRealized))}` : "••••••"} className="w-1/2 text-center" upDown={stats.yearlyRealized} />
+            <StatBox label="今年已實現損益比" value={showData ? `${yearlyRealizedPct >= 0 ? '+' : ''}${yearlyRealizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={stats.yearlyRealized} />
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
             <StatBox label="已實現損益" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "••••••"} className="w-1/2 text-center" upDown={totalRealized} />
-            <StatBox label="已實現投報" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
+            <StatBox label="已實現損益比" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
           </div>
           <div className="pt-6 border-t border-white/5 space-y-5">
             <ProgressBar label="年度獲利目標" icon={Target} current={yearPnl} goal={settings.year_goal} achieved={yearAchieved} showData={showData} />
