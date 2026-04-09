@@ -332,8 +332,9 @@ export default function HoldingsTab({ onRefresh }: Props) {
           ))}
         </div>
         {sortedHoldings.map(h => (
-          <HoldingItem key={h.symbol} h={h} q={quotes[h.symbol]} settings={settings} txs={transactions.filter(t => t.symbol === h.symbol)} isExpanded={expanded === h.symbol} onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)} onUpdated={onRefresh} onDelete={(id:number)=>setDeletingId(id)} />
+          <HoldingItem key={h.symbol} h={h} q={quotes[h.symbol]} settings={settings} fullHistoryStats={fullHistoryStats} isExpanded={expanded === h.symbol} onToggle={() => setExpanded(expanded === h.symbol ? null : h.symbol)} onUpdated={onRefresh} onDelete={(id:number)=>setDeletingId(id)} />
         ))}
+
 
         {closedHoldings.length > 0 && (
           <div className="pt-4">
@@ -427,10 +428,22 @@ function ProgressBar({ label, icon: Icon, goal, current, achieved, showData }: a
   )
 }
 
-function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onDelete }: any) {
+function HoldingItem({ h, q, settings, fullHistoryStats, isExpanded, onToggle, onUpdated, onDelete }: any) {
   const isUp = h.unrealized_pnl >= 0
   const color = isUp ? 'text-red-400' : 'text-green-400'
   const nameZh = q?.name_zh || h.symbol
+  const [clearedExpanded, setClearedExpanded] = useState(false)
+
+  const stockStats = fullHistoryStats[h.symbol] || {}
+  
+  const activeLots = h.lots || []
+  const clearedTxs = useMemo(() => {
+    return (stockStats.history || []).filter((t: any) => t.type === 'SELL').sort((a: any, b: any) => b.trade_date.localeCompare(a.trade_date))
+  }, [stockStats.history])
+
+  const realizedPnl = stockStats.realized || 0
+  const realizedBuyCost = stockStats.buy || 0
+  const realizedPct = realizedBuyCost > 0 ? (realizedPnl / realizedBuyCost) * 100 : 0
 
   return (
     <div className={`transition-all duration-300 border-[0.5px] ${isExpanded ? 'bg-[var(--bg-card)] border-[var(--accent)] ring-1 ring-[var(--accent-bright)]/30' : 'bg-[var(--bg-card)] border-[var(--border-bright)]'} rounded-2xl shadow-xl overflow-hidden`}>
@@ -474,17 +487,64 @@ function HoldingItem({ h, q, settings, txs, isExpanded, onToggle, onUpdated, onD
       </div>
 
       {isExpanded && (
-        <div className="bg-black/30 border-t border-white/5 pb-2 animate-slide-up">
-          <div className="px-6 py-2.5 text-[10px] font-black text-[var(--t2)] uppercase tracking-[0.2em] border-b border-white/5 opacity-60 mb-2">已沖銷明細</div>
-          <div className="px-2 space-y-0.5">
-
-            {txs.map((t: any) => <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />)}
+        <div className="bg-black/30 border-t border-white/5 animate-slide-up pb-4">
+          {/* Section A: Active Holdings */}
+          <div className="px-6 py-3 text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-[0.2em] border-b border-white/5 mb-2">現時庫存 (Active)</div>
+          <div className="px-2 space-y-0.5 mb-6">
+            {activeLots.length > 0 ? (
+              activeLots.map((lot: any, idx: number) => (
+                <ActiveLotRow key={`${lot.id}-${idx}`} lot={lot} onUpdated={onUpdated} onDelete={onDelete} h={h} settings={settings} />
+              ))
+            ) : (
+              <div className="px-6 py-4 text-[11px] text-[var(--t3)] italic opacity-40">查無庫存資料</div>
+            )}
           </div>
+
+          {/* Realized Dashboard & Accordion */}
+          <div className="mx-4 mb-2 p-4 card-base border-white/5 bg-black/20">
+            <div className="flex justify-between items-center mb-4">
+              <div className="flex flex-col">
+                <span className="text-[9px] font-black text-[var(--t2)] opacity-50 uppercase tracking-widest mb-0.5">已沖銷損益</span>
+                <span className={`text-sm font-black font-mono ${realizedPnl >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                  {realizedPnl >= 0 ? '+' : ''}{fmtMoney(Math.round(realizedPnl))}
+                </span>
+              </div>
+              <div className="text-right flex flex-col items-end">
+                <span className="text-[9px] font-black text-[var(--t2)] opacity-50 uppercase tracking-widest mb-0.5">已沖銷報酬率</span>
+                <span className={`text-[11px] px-2 py-0.5 rounded-full font-black ${realizedPnl >= 0 ? 'bg-red-400/10 text-red-400' : 'bg-green-400/10 text-green-400'}`}>
+                  {realizedPnl >= 0 ? '+' : ''}{realizedPct.toFixed(2)}%
+                </span>
+              </div>
+            </div>
+
+            <button 
+              onClick={() => setClearedExpanded(!clearedExpanded)}
+              className="w-full h-10 flex items-center justify-center gap-2 rounded-xl bg-white/5 hover:bg-white/10 active:bg-white/5 transition-all group border border-white/5"
+            >
+              <span className="text-[10px] font-black text-[var(--t2)] uppercase tracking-widest">
+                {clearedExpanded ? '收合已沖銷明細' : `檢視其餘 ${clearedTxs.length} 筆已沖銷交易`}
+              </span>
+              <ChevronDown size={14} className={`text-accent transition-transform duration-300 ${clearedExpanded ? 'rotate-180' : ''}`} />
+            </button>
+          </div>
+
+          {clearedExpanded && (
+            <div className="px-2 space-y-0.5 animate-slide-up">
+              {clearedTxs.length > 0 ? (
+                clearedTxs.map((t: any) => (
+                  <TxRow key={t.id} t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} />
+                ))
+              ) : (
+                <div className="px-6 py-4 text-[11px] text-[var(--t3)] italic opacity-40 text-center">查無歷史沖銷紀錄</div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
   )
 }
+
 
 function ClosedHoldingItem({ c, expanded, onToggle, transactions, settings, onRefresh, onDelete }: any) {
   const [name, setName] = useState(getStockName(c.symbol))
@@ -601,26 +661,77 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
     </div>
   )
   return (
+    <div className="group relative flex flex-col px-6 py-4 hover:bg-white/5 transition-all">
+      <div className="flex justify-between items-center w-full">
+        <div className="flex flex-col gap-0.5">
+          <div className="text-[10px] text-[var(--t2)] font-mono opacity-50 tracking-tight">{t.trade_date}</div>
+          <div className="text-[14px] font-bold text-[var(--t2)] opacity-90 flex items-center gap-1.5">
+            {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] text-[var(--t2)] opacity-40 font-light">@</span> {(t.price ?? 0).toFixed(2)}
+            {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-[8px] text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black tracking-tighter uppercase leading-none ml-1">DCA</span>}
+          </div>
+        </div>
+        <div className="flex items-center gap-5">
+          <div className={`text-[14px] font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+            {net >= 0 ? '+' : ''}{fmtMoney(net)}
+          </div>
+          <div className="flex gap-2">
+            <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-accent transition-colors shadow-lg"><Pencil size={13} /></button>
+            <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-red-400 transition-colors shadow-lg"><Trash2 size={13} /></button>
+          </div>
+        </div>
+      </div>
+      
+      {/* FIFO Matching Detail for SELL transactions */}
+      {t.type === 'SELL' && t.matches && t.matches.length > 0 && (
+        <div className="mt-2 pl-4 border-l-2 border-white/5 space-y-1">
+          {t.matches.map((m: any, idx: number) => (
+            <div key={idx} className="text-[10px] text-[var(--t3)] italic opacity-40 flex justify-between items-center">
+              <span>沖銷 {m.date} 買入</span>
+              <span>{m.shares.toLocaleString()} 股</span>
+            </div>
+          ))}
+          <div className="pt-1 text-[9px] font-black text-accent/50 uppercase tracking-widest flex justify-between">
+            <span>實現獲利</span>
+            <span>{fmtMoney(Math.round(t.profit))}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ActiveLotRow({ lot, h, settings, onUpdated, onDelete }: any) {
+  const [isEditing, setIsEditing] = useState(false)
+  const isBuy = true
+  // For ActiveLotRow, we use the original id if available.
+  const t = { ...lot, symbol: h.symbol, action: 'BUY', trade_date: lot.date }
+  const fee = calcFee(lot.shares, lot.price, settings, false)
+  const net = -(Math.floor(lot.shares * lot.price) + Math.floor(fee))
+
+  if (isEditing) return <div className="p-2"><TxRow t={t} settings={settings} onUpdated={onUpdated} onDelete={onDelete} /></div>
+
+  return (
     <div className="group relative flex justify-between items-center px-6 py-4 hover:bg-white/5 transition-all">
       <div className="flex flex-col gap-0.5">
-        <div className="text-[10px] text-[var(--t2)] font-mono opacity-50 tracking-tight">{t.trade_date}</div>
+        <div className="text-[10px] text-[var(--t2)] font-mono opacity-50 tracking-tight">{lot.date}</div>
         <div className="text-[14px] font-bold text-[var(--t2)] opacity-90 flex items-center gap-1.5">
-          {(t.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] text-[var(--t2)] opacity-40 font-light">@</span> {(t.price ?? 0).toFixed(2)}
-          {(t.action === 'DCA' || t.trade_type === 'DCA') && <span className="text-[8px] text-yellow-500/80 border border-yellow-500/30 px-1.5 py-0.5 rounded font-black tracking-tighter uppercase leading-none ml-1">DCA</span>}
+          {(lot.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] pb-0.5 text-accent font-black tracking-tighter uppercase leading-none opacity-40">剩餘</span>
+          <span className="text-[10px] text-[var(--t2)] opacity-40 font-light ml-1">@</span> {(lot.price ?? 0).toFixed(2)}
         </div>
       </div>
       <div className="flex items-center gap-5">
-        <div className={`text-[14px] font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-          {net >= 0 ? '+' : ''}{fmtMoney(net)}
+        <div className="text-[14px] font-black font-mono text-green-400">
+          {fmtMoney(net)}
         </div>
-        <div className="flex gap-2">
-          <button onClick={(e) => { e.stopPropagation(); setIsEditing(true); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-accent transition-colors shadow-lg"><Pencil size={13} /></button>
-          <button onClick={(e) => { e.stopPropagation(); onDelete(t.id); }} className="p-2 rounded-lg bg-white/10 text-white hover:text-red-400 transition-colors shadow-lg"><Trash2 size={13} /></button>
+        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => setIsEditing(true)} className="p-2 rounded-lg bg-white/10 text-white hover:text-accent transition-colors shadow-lg"><Pencil size={13} /></button>
+          <button onClick={() => onDelete(lot.id)} className="p-2 rounded-lg bg-white/10 text-white hover:text-red-400 transition-colors shadow-lg"><Trash2 size={13} /></button>
         </div>
       </div>
     </div>
   )
 }
+
 
 
 function Label({ children }: { children: React.ReactNode }) { return <label className="text-[10px] font-black opacity-30 uppercase tracking-widest ml-1 mb-1 block">{children}</label> }

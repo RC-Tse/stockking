@@ -237,9 +237,11 @@ export function PortfolioProvider({
           sell_tax,
           unrealized_pnl: Math.round(upnl),
           pnl_pct: totalCost ? (upnl / totalCost) * 100 : 0,
+          lots: lots.map(l => ({ ...l })), // Deep copy for immutability
         }
       })
       .filter((h): h is Holding => h !== null)
+
 
     const totalBuyCost = hList.reduce((s, h) => s + h.total_cost, 0)
     const totalNetMV = hList.reduce((s, h) => s + h.net_market_value, 0)

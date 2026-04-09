@@ -48,7 +48,9 @@ export interface Holding {
   sell_tax: number            // estimated sell securities transaction tax
   unrealized_pnl: number
   pnl_pct: number
+  lots?: any[]
 }
+
 
 export interface Quote {
   symbol: string
