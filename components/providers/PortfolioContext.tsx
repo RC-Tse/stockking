@@ -246,7 +246,8 @@ export function PortfolioProvider({
     const totalBuyCost = hList.reduce((s, h) => s + h.total_cost, 0)
     const totalNetMV = hList.reduce((s, h) => s + h.net_market_value, 0)
     const totalUnrealizedPnl = hList.reduce((s, h) => s + h.unrealized_pnl, 0)
-    const yearlyUnrealizedPnl = totalUnrealizedPnl - yearEndUnrealizedSnapshot
+    const yearlyUnrealizedPnl = totalUnrealizedPnl
+
 
     // 總體損益：總未實現損益 + 總已實現損益 (若設定了總目標起始日，則過濾已實現部分)
     let filteredAllTimeRealized = 0
