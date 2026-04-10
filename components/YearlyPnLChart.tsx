@@ -95,7 +95,17 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     let cumulativeRealizedThisYear = 0
     const lastPriceMap: Record<string, number> = {}
     const stockHistoryPointers: Record<string, number> = {}
-    relevantSymbols.forEach(s => stockHistoryPointers[s] = 0)
+    
+    // Seed price map with first available price to fix 1/1 asset loss
+    relevantSymbols.forEach(s => {
+      stockHistoryPointers[s] = 0
+      const hist = historyData[s] || []
+      if (hist.length > 0) {
+        lastPriceMap[s] = hist[0].price || 0
+      } else {
+        lastPriceMap[s] = 0
+      }
+    })
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dStr = d.toISOString().split('T')[0]
@@ -173,7 +183,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       })
     }
 
-    // Phase 3: Intersection Point Injection for Seamless Rendering
+    // Phase 3: Intersection Point Injection & Differential Range Calculation
     const finalData: any[] = []
     for (let i = 0; i < rawDays.length; i++) {
         const curr = rawDays[i]
@@ -185,8 +195,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 ...d,
                 actualAbove: isAbv ? d.actual : null,
                 actualBelow: !isAbv ? d.actual : null,
-                rangeAbove: isAbv && d.actual !== null && d.actual > 0 ? [0, d.actual] : null,
-                rangeBelow: !isAbv && d.actual !== null && d.actual > 0 ? [0, d.actual] : null
+                // Differential Area Fill (strictly between lines)
+                rangeAbove: isAbv && d.actual !== null ? [d.ideal, d.actual] : null,
+                rangeBelow: !isAbv && d.actual !== null ? [d.actual, d.ideal] : null
             }
         }
         
@@ -204,17 +215,17 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 const denom = (next.actual - curr.actual) - (next.ideal - curr.ideal)
                 if (Math.abs(denom) > 0.0001) {
                     const t = (curr.ideal - curr.actual) / denom
-                    const intersectActual = curr.actual + t * (next.actual - curr.actual)
+                    const intersectVal = curr.actual + t * (next.actual - curr.actual)
                     
                     // Synthetic point (shared logic)
                     const synthetic = {
                         date: curr.date, // Same day visual overlap
-                        actual: intersectActual,
-                        ideal: intersectActual,
-                        actualAbove: intersectActual,
-                        actualBelow: intersectActual,
-                        rangeAbove: intersectActual > 0 ? [0, intersectActual] : null,
-                        rangeBelow: intersectActual > 0 ? [0, intersectActual] : null,
+                        actual: intersectVal,
+                        ideal: intersectVal,
+                        actualAbove: intersectVal,
+                        actualBelow: intersectVal,
+                        rangeAbove: [intersectVal, intersectVal],
+                        rangeBelow: [intersectVal, intersectVal],
                         isIntersection: true
                     }
                     finalData.push(synthetic)
@@ -245,22 +256,18 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
   const yDomain = (() => {
     const goal = settings?.year_goal || 0
-    const vals = chartData.filter(d => d.actual !== null).flatMap(d => [d.actual])
-    const idealVals = chartData.map(d => d.ideal)
+    const vals = chartData.filter(d => d.actual !== null).flatMap(d => [d.actual, d.ideal])
     
-    // Y-Axis Minimum rounding logic
     let minVal = Math.min(0, ...vals)
     if (minVal < 0) {
       const absMin = Math.abs(minVal)
       const digits = Math.floor(Math.log10(absMin))
       const base = Math.pow(10, digits)
-      minVal = -Math.ceil(absMin / base) * base
+      minVal = -Math.ceil(absMin / (base/2)) * (base/2)
     }
 
-    // Y-Axis Maximum: Always at least the Goal
     const actualMax = Math.max(0, ...vals)
-    const idealMax = Math.max(0, ...idealVals)
-    const maxVal = Math.max(goal, actualMax, idealMax)
+    const maxVal = Math.max(goal, actualMax)
 
     const span = maxVal - minVal
     return [minVal, maxVal + (span * 0.05)]
@@ -270,12 +277,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     <div className="space-y-4 animate-slide-up w-full">
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
-        {/* Goal Badge - Top Right */}
-        <div className="absolute top-6 right-8 border border-[#fbbf24]/40 bg-[#fbbf24]/10 backdrop-blur-md px-4 py-2 rounded-2xl z-20 flex flex-col items-end shadow-lg">
-          <span className="text-[10px] font-black text-[#fbbf24] opacity-70 uppercase tracking-widest">{chartYear} 年度獲益目標</span>
-          <span className="text-sm font-black text-[#fbbf24] font-mono">{fmtMoney(Math.round(settings.year_goal))}</span>
-        </div>
-
         {/* Custom Legend - Floating */}
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
           <div className="flex items-center gap-2">
