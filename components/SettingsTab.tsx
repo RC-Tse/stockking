@@ -37,6 +37,8 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
   const [saving, setSaving] = useState(false)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
   const [showGoalTypeInfo, setShowGoalTypeInfo] = useState(false)
+  const [editingYear, setEditingYear] = useState(new Date().getFullYear().toString())
+  const [showHistory, setShowHistory] = useState(false)
 
   // Sync with parent settings when they update (e.g. after localStorage load)
   useEffect(() => { setLocalSettings(settings) }, [settings])
