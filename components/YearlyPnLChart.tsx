@@ -61,7 +61,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       .filter(t => t?.trade_date)
       .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
     
-    let inventory: Record<string, { shares: number, cost: number }[]> = {}
+    let inventory: Record<string, any[]> = {}
     let txIdx = 0
     
     // Phase 1: Pre-Year Inventory
@@ -69,8 +69,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       const t = sortedTxs[txIdx]
       if (!inventory[t.symbol]) inventory[t.symbol] = []
       if (t.action !== 'SELL') {
-        const f = calcFee(t.shares, t.price, settings, false, t.action === 'DCA' || t.trade_type === 'DCA')
-        inventory[t.symbol].push({ shares: t.shares, cost: t.amount + f })
+        const p = Math.round(t.amount)
+        const rf = calcRawFee(t.shares, t.price, settings, false, t.action === 'DCA' || t.trade_type === 'DCA')
+        const total = Math.round(p + rf)
+        inventory[t.symbol].push({ shares: t.shares, price: t.price, principal: p, rawFee: rf, cost: total })
       } else {
         let rem = t.shares
         while (rem > 0 && inventory[t.symbol].length > 0) {
@@ -80,7 +82,13 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           const lotCost = lot.cost
           const lotShares = lot.shares
           if (lotShares > 0) {
-            lot.cost -= (take / lotShares) * lotCost
+            const ratio = take / lotShares
+            const matchedPrincipal = (lot.principal || lot.cost) * ratio
+            const matchedRawFee = (lot.rawFee || 0) * ratio
+            
+            lot.principal = (lot.principal || lot.cost) - matchedPrincipal
+            lot.rawFee = (lot.rawFee || 0) - matchedRawFee
+            lot.cost = Math.round(lot.principal + lot.rawFee)
             lot.shares -= take
           }
           rem -= take
