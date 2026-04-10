@@ -91,7 +91,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     }
 
     // Phase 2: Annual Loop
-    const days: any[] = []
+    const rawDays: any[] = []
     let cumulativeRealizedThisYear = 0
     const lastPriceMap: Record<string, number> = {}
     const stockHistoryPointers: Record<string, number> = {}
@@ -158,27 +158,71 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         }
       })
 
-      const dayIdx = days.length
+      const dayIdx = rawDays.length
       const idealPnL = (dayIdx / 365) * (settings?.year_goal || 0)
       const actualPnL = isFuture ? null : (cumulativeRealizedThisYear + currentUnrealizedTotal)
       
       const isAbove = actualPnL !== null && actualPnL >= idealPnL
       
-      days.push({
+      rawDays.push({
         date: dStr,
         actual: actualPnL,
         ideal: idealPnL,
-        // For Segmented Lines:
-        actualAbove: isAbove ? actualPnL : null,
-        actualBelow: !isAbove ? actualPnL : null,
-        // For Fill to Zero (Only applied when PnL > 0 per user requirement)
-        rangeAbove: isAbove && actualPnL !== null && actualPnL > 0 ? [0, actualPnL] : null,
-        rangeBelow: !isAbove && actualPnL !== null && actualPnL > 0 ? [0, actualPnL] : null,
         isFuture,
         isMonthStart: d.getDate() === 1,
       })
     }
-    return days
+
+    // Phase 3: Intersection Point Injection for Seamless Rendering
+    const finalData: any[] = []
+    for (let i = 0; i < rawDays.length; i++) {
+        const curr = rawDays[i]
+        
+        // Compute derived fields for this point
+        const augment = (d: any) => {
+            const isAbv = d.actual !== null && d.actual >= d.ideal
+            return {
+                ...d,
+                actualAbove: isAbv ? d.actual : null,
+                actualBelow: !isAbv ? d.actual : null,
+                rangeAbove: isAbv && d.actual !== null && d.actual > 0 ? [0, d.actual] : null,
+                rangeBelow: !isAbv && d.actual !== null && d.actual > 0 ? [0, d.actual] : null
+            }
+        }
+        
+        finalData.push(augment(curr))
+
+        // Check for crossing between current and next
+        const next = rawDays[i+1]
+        if (next && curr.actual !== null && next.actual !== null && !curr.isFuture && !next.isFuture) {
+            const currAbv = curr.actual >= curr.ideal
+            const nextAbv = next.actual >= next.ideal
+            
+            if (currAbv !== nextAbv) {
+                // Crossing detected! Inject shared point.
+                // Linear interpolation to find precise crossing day offset 't' (0 to 1)
+                const denom = (next.actual - curr.actual) - (next.ideal - curr.ideal)
+                if (Math.abs(denom) > 0.0001) {
+                    const t = (curr.ideal - curr.actual) / denom
+                    const intersectActual = curr.actual + t * (next.actual - curr.actual)
+                    
+                    // Synthetic point (shared logic)
+                    const synthetic = {
+                        date: curr.date, // Same day visual overlap
+                        actual: intersectActual,
+                        ideal: intersectActual,
+                        actualAbove: intersectActual,
+                        actualBelow: intersectActual,
+                        rangeAbove: intersectActual > 0 ? [0, intersectActual] : null,
+                        rangeBelow: intersectActual > 0 ? [0, intersectActual] : null,
+                        isIntersection: true
+                    }
+                    finalData.push(synthetic)
+                }
+            }
+        }
+    }
+    return finalData
   }, [transactions, historyData, loading, settings, chartYear, todayStr, relevantSymbols, yearStartStr])
 
   const ticks = useMemo(() => {
@@ -200,26 +244,38 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   )
 
   const yDomain = (() => {
-    const vals = chartData.filter(d => !d.isFuture).flatMap(d => [d.actual || 0])
+    const goal = settings?.year_goal || 0
+    const vals = chartData.filter(d => d.actual !== null).flatMap(d => [d.actual])
     const idealVals = chartData.map(d => d.ideal)
-    let min = Math.min(0, ...vals)
-    const max = Math.max(settings?.year_goal || 0, ...vals, ...idealVals)
     
-    if (min < 0) {
-      const absMin = Math.abs(min)
+    // Y-Axis Minimum rounding logic
+    let minVal = Math.min(0, ...vals)
+    if (minVal < 0) {
+      const absMin = Math.abs(minVal)
       const digits = Math.floor(Math.log10(absMin))
       const base = Math.pow(10, digits)
-      min = -Math.ceil(absMin / base) * base
+      minVal = -Math.ceil(absMin / base) * base
     }
 
-    const pad = (max - min) * 0.05
-    return [min, max + pad]
+    // Y-Axis Maximum: Always at least the Goal
+    const actualMax = Math.max(0, ...vals)
+    const idealMax = Math.max(0, ...idealVals)
+    const maxVal = Math.max(goal, actualMax, idealMax)
+
+    const span = maxVal - minVal
+    return [minVal, maxVal + (span * 0.05)]
   })()
 
   return (
     <div className="space-y-4 animate-slide-up w-full">
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
+        {/* Goal Badge - Top Right */}
+        <div className="absolute top-6 right-8 border border-[#fbbf24]/40 bg-[#fbbf24]/10 backdrop-blur-md px-4 py-2 rounded-2xl z-20 flex flex-col items-end shadow-lg">
+          <span className="text-[10px] font-black text-[#fbbf24] opacity-70 uppercase tracking-widest">{chartYear} 年度獲益目標</span>
+          <span className="text-sm font-black text-[#fbbf24] font-mono">{fmtMoney(Math.round(settings.year_goal))}</span>
+        </div>
+
         {/* Custom Legend - Floating */}
         <div className="absolute top-8 left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
           <div className="flex items-center gap-2">
@@ -237,14 +293,14 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 60, right: 10, left: 0, bottom: 5 }}>
+            <ComposedChart data={chartData} margin={{ top: 70, right: 10, left: 10, bottom: 5 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
+                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.6}/>
                   <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="areaGreen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.3}/>
+                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.6}/>
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
                 </linearGradient>
               </defs>
@@ -263,7 +319,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
-                padding={{ left: 5, right: 5 }}
+                padding={{ left: 20, right: 20 }}
                 interval={0}
               />
               <YAxis 
