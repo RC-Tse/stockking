@@ -9,6 +9,7 @@ import {
 import { TrendingUp, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker from './DatePicker'
 import { usePortfolio } from './providers/PortfolioContext'
+import YearlyPnLChart from './YearlyPnLChart'
 
 type StockRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
 
@@ -17,7 +18,7 @@ interface Props {
 }
 
 export default function AnalyticsTab({ onRefresh }: Props) {
-  const { stats, quotes } = usePortfolio()
+  const { stats, quotes, settings } = usePortfolio()
   const { holdings } = stats
   
   // Flatten transactions from allHistoryStats for local use
@@ -328,6 +329,11 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   return (
     <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
+      {/* ── 0. 年度進度圖 ── */}
+      <section>
+        <YearlyPnLChart transactions={transactions} settings={settings} />
+      </section>
+
       {/* ── 1. 各股分析 ── */}
       <section className="space-y-4">
         <div className="flex flex-col space-y-3 px-1">
