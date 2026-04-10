@@ -11,7 +11,9 @@ export async function GET(req: NextRequest) {
   let url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d`
   
   if (year) {
-    const start = new Date(`${year}-01-01T00:00:00Z`).getTime() / 1000
+    // Include the end of the previous year to ensure we have a seed price for 1/1 calculations
+    const prevYear = Number(year) - 1
+    const start = new Date(`${prevYear}-12-20T00:00:00Z`).getTime() / 1000
     const end = new Date(`${year}-12-31T23:59:59Z`).getTime() / 1000
     url += `&period1=${Math.floor(start)}&period2=${Math.floor(end)}`
   } else {

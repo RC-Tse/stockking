@@ -212,7 +212,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
               onClick={() => setChartMode('market')}
               className={`flex-1 py-1.5 text-[11px] font-black rounded-lg transition-colors z-10 ${chartMode === 'market' ? 'text-bg-base' : 'text-[var(--t3)]'}`}
             >
-              現實市值
+              預估淨市值
             </button>
           </div>
         </div>
@@ -253,7 +253,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase">{chartMode === 'cost' ? '總投入' : '合計市值'}</span>
+            <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase">{chartMode === 'cost' ? '總投入' : '預估淨市值合計'}</span>
             <span className="text-lg font-black text-[var(--t1)] font-mono">{fmtMoney(Math.round(chartTotal))}</span>
           </div>
         </div>
