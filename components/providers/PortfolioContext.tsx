@@ -58,7 +58,7 @@ export function PortfolioProvider({
   }, [transactions])
 
   const stats = useMemo(() => {
-    const inventory: Record<string, { shares: number; price: number; principal: number; fee: number; origShares: number; date: string; id: number }[]> = {}
+    const inventory: Record<string, any[]> = {}
 
     const fullHistoryStats: Record<string, any> = {}
     let allTimeRealized = 0
