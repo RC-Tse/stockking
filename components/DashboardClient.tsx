@@ -100,6 +100,16 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     fetch('/api/stockname/refresh').catch(console.error)
   }, [refresh])
 
+  useEffect(() => {
+    const handleTabChange = (e: any) => {
+      if (e.detail && TABS.find(t => t.id === e.detail)) {
+        setTab(e.detail)
+      }
+    }
+    window.addEventListener('changeTab', handleTabChange)
+    return () => window.removeEventListener('changeTab', handleTabChange)
+  }, [])
+
 
   const signOut = async () => {
     await supabase.auth.signOut()

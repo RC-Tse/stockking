@@ -150,7 +150,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         const cost = lots.reduce((s, l) => s + (l?.cost || 0), 0)
         if (shares > 0) {
           const price = lastPriceMap[sym] || 0
-          currentUnrealizedTotal += (shares * price - cost)
+          const mv = shares * price
+          const f = calcFee(shares, price, settings, true)
+          const t = calcTax(shares, price, sym, settings)
+          const netMv = mv - f - t
+          currentUnrealizedTotal += (netMv - cost)
         }
       })
 
@@ -164,10 +168,12 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         date: dStr,
         actual: actualPnL,
         ideal: idealPnL,
+        // For Segmented Lines:
         actualAbove: isAbove ? actualPnL : null,
         actualBelow: !isAbove ? actualPnL : null,
-        rangeAbove: isAbove && actualPnL !== null ? [0, actualPnL] : null,
-        rangeBelow: !isAbove && actualPnL !== null ? [0, actualPnL] : null,
+        // For Fill to Zero (Only applied when PnL > 0 per user requirement)
+        rangeAbove: isAbove && actualPnL !== null && actualPnL > 0 ? [0, actualPnL] : null,
+        rangeBelow: !isAbove && actualPnL !== null && actualPnL > 0 ? [0, actualPnL] : null,
         isFuture,
         isMonthStart: d.getDate() === 1,
       })
@@ -194,11 +200,19 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   )
 
   const yDomain = (() => {
-    const vals = chartData.flatMap(d => [d.actual || 0, d.ideal])
+    const vals = chartData.filter(d => !d.isFuture).flatMap(d => [d.actual || 0])
+    const idealVals = chartData.map(d => d.ideal)
     let min = Math.min(0, ...vals)
-    const max = Math.max(settings?.year_goal || 0, ...vals)
-    if (min < 0) min = Math.floor((min - 1) / 100) * 100
-    const pad = (max - min) * 0.1
+    const max = Math.max(settings?.year_goal || 0, ...vals, ...idealVals)
+    
+    if (min < 0) {
+      const absMin = Math.abs(min)
+      const digits = Math.floor(Math.log10(absMin))
+      const base = Math.pow(10, digits)
+      min = -Math.ceil(absMin / base) * base
+    }
+
+    const pad = (max - min) * 0.05
     return [min, max + pad]
   })()
 
@@ -223,7 +237,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
         <div className="h-[400px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 60, right: 35, left: 10, bottom: 5 }}>
+            <ComposedChart data={chartData} margin={{ top: 60, right: 10, left: 0, bottom: 5 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.3}/>
@@ -249,11 +263,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
-                padding={{ left: 15, right: 15 }}
+                padding={{ left: 5, right: 5 }}
                 interval={0}
               />
               <YAxis 
-                width={70}
+                width={50}
                 orientation="right"
                 domain={yDomain}
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}

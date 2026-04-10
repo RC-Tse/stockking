@@ -251,6 +251,9 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
       {view === 'UI' && (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
           <div className="flex items-center gap-4 px-1">
+            <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-accent active:bg-white/10 transition-colors">
+              <ChevronLeft size={20} />
+            </button>
             <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-[0.2em]">介面主題設定</h3>
           </div>
 
@@ -276,6 +279,9 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
       {view === 'CALC' && (
         <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
           <div className="flex items-center gap-4 px-1">
+            <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-accent active:bg-white/10 transition-colors">
+              <ChevronLeft size={20} />
+            </button>
             <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-[0.2em]">手續費設定</h3>
           </div>
 

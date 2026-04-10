@@ -371,7 +371,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             <div className="pt-2">
               <button 
                onClick={() => {
-                 window.location.hash = '#settings'
+                 window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))
                }}
                className="px-6 py-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent text-[12px] font-black active:scale-95 transition-all"
               >
