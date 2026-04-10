@@ -170,7 +170,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
       const dayIdx = rawDays.length
       const idealPnL = (dayIdx / 365) * (settings?.year_goal || 0)
-      const actualPnL = isFuture ? null : (cumulativeRealizedThisYear + currentUnrealizedTotal)
+      const actualPnL = isFuture ? null : Math.round(cumulativeRealizedThisYear + currentUnrealizedTotal)
       
       const isAbove = actualPnL !== null && actualPnL >= idealPnL
       

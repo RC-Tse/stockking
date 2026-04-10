@@ -96,14 +96,14 @@ export function PortfolioProvider({
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const f = calcFee(tx.shares, tx.price, settings, false, isDca)
-        lots.push({ shares: tx.shares, price: tx.price, principal: Math.floor(tx.amount), fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
+        lots.push({ shares: tx.shares, price: tx.price, principal: Math.round(tx.amount), fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
 
-        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: f, net: -Math.floor(tx.amount + f) })
+        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: f, net: -Math.round(tx.amount + f) })
 
       } else if (tx.action === 'SELL') {
         const f = calcFee(tx.shares, tx.price, settings, true)
         const t = calcTax(tx.shares, tx.price, tx.symbol, settings)
-        const sellProceeds = Math.floor(tx.amount - f - t)
+        const sellProceeds = Math.round(tx.amount - f - t)
         
         let sellRem = tx.shares
         let matchedBuyCostTotal = 0
@@ -117,17 +117,17 @@ export function PortfolioProvider({
           let matchedPrincipal = 0
           let matchedFee = 0
           
-          // Use Math.floor for proportional fee/principal to ensure strict integers
-          if (take === lot.shares) {
-            matchedPrincipal = lot.principal
-            matchedFee = lot.fee
-          } else {
-            const ratio = take / lot.shares
-            matchedPrincipal = Math.floor(lot.principal * ratio)
-            matchedFee = Math.floor(lot.fee * ratio)
-          }
+            // Use Math.round for proportional fee/principal to ensure strict integers
+            if (take === lot.shares) {
+              matchedPrincipal = lot.principal
+              matchedFee = lot.fee
+            } else {
+              const ratio = take / lot.shares
+              matchedPrincipal = Math.round(lot.principal * ratio)
+              matchedFee = Math.round(lot.fee * ratio)
+            }
 
-          const matchedSellNet = Math.floor((tx.amount - f - t) * (take / tx.shares))
+            const matchedSellNet = Math.round((tx.amount - f - t) * (take / tx.shares))
           matchedBuyCostTotal += (matchedPrincipal + matchedFee)
           matchedBuyFeeTotal += matchedFee
 
@@ -232,10 +232,10 @@ export function PortfolioProvider({
         const totalCost = lots.reduce((s, l) => s + (l.principal + l.fee), 0)
         const q = quotes[sym]
         const cp = q?.price || 0
-        const mv = Math.floor(cp * netShares)
+        const mv = Math.round(cp * netShares)
         const sell_fee = calcFee(netShares, cp, settings, true)
         const sell_tax = calcTax(netShares, cp, sym, settings)
-        const net_mv = Math.floor(mv - sell_fee - sell_tax)
+        const net_mv = Math.round(mv - sell_fee - sell_tax)
         const upnl = net_mv - totalCost
 
         return [{

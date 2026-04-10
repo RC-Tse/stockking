@@ -78,10 +78,10 @@ export default function HoldingsTab({ onRefresh }: Props) {
   const unrealizedPct = stats.totalBuyCost ? (stats.totalUnrealizedPnl / stats.totalBuyCost) * 100 : 0
   const realizedPct = stats.historyBuyCost ? (stats.allTimeRealized / stats.historyBuyCost) * 100 : 0
   
-  const totalPnl = stats.totalPnl
+  const totalPnl = Math.round(stats.totalPnl)
   
   const yearlyRealizedPct = (stats.yearlyRealizedCostBasis) ? (stats.yearlyRealized / stats.yearlyRealizedCostBasis) * 100 : 0
-  const totalYearPnl = stats.yearlyRealized + stats.yearlyUnrealizedPnl
+  const totalYearPnl = Math.round(stats.yearlyRealized + stats.yearlyUnrealizedPnl)
 
   const yearAchieved = settings.year_goal > 0 ? (totalYearPnl / settings.year_goal) * 100 : 0
   const totalAchieved = settings.total_goal > 0 ? (totalPnl / settings.total_goal) * 100 : 0
