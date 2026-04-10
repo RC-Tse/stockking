@@ -660,12 +660,13 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
       <div className="space-y-1"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
       <div className="space-y-1"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-[11px] py-2.5" placeholder="選填..." /></div>
       <div className="bg-black/20 p-3 rounded-xl space-y-1 text-[10px] font-bold">
-        <div className="flex justify-between opacity-30"><span>手續費 + 稅</span><span>{fmtMoney(Math.floor(fee+tax))}</span></div>
+        <div className="flex justify-between opacity-30"><span>手續費 + 稅</span><span>{fmtMoney(Math.round(fee+tax))}</span></div>
         <div className="flex justify-between items-center pt-1 border-t border-white/5"><span className="text-[var(--t2)] opacity-60">預估淨收支</span><span className={`text-[13px] font-black ${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
       </div>
       <div className="flex gap-2 pt-1"><button onClick={handleSave} disabled={!isValid || loading} className="flex-[3] btn-primary py-3 text-xs">確認修改</button><button onClick={() => setIsEditing(false)} className="flex-1 btn-secondary py-3 text-xs">取消</button></div>
     </div>
   )
+
   return (
     <div className="group relative flex flex-col px-6 py-4 hover:bg-white/5 transition-all">
       <div className="flex justify-between items-center w-full">
@@ -687,7 +688,6 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
         </div>
       </div>
       
-      {/* FIFO Matching Detail for SELL transactions */}
       {t.type === 'SELL' && t.matches && t.matches.length > 0 && (
         <div className="mt-2 pl-4 border-l-2 border-white/5 space-y-1">
           {t.matches.map((m: any, idx: number) => (
@@ -708,12 +708,10 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
 
 function ActiveLotRow({ lot, h, settings, onUpdated, onDelete }: any) {
   const [isEditing, setIsEditing] = useState(false)
-  const isBuy = true
   const t = { ...lot, symbol: h.symbol, action: 'BUY', trade_date: lot.date }
-  
-  const cost = Math.floor(lot.shares * lot.price) + Math.floor(lot.fee)
-  const mv = Math.floor(lot.shares * h.current_price)
-  const pnl = mv - cost
+  const cost = lot.total_cost
+  const netMv = lot.net_market_value
+  const pnl = lot.unrealized_pnl
   const pnlPct = cost > 0 ? (pnl / cost) * 100 : 0
   const isUp = pnl >= 0
 
@@ -740,12 +738,31 @@ function ActiveLotRow({ lot, h, settings, onUpdated, onDelete }: any) {
           <span className="text-lg font-black font-mono text-[var(--t1)]">{fmtMoney(cost)}</span>
         </div>
         <div className="flex flex-col text-center">
-          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">當前市值</span>
-          <span className={`text-lg font-black font-mono ${mv >= cost ? 'text-red-400' : 'text-green-400'}`}>{fmtMoney(mv)}</span>
+          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">預估淨市值</span>
+          <span className={`text-lg font-black font-mono ${netMv >= cost ? 'text-red-400' : 'text-green-400'}`}>{fmtMoney(netMv)}</span>
         </div>
         <div className="flex flex-col text-center">
           <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">未實現損益</span>
           <span className={`text-lg font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
+            {isUp ? '+' : ''}{fmtMoney(pnl)}
+          </span>
+        </div>
+        <div className="flex flex-col text-center">
+          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">損益比 (%)</span>
+          <span className={`text-lg font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
+            {isUp ? '+' : ''}{pnlPct.toFixed(2)}%
+          </span>
+        </div>
+      </div>
+    </div>
+  )
+          <span className={`text-lg font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
+            {isUp ? '+' : ''}{pnlPct.toFixed(2)}%
+          </span>
+        </div>
+      </div>
+    </div>
+  )
             {isUp ? '+' : ''}{fmtMoney(pnl)}
           </span>
         </div>

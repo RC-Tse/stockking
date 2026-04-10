@@ -116,12 +116,12 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           const t = sortedTxs[txIdx]
           if (!inventory[t.symbol]) inventory[t.symbol] = []
           if (t.action !== 'SELL') {
-            const f = calcFee(t.shares, t.price, settings, false, t.action === 'DCA' || t.trade_type === 'DCA')
-            inventory[t.symbol].push({ shares: t.shares, cost: t.amount + f })
+            const p = Math.round(t.amount)
+            const f = Math.round(calcFee(t.shares, t.price, settings, false, t.action === 'DCA' || t.trade_type === 'DCA'))
+            inventory[t.symbol].push({ shares: t.shares, cost: Math.floor(p + f) })
           } else {
             const f = calcFee(t.shares, t.price, settings, true)
             const tax = calcTax(t.shares, t.price, t.symbol, settings)
-            const sellProceeds = t.amount - f - tax
             let rem = t.shares
             let matchedCost = 0
             while (rem > 0 && inventory[t.symbol].length > 0) {
@@ -130,15 +130,23 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               const take = Math.min(lot.shares, rem)
               const lotShares = lot.shares
               if (lotShares > 0) {
-                const takeCost = (take / lotShares) * lot.cost
-                matchedCost += takeCost
+                const ratio = take / lotShares
+                const takeCost = Math.round(lot.cost * ratio)
+                
+                // Discrete sell proceeds for this portion
+                const p_part = Math.round(t.amount * ratio)
+                const f_part = Math.round(f * ratio)
+                const t_part = Math.round(tax * ratio)
+                const sellProceedsPart = Math.floor(p_part - f_part - t_part)
+
+                cumulativeRealizedThisYear += (sellProceedsPart - takeCost)
+                
                 lot.shares -= take
                 lot.cost -= takeCost
               }
               rem -= take
               if (lot.shares <= 0) inventory[t.symbol].shift()
             }
-            cumulativeRealizedThisYear += (sellProceeds - matchedCost)
           }
           txIdx++
         }
@@ -156,15 +164,15 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
       let currentUnrealizedTotal = 0
       Object.entries(inventory).forEach(([sym, lots]) => {
-        const shares = lots.reduce((s, l) => s + (l?.shares || 0), 0)
-        const cost = lots.reduce((s, l) => s + (l?.cost || 0), 0)
-        if (shares > 0) {
-          const price = lastPriceMap[sym] || 0
-          const mv = shares * price
-          const f = calcFee(shares, price, settings, true)
-          const t = calcTax(shares, price, sym, settings)
-          const netMv = mv - f - t
-          currentUnrealizedTotal += (netMv - cost)
+        const price = lastPriceMap[sym] || 0
+        if (price > 0) {
+          lots.forEach(l => {
+            const mv = Math.round(price * l.shares)
+            const f = Math.round(calcFee(l.shares, price, settings, true))
+            const t = Math.round(calcTax(l.shares, price, sym, settings))
+            const netMv = Math.floor(mv - f - t)
+            currentUnrealizedTotal += (netMv - l.cost)
+          })
         }
       })
 

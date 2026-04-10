@@ -95,10 +95,12 @@ export function PortfolioProvider({
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
+        const p = Math.round(tx.amount)
         const f = calcFee(tx.shares, tx.price, settings, false, isDca)
-        lots.push({ shares: tx.shares, price: tx.price, principal: Math.round(tx.amount), fee: f, origShares: tx.shares, date: tx.trade_date, id: tx.id })
+        const total = Math.floor(p + Math.round(f))
+        lots.push({ shares: tx.shares, price: tx.price, principal: p, fee: Math.round(f), origShares: tx.shares, date: tx.trade_date, id: tx.id, total_cost: total })
 
-        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: f, net: -Math.round(tx.amount + f) })
+        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: Math.round(f), net: -total })
 
       } else if (tx.action === 'SELL') {
         const f = calcFee(tx.shares, tx.price, settings, true)
@@ -127,7 +129,7 @@ export function PortfolioProvider({
               matchedFee = Math.round(lot.fee * ratio)
             }
 
-            const matchedSellNet = Math.round((tx.amount - f - t) * (take / tx.shares))
+          const matchedSellNet = Math.floor(Math.round(tx.amount * (take / tx.shares)) - Math.round(f * (take / tx.shares)) - Math.round(t * (take / tx.shares)))
           matchedBuyCostTotal += (matchedPrincipal + matchedFee)
           matchedBuyFeeTotal += matchedFee
 
@@ -233,24 +235,43 @@ export function PortfolioProvider({
         const q = quotes[sym]
         const cp = q?.price || 0
         const mv = Math.round(cp * netShares)
-        const sell_fee = calcFee(netShares, cp, settings, true)
-        const sell_tax = calcTax(netShares, cp, sym, settings)
-        const net_mv = Math.round(mv - sell_fee - sell_tax)
-        const upnl = net_mv - totalCost
+        const sell_fee = Math.round(calcFee(netShares, cp, settings, true))
+        const sell_tax = Math.round(calcTax(netShares, cp, sym, settings))
+        const net_mv = Math.floor(mv - sell_fee - sell_tax)
+        
+        // Per-lot detail calculation for visual parity
+        const lotDetails = lots.map(l => {
+          const l_mv = Math.round(cp * l.shares)
+          const l_fee = Math.round(calcFee(l.shares, cp, settings, true))
+          const l_tax = Math.round(calcTax(l.shares, cp, sym, settings))
+          const l_net_mv = Math.floor(l_mv - l_fee - l_tax)
+          const l_cost = Math.floor(l.principal + l.fee)
+          return {
+            ...l,
+            market_value: l_mv,
+            net_market_value: l_net_mv,
+            total_cost: l_cost,
+            unrealized_pnl: l_net_mv - l_cost
+          }
+        })
+
+        const summedNetMV = lotDetails.reduce((s, ld) => s + ld.net_market_value, 0)
+        const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
+        const upnl = summedNetMV - summedCost
 
         return [{
           symbol: sym,
           shares: netShares,
-          avg_cost: totalCost / netShares,
-          total_cost: Math.round(totalCost),
+          avg_cost: summedCost / netShares,
+          total_cost: summedCost,
           current_price: cp,
-          market_value: mv,
-          net_market_value: net_mv,
+          market_value: Math.round(mv),
+          net_market_value: summedNetMV,
           sell_fee,
           sell_tax,
-          unrealized_pnl: Math.round(upnl),
-          pnl_pct: totalCost ? (upnl / totalCost) * 100 : 0,
-          lots: lots.map(l => ({ ...l })), // Deep copy for immutability
+          unrealized_pnl: upnl,
+          pnl_pct: summedCost ? (upnl / summedCost) * 100 : 0,
+          lots: lotDetails,
         }]
       })
 
