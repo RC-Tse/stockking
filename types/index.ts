@@ -149,16 +149,24 @@ export function codeOnly(symbol: string): string {
   return symbol.replace('.TW','').replace('.TWO','')
 }
 
-export function calcFee(shares: number, price: number, s: UserSettings, isSell = false, isDca = false): number {
+export function calcRawFee(shares: number, price: number, s: UserSettings, isSell = false, isDca = false): number {
   if (isDca) return s.dca_fee_min
   const rate = isSell ? s.sell_fee_rate : s.buy_fee_rate
   const discount = isSell ? s.sell_discount : s.buy_discount
-  return Math.max(1, Math.floor(shares * price * rate * discount))
+  return Math.max(1, shares * price * rate * discount)
+}
+
+export function calcFee(shares: number, price: number, s: UserSettings, isSell = false, isDca = false): number {
+  return Math.floor(calcRawFee(shares, price, s, isSell, isDca))
+}
+
+export function calcRawTax(shares: number, price: number, symbol: string, s: UserSettings): number {
+  const rate = isEtf(symbol) ? s.tax_etf : s.tax_stock
+  return shares * price * rate
 }
 
 export function calcTax(shares: number, price: number, symbol: string, s: UserSettings): number {
-  const rate = isEtf(symbol) ? s.tax_etf : s.tax_stock
-  return Math.floor(shares * price * rate)
+  return Math.floor(calcRawTax(shares, price, symbol, s))
 }
 
 

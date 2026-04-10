@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useMemo } from 'react'
-import { Transaction, UserSettings, Holding, Quote, calcFee, calcTax } from '@/types'
+import { Transaction, UserSettings, Holding, Quote, calcFee, calcTax, calcRawFee, calcRawTax } from '@/types'
 
 interface PortfolioStats {
   holdings: Holding[]
@@ -96,11 +96,20 @@ export function PortfolioProvider({
       if (tx.action === 'BUY' || tx.action === 'DCA') {
         const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
         const p = Math.round(tx.amount)
-        const f = calcFee(tx.shares, tx.price, settings, false, isDca)
-        const total = Math.floor(p + Math.round(f))
-        lots.push({ shares: tx.shares, price: tx.price, principal: p, fee: Math.round(f), origShares: tx.shares, date: tx.trade_date, id: tx.id, total_cost: total })
+        const rf = calcRawFee(tx.shares, tx.price, settings, false, isDca)
+        const total = Math.round(p + rf)
+        lots.push({ 
+          shares: tx.shares, 
+          price: tx.price, 
+          principal: p, 
+          rawFee: rf, 
+          origShares: tx.shares, 
+          date: tx.trade_date, 
+          id: tx.id, 
+          total_cost: total 
+        })
 
-        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: Math.round(f), net: -total })
+        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: Math.round(rf), net: -total })
 
       } else if (tx.action === 'SELL') {
         const f = calcFee(tx.shares, tx.price, settings, true)
@@ -117,28 +126,36 @@ export function PortfolioProvider({
           const take = Math.min(lot.shares, sellRem)
           
           let matchedPrincipal = 0
-          let matchedFee = 0
+          let matchedRawFee = 0
           
-            // Use Math.round for proportional fee/principal to ensure strict integers
             if (take === lot.shares) {
               matchedPrincipal = lot.principal
-              matchedFee = lot.fee
+              matchedRawFee = (lot.rawFee || lot.fee || 0)
             } else {
               const ratio = take / lot.shares
-              matchedPrincipal = Math.round(lot.principal * ratio)
-              matchedFee = Math.round(lot.fee * ratio)
+              matchedPrincipal = lot.principal * ratio // Keep as floating point for now
+              matchedRawFee = (lot.rawFee || lot.fee || 0) * ratio
             }
 
-          const matchedSellNet = Math.floor(Math.round(tx.amount * (take / tx.shares)) - Math.round(f * (take / tx.shares)) - Math.round(t * (take / tx.shares)))
-          matchedBuyCostTotal += (matchedPrincipal + matchedFee)
-          matchedBuyFeeTotal += matchedFee
+          // Single Exit Rounding for matched buy cost
+          const matchedBuyCostInt = Math.round(matchedPrincipal + matchedRawFee)
+          
+          // Single Exit Rounding for matched sell net
+          const ratioSell = take / tx.shares
+          const rawSellGross = tx.amount * ratioSell
+          const rawSellFee = f * ratioSell
+          const rawSellTax = t * ratioSell
+          const matchedSellNet = Math.round(rawSellGross - rawSellFee - rawSellTax)
+
+          matchedBuyCostTotal += matchedBuyCostInt
+          matchedBuyFeeTotal += Math.round(matchedRawFee)
 
           matches.push({ 
             date: lot.date, 
             sellDate: tx.trade_date,
             shares: take, 
             buyPrice: lot.price, 
-            buyCost: matchedPrincipal + matchedFee,
+            buyCost: matchedBuyCostInt,
             sellPrice: tx.price,
             sellNet: matchedSellNet
           })
@@ -241,14 +258,16 @@ export function PortfolioProvider({
         
         // Per-lot detail calculation for visual parity
         const lotDetails = lots.map(l => {
-          const l_mv = Math.round(cp * l.shares)
-          const l_fee = Math.round(calcFee(l.shares, cp, settings, true))
-          const l_tax = Math.round(calcTax(l.shares, cp, sym, settings))
-          const l_net_mv = Math.floor(l_mv - l_fee - l_tax)
-          const l_cost = Math.floor(l.principal + l.fee)
+          const l_mv = cp * l.shares
+          const l_raw_sell_fee = calcRawFee(l.shares, cp, settings, true)
+          const l_raw_sell_tax = calcRawTax(l.shares, cp, sym, settings)
+          
+          const l_net_mv = Math.round(l_mv - l_raw_sell_fee - l_raw_sell_tax)
+          const l_cost = Math.round(l.principal + (l.rawFee || l.fee || 0))
+          
           return {
             ...l,
-            market_value: l_mv,
+            market_value: Math.round(l_mv), // Standardize MV for display
             net_market_value: l_net_mv,
             total_cost: l_cost,
             unrealized_pnl: l_net_mv - l_cost
