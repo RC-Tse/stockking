@@ -161,6 +161,9 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
         date: dStr,
         actual: isFuture ? null : actualPnL,
         ideal: idealPnL,
+        // Range for Area between curves: [base, value]
+        rangeAbove: isFuture ? null : [idealPnL, Math.max(actualPnL, idealPnL)],
+        rangeBelow: isFuture ? null : [Math.min(actualPnL, idealPnL), idealPnL],
         isFuture,
         isMonthStart: d.getDate() === 1,
       })
@@ -239,13 +242,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                   <stop offset="5%" stopColor="#4ade80" stopOpacity={0.4}/>
                   <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
                 </linearGradient>
-
-                <clipPath id="clipAbove">
-                   {/* Hard-coded large polygon trick for straight ideal line relative to Chart scale 
-                       In a real Recharts custom component, we'd use the Y scale.
-                   */}
-                   <rect x="-10%" y="-100%" width="120%" height="200%" /> 
-                </clipPath>
               </defs>
 
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
@@ -324,34 +320,28 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
               />
 
               {/* DYNAMIC FILL BETWEEN ACTUAL AND IDEAL 
-                  Using two Area components with the baseValue trick.
-                  Area Red: Actual as values, Ideal as baseValue (Fills gap).
-                  We use ClipPath polygons defined relative to the Ideal line to split colors.
+                  Instead of unsupported baseValue="ideal", we use rangeAbove and rangeBelow 
+                  which are arrays [base, value] to define the filled area.
               */}
               
               {/* Above Ideal (Red) */}
               <Area 
                 type="monotone" 
-                dataKey="actual" 
-                baseValue="ideal"
+                dataKey="rangeAbove" 
                 fill="url(#areaRed)"
                 stroke="none"
                 isAnimationActive={true}
                 connectNulls
               />
 
-              {/* Secondary logic: Since Recharts fill between lines isn't color-aware,
-                  we use a single Area and apply a splitOffset mask trick or custom component.
-                  For simplicity + visual impact, we use the fill between curves. 
-                  Given the request for Red if ABOVE and Green if BELOW:
-              */}
+              {/* Below Ideal (Green) */}
               <Area 
                 type="monotone" 
-                dataKey="actual" 
-                baseValue="ideal"
-                fill={isAhead ? "url(#areaRed)" : "url(#areaGreen)"}
+                dataKey="rangeBelow" 
+                fill="url(#areaGreen)"
                 stroke="none"
                 isAnimationActive={true}
+                connectNulls
               />
 
               {/* ACTUAL LINE - Dynamic Color */}
@@ -363,6 +353,8 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 dot={false}
                 isAnimationActive={true}
               />
+
+
 
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
               <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
