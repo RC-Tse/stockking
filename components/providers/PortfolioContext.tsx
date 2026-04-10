@@ -162,7 +162,7 @@ export function PortfolioProvider({
 
           lot.shares -= take
           lot.principal -= matchedPrincipal
-          lot.fee -= matchedFee
+          lot.rawFee -= matchedRawFee
           sellRem -= take
 
 
@@ -248,7 +248,7 @@ export function PortfolioProvider({
         const netShares = lots.reduce((s, l) => s + l.shares, 0)
         if (netShares <= 0) return []
         
-        const totalCost = lots.reduce((s, l) => s + (l.principal + l.fee), 0)
+        const totalCost = lots.reduce((s, l) => s + (l.principal + (l.rawFee || l.fee || 0)), 0)
         const q = quotes[sym]
         const cp = q?.price || 0
         const mv = Math.round(cp * netShares)
