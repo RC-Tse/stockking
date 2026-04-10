@@ -756,28 +756,7 @@ function ActiveLotRow({ lot, h, settings, onUpdated, onDelete }: any) {
       </div>
     </div>
   )
-          <span className={`text-lg font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
-            {isUp ? '+' : ''}{pnlPct.toFixed(2)}%
-          </span>
-        </div>
-      </div>
-    </div>
-  )
-            {isUp ? '+' : ''}{fmtMoney(pnl)}
-          </span>
-        </div>
-        <div className="flex flex-col text-center">
-          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">損益比 (%)</span>
-          <span className={`text-lg font-black font-mono ${isUp ? 'text-red-400' : 'text-green-400'}`}>
-            {isUp ? '+' : ''}{pnlPct.toFixed(2)}%
-          </span>
-        </div>
-      </div>
-
-    </div>
-  )
 }
-
 function MatchedPairRow({ m, symbol }: any) {
   const isUp = (m.sellNet - m.buyCost) >= 0
   const profit = m.sellNet - m.buyCost
