@@ -64,7 +64,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
     let inventory: Record<string, { shares: number, cost: number }[]> = {}
     let txIdx = 0
     
-    // Phase 1: Pre-2026 Inventory & Baseline
+    // Phase 1: Pre-2026 Inventory
     while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date < yearStartStr) {
       const t = sortedTxs[txIdx]
       if (!inventory[t.symbol]) inventory[t.symbol] = []
@@ -90,19 +90,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
       txIdx++
     }
 
-    let initialUnrealized = 0
-    Object.entries(inventory).forEach(([sym, lots]) => {
-      const shares = lots.reduce((s, l) => s + (l?.shares || 0), 0)
-      const cost = lots.reduce((s, l) => s + (l?.cost || 0), 0)
-      if (shares > 0) {
-        const hist = historyData[sym] || []
-        // CRITICAL BUG FIX/GUARD: Safe find with initial state
-        const priceObj = [...hist].reverse().find(p => p?.date && p.date <= lastYearEndStr)
-        const price = priceObj?.price || 0
-        initialUnrealized += (shares * price - cost)
-      }
-    })
-
     // Phase 2: Annual Loop
     const days: any[] = []
     let cumulativeRealized2026 = 0
@@ -115,6 +102,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
       const isFuture = dStr > todayStr
 
       if (!isFuture) {
+        // Process Transactions
         while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date === dStr) {
           const t = sortedTxs[txIdx]
           if (!inventory[t.symbol]) inventory[t.symbol] = []
@@ -147,7 +135,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
         }
       }
 
-      // CRITICAL BUG FIX/GUARD: Pointer loop with safe access
+      // Update Prices
       relevantSymbols.forEach(sym => {
         const hist = historyData[sym] || []
         let ptr = stockHistoryPointers[sym]
@@ -170,7 +158,9 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
 
       const dayIdx = days.length
       const idealPnL = (dayIdx / 365) * (settings?.year_goal || 0)
-      const actualPnL = cumulativeRealized2026 + currentUnrealizedTotal - initialUnrealized
+      
+      // FORMULA PARITY: Actual = Total_Unrealized + Realized_YTD (Matching Holdings Tab)
+      const actualPnL = cumulativeRealized2026 + currentUnrealizedTotal
 
       days.push({
         date: dStr,
@@ -181,7 +171,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
       })
     }
     return days
-  }, [transactions, historyData, loading, settings, currentYear, todayStr, relevantSymbols, yearStartStr, lastYearEndStr])
+  }, [transactions, historyData, loading, settings, currentYear, todayStr, relevantSymbols, yearStartStr])
 
   const ticks = useMemo(() => {
     if (!chartData || chartData.length === 0) return []
@@ -195,7 +185,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
     <div className="h-[280px] flex items-center justify-center bg-[var(--bg-card)] rounded-[40px] border border-[var(--border-bright)]">
        <div className="flex flex-col items-center gap-3">
          <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-         <span className="text-[11px] font-black text-[var(--t2)] opacity-80 uppercase tracking-widest">初始化核心分析引擎...</span>
+         <span className="text-[11px] font-black text-[var(--t2)] opacity-80 uppercase tracking-widest">同步核心分析引擎...</span>
        </div>
     </div>
   )
@@ -205,19 +195,35 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
   const currentIdeal = lastActual?.ideal || 0
   const isAhead = currentActual >= currentIdeal
 
+  // Y-Axis Special Rounding for Negative values
+  const yDomain = (() => {
+    const vals = chartData.flatMap(d => [d.actual || 0, d.ideal])
+    let min = Math.min(0, ...vals)
+    const max = Math.max(settings?.year_goal || 0, ...vals)
+    
+    // "無條件進位" logic for negative scaling
+    if (min < 0) {
+      // Step to next hundred below (e.g., -400 -> -500, -789 -> -800)
+      min = Math.floor((min - 1) / 100) * 100
+    }
+    
+    const pad = (max - min) * 0.1
+    return [min, max + pad]
+  })()
+
   return (
-    <div className="space-y-6 animate-slide-up w-full">
-      <div className="flex items-center justify-between px-2">
+    <div className="space-y-6 animate-slide-up w-full px-1">
+      <div className="flex items-center justify-between">
         <h3 className="text-[14px] font-black text-[var(--t1)] uppercase tracking-widest flex items-center gap-3">
-           年度損益進度圖
+           年度總獲利進度圖
         </h3>
         <div className="bg-[var(--bg-card)] px-4 py-2 rounded-2xl border border-[var(--border-bright)] shadow-inner">
-           <span className="text-[10px] font-black text-[var(--t3)] uppercase mr-3 opacity-60 font-mono">GOAL</span>
+           <span className="text-[10px] font-black text-[var(--t3)] uppercase mr-3 opacity-60 font-mono">ANNUAL GOAL</span>
            <span className="text-[14px] font-mono font-black text-accent">{fmtMoney(settings?.year_goal || 0)}</span>
         </div>
       </div>
 
-      <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-10 pt-8 shadow-2xl relative overflow-hidden group">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-8 pt-6 shadow-2xl relative overflow-hidden group">
         
         <div className="flex justify-center gap-10 mb-8 relative z-10">
           <div className="flex items-center gap-2.5">
@@ -233,9 +239,9 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
           </div>
         </div>
 
-        <div className="h-[300px] w-full">
+        <div className="h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 30, bottom: 20 }}>
+            <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 30, bottom: 30 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#e05050" stopOpacity={0.25}/>
@@ -258,17 +264,23 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                   if (v.endsWith('-12-31')) return '12/31'
                   return `${d.getMonth() + 1}/1`
                 }}
-                tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t3)'}}
-                axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+                tick={{fontSize: 10, fontWeight: 900, fill: 'var(--t3)'}}
+                axisLine={false}
                 tickLine={false}
                 padding={{ left: 20, right: 20 }}
-                interval={0}
+                interval="preserveStartEnd" // Automatically avoid overlap
+                minTickGap={40} // Forced minimum gap
               />
               <YAxis 
                 width={60}
+                domain={yDomain}
                 tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t3)'}}
                 axisLine={false}
-                tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
+                tickLine={false}
+                tickFormatter={(v) => {
+                   if (Math.abs(v) >= 1000) return `${(v/1000).toFixed(0)}K`
+                   return v
+                }}
                 padding={{ top: 20, bottom: 0 }}
               />
 
@@ -283,13 +295,13 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                         <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-[0.2em]">{data.date}</div>
                         <div className="space-y-3">
                           <div className="flex justify-between gap-12">
-                            <span className="text-[12px] text-[var(--t2)] font-black">累計損益</span>
+                            <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
                             <span className={`text-[14px] font-mono font-black ${data.actual >= 0 ? 'text-[#e05050]' : 'text-[#4ade80]'}`}>
                               {fmtMoney(Math.round(data.actual || 0))}
                             </span>
                           </div>
                           <div className="flex justify-between gap-12">
-                            <span className="text-[12px] text-[var(--t2)] font-black">理想進度</span>
+                            <span className="text-[12px] text-[var(--t2)] font-black">理想目標</span>
                             <span className="text-[14px] font-mono font-black text-[#FFD700]">
                               {fmtMoney(Math.round(data.ideal || 0))}
                             </span>
@@ -334,7 +346,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 isAnimationActive={true}
               />
 
-              <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1.5} />
+              <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
               <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.2)" strokeDasharray="5 5" />
             </ComposedChart>
           </ResponsiveContainer>
@@ -344,7 +356,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
   )
 }
 
-// Wrap with ErrorBoundary for safe rendering
 export default function YearlyPnLChart(props: Props) {
   return (
     <ErrorBoundary>
