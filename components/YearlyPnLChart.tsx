@@ -257,7 +257,7 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
               />
               <YAxis 
                 width={60}
-                tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t3)', fontMono: true}}
+                tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t3)'}}
                 axisLine={false}
                 tickFormatter={(v) => v >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
                 padding={{ top: 20, bottom: 0 }}
