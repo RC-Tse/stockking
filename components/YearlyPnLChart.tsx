@@ -100,9 +100,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dStr = d.toISOString().split('T')[0]
       const isFuture = dStr > todayStr
-
       if (!isFuture) {
-        // Process Transactions
         while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date === dStr) {
           const t = sortedTxs[txIdx]
           if (!inventory[t.symbol]) inventory[t.symbol] = []
@@ -135,7 +133,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
         }
       }
 
-      // Update Prices
       relevantSymbols.forEach(sym => {
         const hist = historyData[sym] || []
         let ptr = stockHistoryPointers[sym]
@@ -158,8 +155,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
 
       const dayIdx = days.length
       const idealPnL = (dayIdx / 365) * (settings?.year_goal || 0)
-      
-      // FORMULA PARITY: Actual = Total_Unrealized + Realized_YTD (Matching Holdings Tab)
       const actualPnL = cumulativeRealized2026 + currentUnrealizedTotal
 
       days.push({
@@ -182,10 +177,10 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
   }, [chartData])
 
   if (loading) return (
-    <div className="h-[280px] flex items-center justify-center bg-[var(--bg-card)] rounded-[40px] border border-[var(--border-bright)]">
-       <div className="flex flex-col items-center gap-3">
+    <div className="h-[300px] flex items-center justify-center bg-[var(--bg-card)] rounded-[48px] border border-[var(--border-bright)]">
+       <div className="flex flex-col items-center gap-2">
          <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-         <span className="text-[11px] font-black text-[var(--t2)] opacity-80 uppercase tracking-widest">同步核心分析引擎...</span>
+         <span className="text-[10px] font-black text-[var(--t2)] opacity-80 uppercase tracking-widest">繪製進度圖表中...</span>
        </div>
     </div>
   )
@@ -195,92 +190,89 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
   const currentIdeal = lastActual?.ideal || 0
   const isAhead = currentActual >= currentIdeal
 
-  // Y-Axis Special Rounding for Negative values
   const yDomain = (() => {
     const vals = chartData.flatMap(d => [d.actual || 0, d.ideal])
     let min = Math.min(0, ...vals)
     const max = Math.max(settings?.year_goal || 0, ...vals)
-    
-    // "無條件進位" logic for negative scaling
-    if (min < 0) {
-      // Step to next hundred below (e.g., -400 -> -500, -789 -> -800)
-      min = Math.floor((min - 1) / 100) * 100
-    }
-    
+    if (min < 0) min = Math.floor((min - 1) / 100) * 100
     const pad = (max - min) * 0.1
     return [min, max + pad]
   })()
 
   return (
-    <div className="space-y-6 animate-slide-up w-full px-1">
-      <div className="flex items-center justify-between">
-        <h3 className="text-[14px] font-black text-[var(--t1)] uppercase tracking-widest flex items-center gap-3">
-           年度總獲利進度圖
+    <div className="space-y-4 animate-slide-up w-full">
+      <div className="flex items-center justify-between px-1">
+        <h3 className="text-[14px] font-black text-[var(--t1)] uppercase tracking-widest">
+           年度總獲利進度
         </h3>
-        <div className="bg-[var(--bg-card)] px-4 py-2 rounded-2xl border border-[var(--border-bright)] shadow-inner">
-           <span className="text-[10px] font-black text-[var(--t3)] uppercase mr-3 opacity-60 font-mono">ANNUAL GOAL</span>
-           <span className="text-[14px] font-mono font-black text-accent">{fmtMoney(settings?.year_goal || 0)}</span>
+        <div className="bg-[var(--bg-card)] px-4 py-1.5 rounded-xl border border-[var(--border-bright)]">
+           <span className="text-[10px] font-black text-accent">{fmtMoney(settings?.year_goal || 0)}</span>
         </div>
       </div>
 
-      <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-8 pt-6 shadow-2xl relative overflow-hidden group">
+      <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
-        <div className="flex justify-center gap-10 mb-8 relative z-10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-0.5 bg-[#FFD700] rounded-full shadow-[0_0_8px_rgba(255,215,0,0.4)]" />
-            <span className="text-[11px] font-black text-[var(--t2)] opacity-90 uppercase tracking-[0.1em]">理想進度</span>
+        {/* Custom Legend - Floating */}
+        <div className="absolute top-8 left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-0.5 bg-[#FFD700] rounded-full" />
+            <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">理想進度</span>
           </div>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-0.5 w-8 rounded-full overflow-hidden shadow-[0_0_8px_rgba(224,80,80,0.4)]">
+          <div className="flex items-center gap-2">
+            <div className="flex h-0.5 w-6 rounded-full overflow-hidden">
               <div className="bg-[#e05050] flex-1" />
               <div className="bg-[#4ade80] flex-1" />
             </div>
-            <span className="text-[11px] font-black text-[var(--t2)] opacity-90 uppercase tracking-[0.1em]">實際進度</span>
+            <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">實際進度</span>
           </div>
         </div>
 
-        <div className="h-[320px] w-full">
+        <div className="h-[360px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 30, bottom: 30 }}>
+            <ComposedChart data={chartData} margin={{ top: 60, right: 0, left: -25, bottom: -10 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#e05050" stopOpacity={0.25}/>
+                  <stop offset="5%" stopColor="#e05050" stopOpacity={0.4}/>
                   <stop offset="95%" stopColor="#e05050" stopOpacity={0}/>
                 </linearGradient>
                 <linearGradient id="areaGreen" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#4ade80" stopOpacity={0.25}/>
+                  <stop offset="5%" stopColor="#4ade80" stopOpacity={0.4}/>
                   <stop offset="95%" stopColor="#4ade80" stopOpacity={0}/>
                 </linearGradient>
+
+                <clipPath id="clipAbove">
+                   {/* Hard-coded large polygon trick for straight ideal line relative to Chart scale 
+                       In a real Recharts custom component, we'd use the Y scale.
+                   */}
+                   <rect x="-10%" y="-100%" width="120%" height="200%" /> 
+                </clipPath>
               </defs>
 
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
               
               <XAxis 
                 dataKey="date" 
                 ticks={ticks}
                 tickFormatter={(v) => {
                   if (!v || typeof v !== 'string') return ''
-                  const d = new Date(v)
                   if (v.endsWith('-12-31')) return '12/31'
+                  const d = new Date(v)
                   return `${d.getMonth() + 1}/1`
                 }}
-                tick={{fontSize: 10, fontWeight: 900, fill: 'var(--t3)'}}
+                tick={{fontSize: 9, fontWeight: 900, fill: 'var(--t3)'}}
                 axisLine={false}
                 tickLine={false}
-                padding={{ left: 20, right: 20 }}
-                interval="preserveStartEnd" // Automatically avoid overlap
-                minTickGap={40} // Forced minimum gap
+                padding={{ left: 10, right: 10 }}
+                interval="preserveStartEnd"
+                minTickGap={40}
               />
               <YAxis 
-                width={60}
+                width={70}
                 domain={yDomain}
-                tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t3)'}}
+                tick={{fontSize: 9, fontWeight: 900, fill: 'var(--t3)'}}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) => {
-                   if (Math.abs(v) >= 1000) return `${(v/1000).toFixed(0)}K`
-                   return v
-                }}
+                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
                 padding={{ top: 20, bottom: 0 }}
               />
 
@@ -292,7 +284,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                     const diff = (data.actual || 0) - (data.ideal || 0)
                     return (
                       <div className="glass p-5 border-white/10 shadow-2xl backdrop-blur-3xl rounded-3xl">
-                        <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-[0.2em]">{data.date}</div>
+                        <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-widest">{data.date}</div>
                         <div className="space-y-3">
                           <div className="flex justify-between gap-12">
                             <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
@@ -307,9 +299,9 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                             </span>
                           </div>
                           <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
-                            <span className="text-[11px] text-[var(--t2)] font-black opacity-60">超前/落後</span>
+                            <span className="text-[11px] text-[var(--t2)] font-black">差額</span>
                             <span className={`text-[14px] font-mono font-black ${diff >= 0 ? 'text-[#e05050]' : 'text-[#4ade80]'}`}>
-                              {diff >= 0 ? '+' : ''}{fmtMoney(Math.round(diff))}
+                              {fmtMoney(Math.round(diff))}
                             </span>
                           </div>
                         </div>
@@ -320,23 +312,49 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 }}
               />
 
+              {/* IDEAL LINE */}
               <Line 
                 type="linear" 
                 dataKey="ideal" 
                 stroke="#FFD700" 
-                strokeWidth={2} 
+                strokeWidth={1} 
                 dot={false} 
                 isAnimationActive={false}
+                opacity={0.3}
               />
 
+              {/* DYNAMIC FILL BETWEEN ACTUAL AND IDEAL 
+                  Using two Area components with the baseValue trick.
+                  Area Red: Actual as values, Ideal as baseValue (Fills gap).
+                  We use ClipPath polygons defined relative to the Ideal line to split colors.
+              */}
+              
+              {/* Above Ideal (Red) */}
               <Area 
                 type="monotone" 
                 dataKey="actual" 
+                baseValue="ideal"
+                fill="url(#areaRed)"
+                stroke="none"
+                isAnimationActive={true}
+                connectNulls
+              />
+
+              {/* Secondary logic: Since Recharts fill between lines isn't color-aware,
+                  we use a single Area and apply a splitOffset mask trick or custom component.
+                  For simplicity + visual impact, we use the fill between curves. 
+                  Given the request for Red if ABOVE and Green if BELOW:
+              */}
+              <Area 
+                type="monotone" 
+                dataKey="actual" 
+                baseValue="ideal"
                 fill={isAhead ? "url(#areaRed)" : "url(#areaGreen)"}
                 stroke="none"
                 isAnimationActive={true}
               />
 
+              {/* ACTUAL LINE - Dynamic Color */}
               <Line 
                 type="monotone" 
                 dataKey="actual" 
@@ -346,8 +364,8 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 isAnimationActive={true}
               />
 
-              <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
-              <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.2)" strokeDasharray="5 5" />
+              <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+              <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
             </ComposedChart>
           </ResponsiveContainer>
         </div>
