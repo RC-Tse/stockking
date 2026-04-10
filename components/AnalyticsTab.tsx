@@ -21,6 +21,15 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const { stats, quotes, settings } = usePortfolio()
   const { holdings } = stats
   
+  const currentYear = new Date().getFullYear().toString()
+  const [selectedYear, setSelectedYear] = useState(currentYear)
+
+  const yearGoal = useMemo(() => {
+    return settings.year_goals?.[selectedYear] || (selectedYear === currentYear ? settings.year_goal : 0)
+  }, [settings, selectedYear, currentYear])
+
+  const hasGoal = yearGoal > 0
+
   // Flatten transactions from allHistoryStats for local use
   const transactions = useMemo(() => {
     const all: Transaction[] = []
@@ -330,8 +339,47 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   return (
     <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
       {/* ── 0. 年度進度圖 ── */}
-      <section>
-        <YearlyPnLChart transactions={transactions} settings={settings} />
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">年度進度回顧</span>
+            <select 
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-[12px] font-black text-accent outline-none ml-2"
+            >
+              {['2023', '2024', '2025', '2026', '2027'].map(y => <option key={y} value={y}>{y} 年</option>)}
+            </select>
+          </div>
+        </div>
+
+        {hasGoal ? (
+          <YearlyPnLChart 
+            transactions={transactions} 
+            settings={{ ...settings, year_goal: yearGoal }} 
+            year={Number(selectedYear)}
+          />
+        ) : (
+          <div className="bg-[var(--bg-card)] border border-dashed border-accent/20 rounded-[48px] p-12 text-center space-y-4 shadow-sm">
+            <div className="w-16 h-16 bg-accent/5 rounded-full flex items-center justify-center mx-auto mb-2">
+              <span className="text-2xl">🎯</span>
+            </div>
+            <h4 className="text-[15px] font-black text-[var(--t1)]">尚未設定 {selectedYear} 年度目標</h4>
+            <p className="text-[12px] text-[var(--t2)] opacity-60 leading-relaxed max-w-[200px] mx-auto">
+              請前往「設定」頁面為該年份設定投資獲利目標，以便開始追蹤進度。
+            </p>
+            <div className="pt-2">
+              <button 
+               onClick={() => {
+                 window.location.hash = '#settings'
+               }}
+               className="px-6 py-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent text-[12px] font-black active:scale-95 transition-all"
+              >
+                前往設定
+              </button>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* ── 1. 各股分析 ── */}

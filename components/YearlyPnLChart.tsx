@@ -11,15 +11,16 @@ import ErrorBoundary from './ErrorBoundary'
 interface Props {
   transactions: Transaction[]
   settings: UserSettings
+  year?: number
 }
 
-function YearlyPnLChartContent({ transactions, settings }: Props) {
+function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const [historyData, setHistoryData] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
 
-  const currentYear = new Date().getFullYear()
-  const yearStartStr = `${currentYear}-01-01`
-  const lastYearEndStr = `${currentYear - 1}-12-31`
+  const chartYear = year || new Date().getFullYear()
+  const yearStartStr = `${chartYear}-01-01`
+  const nextYearStartStr = `${chartYear + 1}-01-01`
   const todayStr = new Date().toISOString().split('T')[0]
 
   const relevantSymbols = useMemo(() => {
@@ -40,7 +41,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
       const results: Record<string, any[]> = {}
       await Promise.all(relevantSymbols.map(async (sym) => {
         try {
-          const res = await fetch(`/api/stocks/info?symbol=${sym}&range=1y`)
+          const res = await fetch(`/api/stocks/info?symbol=${sym}&year=${chartYear}`)
           if (res.ok) {
             const data = await res.json()
             results[sym] = Array.isArray(data?.history) ? data.history : []
@@ -51,12 +52,12 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
       setLoading(false)
     }
     fetchAllHistory()
-  }, [relevantSymbols])
+  }, [relevantSymbols, chartYear])
 
   const chartData = useMemo(() => {
     if (loading) return []
-    const start = new Date(`${currentYear}-01-01`)
-    const end = new Date(`${currentYear}-12-31`)
+    const start = new Date(`${chartYear}-01-01`)
+    const end = new Date(`${chartYear}-12-31`)
     const sortedTxs = [...transactions]
       .filter(t => t?.trade_date)
       .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
@@ -64,7 +65,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
     let inventory: Record<string, { shares: number, cost: number }[]> = {}
     let txIdx = 0
     
-    // Phase 1: Pre-2026 Inventory
+    // Phase 1: Pre-Year Inventory
     while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date < yearStartStr) {
       const t = sortedTxs[txIdx]
       if (!inventory[t.symbol]) inventory[t.symbol] = []
@@ -92,7 +93,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
 
     // Phase 2: Annual Loop
     const days: any[] = []
-    let cumulativeRealized2026 = 0
+    let cumulativeRealizedThisYear = 0
     const lastPriceMap: Record<string, number> = {}
     const stockHistoryPointers: Record<string, number> = {}
     relevantSymbols.forEach(s => stockHistoryPointers[s] = 0)
@@ -100,6 +101,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dStr = d.toISOString().split('T')[0]
       const isFuture = dStr > todayStr
+      
       if (!isFuture) {
         while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date === dStr) {
           const t = sortedTxs[txIdx]
@@ -127,7 +129,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
               rem -= take
               if (lot.shares <= 0) inventory[t.symbol].shift()
             }
-            cumulativeRealized2026 += (sellProceeds - matchedCost)
+            cumulativeRealizedThisYear += (sellProceeds - matchedCost)
           }
           txIdx++
         }
@@ -155,21 +157,26 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
 
       const dayIdx = days.length
       const idealPnL = (dayIdx / 365) * (settings?.year_goal || 0)
-      const actualPnL = cumulativeRealized2026 + currentUnrealizedTotal
-
+      const actualPnL = isFuture ? null : (cumulativeRealizedThisYear + currentUnrealizedTotal)
+      
+      const isAbove = actualPnL !== null && actualPnL >= idealPnL
+      
       days.push({
         date: dStr,
-        actual: isFuture ? null : actualPnL,
+        actual: actualPnL,
         ideal: idealPnL,
-        // Range for Area between curves: [base, value]
-        rangeAbove: isFuture ? null : [idealPnL, Math.max(actualPnL, idealPnL)],
-        rangeBelow: isFuture ? null : [Math.min(actualPnL, idealPnL), idealPnL],
+        // For Segmented Lines:
+        actualAbove: isAbove ? actualPnL : null,
+        actualBelow: !isAbove ? actualPnL : null,
+        // For Fill to Zero:
+        rangeAbove: isAbove && actualPnL !== null ? [0, actualPnL] : null,
+        rangeBelow: !isAbove && actualPnL !== null ? [0, actualPnL] : null,
         isFuture,
         isMonthStart: d.getDate() === 1,
       })
     }
     return days
-  }, [transactions, historyData, loading, settings, currentYear, todayStr, relevantSymbols, yearStartStr])
+  }, [transactions, historyData, loading, settings, chartYear, todayStr, relevantSymbols, yearStartStr])
 
   const ticks = useMemo(() => {
     if (!chartData || chartData.length === 0) return []
@@ -188,11 +195,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
     </div>
   )
 
-  const lastActual = chartData.filter(d => !d.isFuture).pop()
-  const currentActual = lastActual?.actual || 0
-  const currentIdeal = lastActual?.ideal || 0
-  const isAhead = currentActual >= currentIdeal
-
   const yDomain = (() => {
     const vals = chartData.flatMap(d => [d.actual || 0, d.ideal])
     let min = Math.min(0, ...vals)
@@ -204,15 +206,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
 
   return (
     <div className="space-y-4 animate-slide-up w-full">
-      <div className="flex items-center justify-between px-1">
-        <h3 className="text-[14px] font-black text-[var(--t1)] uppercase tracking-widest">
-           年度總獲利進度
-        </h3>
-        <div className="bg-[var(--bg-card)] px-4 py-1.5 rounded-xl border border-[var(--border-bright)]">
-           <span className="text-[10px] font-black text-accent">{fmtMoney(settings?.year_goal || 0)}</span>
-        </div>
-      </div>
-
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
         {/* Custom Legend - Floating */}
@@ -232,7 +225,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
 
         <div className="h-[360px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 60, right: 0, left: -25, bottom: -10 }}>
+            <ComposedChart data={chartData} margin={{ top: 60, right: 35, left: 10, bottom: -10 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#e05050" stopOpacity={0.4}/>
@@ -258,12 +251,13 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 tick={{fontSize: 9, fontWeight: 900, fill: 'var(--t3)'}}
                 axisLine={false}
                 tickLine={false}
-                padding={{ left: 10, right: 10 }}
+                padding={{ left: 10, right: 15 }}
                 interval="preserveStartEnd"
                 minTickGap={40}
               />
               <YAxis 
                 width={70}
+                orientation="right"
                 domain={yDomain}
                 tick={{fontSize: 9, fontWeight: 900, fill: 'var(--t3)'}}
                 axisLine={false}
@@ -319,12 +313,7 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 opacity={0.3}
               />
 
-              {/* DYNAMIC FILL BETWEEN ACTUAL AND IDEAL 
-                  Instead of unsupported baseValue="ideal", we use rangeAbove and rangeBelow 
-                  which are arrays [base, value] to define the filled area.
-              */}
-              
-              {/* Above Ideal (Red) */}
+              {/* DYNAMIC FILL TO ZERO */}
               <Area 
                 type="monotone" 
                 dataKey="rangeAbove" 
@@ -333,8 +322,6 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 isAnimationActive={true}
                 connectNulls
               />
-
-              {/* Below Ideal (Green) */}
               <Area 
                 type="monotone" 
                 dataKey="rangeBelow" 
@@ -344,17 +331,25 @@ function YearlyPnLChartContent({ transactions, settings }: Props) {
                 connectNulls
               />
 
-              {/* ACTUAL LINE - Dynamic Color */}
+              {/* ACTUAL LINE - Segmented for Color */}
               <Line 
                 type="monotone" 
-                dataKey="actual" 
-                stroke={isAhead ? '#e05050' : '#4ade80'} 
+                dataKey="actualAbove" 
+                stroke="#e05050" 
                 strokeWidth={4} 
                 dot={false}
+                connectNulls={false}
                 isAnimationActive={true}
               />
-
-
+              <Line 
+                type="monotone" 
+                dataKey="actualBelow" 
+                stroke="#4ade80" 
+                strokeWidth={4} 
+                dot={false}
+                connectNulls={false}
+                isAnimationActive={true}
+              />
 
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
               <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />

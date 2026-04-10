@@ -108,6 +108,7 @@ export interface UserSettings {
   max_holdings: number
   font_size: 'small' | 'medium' | 'large'
   year_goal: number
+  year_goals: Record<string, number> // [NEW] Historical goals: { "2024": 50000, "2025": 80000 }
   total_goal: number
   total_goal_start_date: string
   theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
@@ -120,13 +121,14 @@ export const DEFAULT_SETTINGS: UserSettings = {
   sell_fee_rate: 0.001425,
   sell_discount: 0.285,
   fee_min: 20,
-  dca_fee_rate: 0.0001, // 預設較低的定期定額費率 (例如 1/10000)
-  dca_fee_min: 1,      // 預設最低 1 元
+  dca_fee_rate: 0.0001, 
+  dca_fee_min: 1,      
   tax_stock: 0.003,
   tax_etf: 0.001,
   max_holdings: 7,
   font_size: 'medium',
-  year_goal: 0,
+  year_goal: 10000,
+  year_goals: { "2026": 10000 },
   total_goal: 0,
   total_goal_start_date: new Date().toISOString().split('T')[0],
   theme: 'dark'

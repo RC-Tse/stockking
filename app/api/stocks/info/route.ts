@@ -3,12 +3,23 @@ import { getStockName } from '@/types'
 
 export async function GET(req: NextRequest) {
   const symbol = req.nextUrl.searchParams.get('symbol')?.toUpperCase()
-  const range = req.nextUrl.searchParams.get('range') || '4mo' // Default to 4mo for MA60
+  const range = req.nextUrl.searchParams.get('range')
+  const year = req.nextUrl.searchParams.get('year')
+
   if (!symbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
 
+  let url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d`
+  
+  if (year) {
+    const start = new Date(`${year}-01-01T00:00:00Z`).getTime() / 1000
+    const end = new Date(`${year}-12-31T23:59:59Z`).getTime() / 1000
+    url += `&period1=${Math.floor(start)}&period2=${Math.floor(end)}`
+  } else {
+    url += `&range=${range || '4mo'}`
+  }
+
   try {
-    const res = await fetch(
-      `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=${range}`,
+    const res = await fetch(url, 
       { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
     )
     if (!res.ok) return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 })

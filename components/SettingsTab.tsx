@@ -8,6 +8,7 @@ import {
   Palette, 
   ChevronRight, 
   ChevronLeft,
+  ChevronDown,
   LogOut
 } from 'lucide-react'
 
@@ -48,6 +49,18 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
     setSaving(false)
   }
 
+  const updateYearGoal = (year: string, goal: number) => {
+    const goals = { ...(localSettings.year_goals || {}) }
+    goals[year] = goal
+    const updates: Partial<UserSettings> = { year_goals: goals }
+    if (year === new Date().getFullYear().toString()) {
+      updates.year_goal = goal
+    }
+    handleSave(updates)
+  }
+
+  const fmtMoney = (val: number) => val.toLocaleString()
+
   const handleThemeChange = async (themeId: UserSettings['theme']) => {
     document.documentElement.setAttribute('data-theme', themeId)
     const icon = document.querySelector('link[rel="apple-touch-icon"]')
@@ -84,6 +97,8 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
       {saving ? '儲存中...' : (saveStatus || '儲存設定')}
     </button>
   )
+
+  const availableYears = ['2023', '2024', '2025', '2026', '2027']
 
   return (
     <div className="p-4 space-y-6 pb-32">
@@ -158,18 +173,49 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
           </div>
 
           <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-6 space-y-8 shadow-2xl">
-            <div className="space-y-2">
-              <Label>年度損益目標 (TWD)</Label>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <Label>年度損益目標 (TWD)</Label>
+                <select 
+                  value={editingYear}
+                  onChange={e => setEditingYear(e.target.value)}
+                  className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-[12px] font-black text-accent outline-none"
+                >
+                  {availableYears.map(y => <option key={y} value={y}>{y} 年</option>)}
+                </select>
+              </div>
+              
               <input 
                 type="number" inputMode="numeric"
-                value={localSettings.year_goal || ''} 
-                onChange={e => handleSave({ year_goal: Number(e.target.value) })}
+                value={localSettings.year_goals?.[editingYear] || ''} 
+                onChange={e => updateYearGoal(editingYear, Number(e.target.value))}
                 className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[17px] font-black font-mono text-[var(--t1)] outline-none focus:border-accent transition-all"
-                placeholder="例如: 100000"
+                placeholder={`設定 ${editingYear} 年度目標`}
               />
               <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
-                設定您今年的投資獲利目標，包含已實現與未實現損益。
+                正在設定 <span className="text-accent font-bold">{editingYear}</span> 年度的投資獲利目標。
               </p>
+
+              {/* History Section */}
+              <div className="pt-2">
+                <button 
+                  onClick={() => setShowHistory(!showHistory)}
+                  className="flex items-center gap-2 text-[11px] font-black text-[var(--t3)] hover:text-accent transition-colors uppercase tracking-widest"
+                >
+                  {showHistory ? <ChevronDown size={14} className="rotate-0 transition-transform" /> : <ChevronRight size={14} className="rotate-0 transition-transform" />} 歷年目標紀錄
+                </button>
+                
+                {showHistory && (
+                  <div className="mt-3 space-y-2 pl-2 border-l-2 border-white/5 animate-in fade-in slide-in-from-top-2">
+                     {Object.entries(localSettings.year_goals || {}).sort((a,b) => b[0].localeCompare(a[0])).map(([y, g]) => (
+                       <div key={y} className="flex items-center justify-between py-2 border-b border-white/5 last:border-0">
+                         <span className="text-[12px] font-bold text-[var(--t2)]">{y} 年</span>
+                         <span className="text-[13px] font-mono font-black text-accent">{fmtMoney(g)}</span>
+                       </div>
+                     ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="space-y-2 pt-4 border-t border-white/5">

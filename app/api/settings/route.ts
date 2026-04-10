@@ -12,7 +12,7 @@ const DB_COLUMNS = [
   'dca_fee_min', 'dca_fee_rate',
   'tax_stock', 'tax_etf',
   'max_holdings', 'font_size',
-  'year_goal', 'total_goal', 'total_goal_start_date',
+  'year_goal', 'year_goals', 'total_goal', 'total_goal_start_date',
   'theme',
   'year_goal_type',
 ] as const
