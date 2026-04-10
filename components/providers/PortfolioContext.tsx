@@ -118,12 +118,10 @@ export function PortfolioProvider({
         const rf_sell = calcRawFee(tx.shares, tx.price, settings, true)
         const rt_sell = calcRawTax(tx.shares, tx.price, tx.symbol, settings)
         
-        // Single-Exit Rounding for sell proceeds
-        const sellNet = Math.round((tx.shares * tx.price) - rf_sell - rt_sell)
-        
         let sellRem = tx.shares
         let matchedBuyCostTotal = 0
         let matchedBuyFeeTotal = 0
+        let matchedSellNetTotal = 0
         const matches = []
 
         while (sellRem > 0 && lots.length > 0) {
@@ -134,27 +132,28 @@ export function PortfolioProvider({
           const matchedPrincipal = lot.principal * ratio
           const matchedRawFee = lot.rawFee * ratio
           
-          // Single-Exit Rounding for matched buy cost
-          const matchedBuyCostInt = Math.round(matchedPrincipal + matchedRawFee)
+          // Single-Exit Rounding for matched buy cost (Part Part Rounding)
+          const mBuyCost = Math.round(matchedPrincipal + matchedRawFee)
           
-          // Single-Exit Rounding for matched sell part
+          // Single-Exit Rounding for matched sell part (Part Part Rounding)
           const ratioSell = take / tx.shares
           const rawPartGross = (tx.shares * tx.price) * ratioSell
           const rawPartFee = rf_sell * ratioSell
           const rawPartTax = rt_sell * ratioSell
-          const matchedSellNetPart = Math.round(rawPartGross - rawPartFee - rawPartTax)
+          const mSellNet = Math.round(rawPartGross - rawPartFee - rawPartTax)
 
-          matchedBuyCostTotal += matchedBuyCostInt
+          matchedBuyCostTotal += mBuyCost
           matchedBuyFeeTotal += Math.round(matchedRawFee)
+          matchedSellNetTotal += mSellNet
 
           matches.push({ 
             date: lot.date, 
             sellDate: tx.trade_date,
             shares: take, 
             buyPrice: lot.price, 
-            buyCost: matchedBuyCostInt,
+            buyCost: mBuyCost,
             sellPrice: tx.price,
-            sellNet: matchedSellNetPart
+            sellNet: mSellNet
           })
 
           lot.shares -= take
@@ -167,7 +166,8 @@ export function PortfolioProvider({
           if (lot.shares <= 0) lots.shift()
         }
 
-        const profit = sellNet - matchedBuyCostTotal
+        // Discrete Summation for profit: Sum of rounded parts difference
+        const profit = matchedSellNetTotal - matchedBuyCostTotal
 
         if (!isSnapshotPass) {
           historyBuyTotal += matchedBuyCostTotal
@@ -180,7 +180,7 @@ export function PortfolioProvider({
           }
 
           stock.buy += matchedBuyCostTotal
-          stock.sell += sellNet
+          stock.sell += matchedSellNetTotal
           stock.fee += (matchedBuyFeeTotal + Math.round(rf_sell))
           stock.tax += Math.round(rt_sell)
           stock.realized += profit
@@ -190,7 +190,7 @@ export function PortfolioProvider({
             type: 'SELL', 
             matches, 
             profit, 
-            net: sellNet, 
+            net: matchedSellNetTotal, 
             realizedCost: matchedBuyCostTotal, 
             fee: Math.round(rf_sell), 
             tax: Math.round(rt_sell), 

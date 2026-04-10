@@ -284,6 +284,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     const bufferMax = dataMax * 1.05
     const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
     
+    // Dynamic Snapping logic
     const range = bufferMax - bufferMin
     const snapUnit = range > 10000 ? 1000 : 500
     
@@ -293,21 +294,23 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     return [finalMin, finalMax]
   })()
 
+  const currentActual = Math.round(chartData.findLast(d => d.actual !== null)?.actual || 0)
+
   return (
     <div className="space-y-4 animate-slide-up w-full">
-      {/* Header with Goal Info */}
-      <div className="flex items-end justify-between px-2">
+      {/* Premium Header: Goal & Progress */}
+      <div className="flex items-end justify-between px-4">
         <div className="space-y-1">
-          <h3 className="text-[10px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em]">年度獲利目標進度</h3>
+          <h3 className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em]">年度獲利目標進度</h3>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-black text-[var(--t1)] font-mono">{fmtMoney(settings.year_goal)}</span>
-            <span className="text-[10px] font-bold text-accent opacity-60 uppercase tracking-widest">Target Goal</span>
+            <span className="text-3xl font-black text-[var(--t1)] font-mono">{fmtMoney(settings.year_goal)}</span>
+            <span className="text-[11px] font-bold text-accent opacity-60 uppercase tracking-widest">Target Goal</span>
           </div>
         </div>
         <div className="text-right">
-          <div className="text-[10px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1">當前累計損益</div>
-          <div className={`text-xl font-black font-mono ${(chartData.findLast(d => d.actual !== null)?.actual || 0) >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-            {fmtMoney(Math.round(chartData.findLast(d => d.actual !== null)?.actual || 0))}
+          <div className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1">當前累計總損益</div>
+          <div className={`text-2xl font-black font-mono ${currentActual >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+            {fmtMoney(currentActual)}
           </div>
         </div>
       </div>
@@ -315,7 +318,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
         {/* Custom Legend - Floating */}
-        <div className="absolute top-8 left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
+        <div className="absolute top-10 left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
           <div className="flex items-center gap-2">
             <div className="w-6 h-0.5 bg-[#fbbf24] rounded-full border-t border-dashed" />
             <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">理想進度</span>
@@ -329,9 +332,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           </div>
         </div>
 
-        <div className="h-[400px] w-full">
+        <div className="h-[420px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 70, right: 10, left: 10, bottom: 5 }}>
+            <ComposedChart data={chartData} margin={{ top: 80, right: 15, left: 10, bottom: 5 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
@@ -361,13 +364,13 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 interval={0}
               />
               <YAxis 
-                width={50}
+                width={60}
                 orientation="right"
                 domain={yDomain}
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : v}
+                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : fmtMoney(v)}
               />
 
               <Tooltip 
@@ -393,7 +396,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                             </span>
                           </div>
                           <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
-                            <span className="text-[11px] text-[var(--t2)] font-black">差額</span>
+                            <span className="text-[11px] text-[var(--t2)] font-black">跟隨差距</span>
                             <span className={`text-[14px] font-mono font-black ${diff >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
                               {fmtMoney(diff)}
                             </span>
@@ -406,7 +409,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 }}
               />
 
-              {/* DYNAMIC GAP FILLING */}
+              {/* DYNAMIC GAP FILLING AREAS */}
               <Area 
                 type="monotone" 
                 dataKey="rangeAbove" 
@@ -433,10 +436,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 strokeDasharray="5 5"
                 dot={false} 
                 isAnimationActive={false}
-                opacity={0.4}
+                opacity={0.3}
               />
 
-              {/* ACTUAL LINE - Segmented for Color */}
+              {/* ACTUAL LINE - Differential Coloring */}
               <Line 
                 type="monotone" 
                 dataKey="actualAbove" 
