@@ -169,15 +169,15 @@ export default function HoldingsTab({ onRefresh }: Props) {
             </div>
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="未實現損益" value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(Math.round(unrealizedPnl))}` : "••••••"} className="w-1/2 text-center" upDown={unrealizedPnl} />
+            <StatBox label="未實現損益" value={showData ? `${unrealizedPnl >= 0 ? '+' : ''}${fmtMoney(unrealizedPnl)}` : "••••••"} className="w-1/2 text-center" upDown={unrealizedPnl} />
             <StatBox label="未實現損益比" value={showData ? `${unrealizedPct >= 0 ? '+' : ''}${unrealizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={unrealizedPnl} />
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="今年已實現損益" value={showData ? `${stats.yearlyRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(stats.yearlyRealized))}` : "••••••"} className="w-1/2 text-center" upDown={stats.yearlyRealized} />
+            <StatBox label="今年已實現損益" value={showData ? `${stats.yearlyRealized >= 0 ? '+' : ''}${fmtMoney(stats.yearlyRealized)}` : "••••••"} className="w-1/2 text-center" upDown={stats.yearlyRealized} />
             <StatBox label="今年已實現損益比" value={showData ? `${yearlyRealizedPct >= 0 ? '+' : ''}${yearlyRealizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={stats.yearlyRealized} />
           </div>
           <div className="flex items-center border-t border-white/5 pt-6">
-            <StatBox label="已實現損益 (合計)" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(Math.round(totalRealized))}` : "••••••"} className="w-1/2 text-center" upDown={totalRealized} />
+            <StatBox label="已實現損益 (合計)" value={showData ? `${totalRealized >= 0 ? '+' : ''}${fmtMoney(totalRealized)}` : "••••••"} className="w-1/2 text-center" upDown={totalRealized} />
             <StatBox label="已實現損益比" value={showData ? `${realizedPct >= 0 ? '+' : ''}${realizedPct.toFixed(2)}%` : "••••••"} className="w-1/2 text-center border-l border-white/5" upDown={totalRealized} />
           </div>
 

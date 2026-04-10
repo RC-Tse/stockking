@@ -175,7 +175,7 @@ export function fmtPrice(v: number): string {
 }
 
 export function fmtMoney(v: number): string {
-  return v.toLocaleString('zh-TW')
+  return Math.round(v).toLocaleString('zh-TW')
 }
 
 // ── Stock Name Mapping ────────────────────────────────────────────────────────

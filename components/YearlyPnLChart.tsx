@@ -383,19 +383,19 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                           <div className="flex justify-between gap-12">
                             <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
                             <span className={`text-[14px] font-mono font-black ${(data.actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                              {fmtMoney(Math.round(data.actual || 0))}
+                              {fmtMoney(data.actual || 0)}
                             </span>
                           </div>
                           <div className="flex justify-between gap-12">
                             <span className="text-[12px] text-[var(--t2)] font-black">理想目標</span>
                             <span className="text-[14px] font-mono font-black text-[#fbbf24]">
-                              {fmtMoney(Math.round(data.ideal || 0))}
+                              {fmtMoney(data.ideal || 0)}
                             </span>
                           </div>
                           <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
                             <span className="text-[11px] text-[var(--t2)] font-black">差額</span>
                             <span className={`text-[14px] font-mono font-black ${diff >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                              {fmtMoney(Math.round(diff))}
+                              {fmtMoney(diff)}
                             </span>
                           </div>
                         </div>
