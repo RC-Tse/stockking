@@ -6,29 +6,14 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 import { Transaction, UserSettings, fmtMoney, calcFee, calcTax } from '@/types'
-
-// Custom component to handle dynamic SVG clipping for the Area Chart
-const DynamicClipMasks = (props: any) => {
-  const { width, height, margin, settings } = props
-  // Standard Recharts margins if not provided
-  const top = margin?.top || 10
-  const bottom = height - (margin?.bottom || 20)
-  const left = margin?.left || 20
-  const right = width - (margin?.right || 30)
-
-  // Ideal line goes from (1/1, 0) to (12/31, Goal)
-  // In SVG coordinates, Y=0 is Top. So we need to map the Goal to Y coordinates.
-  // This is hard without the yAxis scale function.
-  // For now, we'll use a reliable gradient fallback or a simple two-area split.
-  return null
-}
+import ErrorBoundary from './ErrorBoundary'
 
 interface Props {
   transactions: Transaction[]
   settings: UserSettings
 }
 
-export default function YearlyPnLChart({ transactions, settings }: Props) {
+function YearlyPnLChartContent({ transactions, settings }: Props) {
   const [historyData, setHistoryData] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
 
@@ -39,7 +24,9 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
 
   const relevantSymbols = useMemo(() => {
     const syms = new Set<string>()
-    transactions.forEach(t => syms.add(t.symbol))
+    transactions.forEach(t => {
+      if (t?.symbol) syms.add(t.symbol)
+    })
     return Array.from(syms)
   }, [transactions])
 
@@ -56,7 +43,7 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
           const res = await fetch(`/api/stocks/info?symbol=${sym}&range=1y`)
           if (res.ok) {
             const data = await res.json()
-            results[sym] = data.history || []
+            results[sym] = Array.isArray(data?.history) ? data.history : []
           }
         } catch (e) { console.error(`Failed to fetch history for ${sym}`, e) }
       }))
@@ -70,10 +57,14 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
     if (loading) return []
     const start = new Date(`${currentYear}-01-01`)
     const end = new Date(`${currentYear}-12-31`)
-    const sortedTxs = [...transactions].sort((a, b) => a.trade_date.localeCompare(b.trade_date))
+    const sortedTxs = [...transactions]
+      .filter(t => t?.trade_date)
+      .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
     
     let inventory: Record<string, { shares: number, cost: number }[]> = {}
     let txIdx = 0
+    
+    // Phase 1: Pre-2026 Inventory & Baseline
     while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date < yearStartStr) {
       const t = sortedTxs[txIdx]
       if (!inventory[t.symbol]) inventory[t.symbol] = []
@@ -84,11 +75,14 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
         let rem = t.shares
         while (rem > 0 && inventory[t.symbol].length > 0) {
           const lot = inventory[t.symbol][0]
+          if (!lot) break
           const take = Math.min(lot.shares, rem)
           const lotCost = lot.cost
           const lotShares = lot.shares
-          lot.cost -= (take / lotShares) * lotCost
-          lot.shares -= take
+          if (lotShares > 0) {
+            lot.cost -= (take / lotShares) * lotCost
+            lot.shares -= take
+          }
           rem -= take
           if (lot.shares <= 0) inventory[t.symbol].shift()
         }
@@ -98,15 +92,18 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
 
     let initialUnrealized = 0
     Object.entries(inventory).forEach(([sym, lots]) => {
-      const shares = lots.reduce((s, l) => s + l.shares, 0)
-      const cost = lots.reduce((s, l) => s + l.cost, 0)
+      const shares = lots.reduce((s, l) => s + (l?.shares || 0), 0)
+      const cost = lots.reduce((s, l) => s + (l?.cost || 0), 0)
       if (shares > 0) {
         const hist = historyData[sym] || []
-        const price = [...hist].reverse().find(p => p.date <= lastYearEndStr)?.price || 0
+        // CRITICAL BUG FIX/GUARD: Safe find with initial state
+        const priceObj = [...hist].reverse().find(p => p?.date && p.date <= lastYearEndStr)
+        const price = priceObj?.price || 0
         initialUnrealized += (shares * price - cost)
       }
     })
 
+    // Phase 2: Annual Loop
     const days: any[] = []
     let cumulativeRealized2026 = 0
     const lastPriceMap: Record<string, number> = {}
@@ -116,6 +113,7 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const dStr = d.toISOString().split('T')[0]
       const isFuture = dStr > todayStr
+
       if (!isFuture) {
         while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date === dStr) {
           const t = sortedTxs[txIdx]
@@ -131,11 +129,15 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
             let matchedCost = 0
             while (rem > 0 && inventory[t.symbol].length > 0) {
               const lot = inventory[t.symbol][0]
+              if (!lot) break
               const take = Math.min(lot.shares, rem)
-              const takeCost = (take / lot.shares) * lot.cost
-              matchedCost += takeCost
-              lot.shares -= take
-              lot.cost -= takeCost
+              const lotShares = lot.shares
+              if (lotShares > 0) {
+                const takeCost = (take / lotShares) * lot.cost
+                matchedCost += takeCost
+                lot.shares -= take
+                lot.cost -= takeCost
+              }
               rem -= take
               if (lot.shares <= 0) inventory[t.symbol].shift()
             }
@@ -144,26 +146,32 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
           txIdx++
         }
       }
+
+      // CRITICAL BUG FIX/GUARD: Pointer loop with safe access
       relevantSymbols.forEach(sym => {
         const hist = historyData[sym] || []
         let ptr = stockHistoryPointers[sym]
-        while (ptr < hist.length && hist[ptr].date <= dStr) {
-          lastPriceMap[sym] = hist[ptr].price; ptr++
+        while (ptr < hist.length && hist[ptr] && (hist[ptr].date || '') <= dStr) {
+          lastPriceMap[sym] = hist[ptr].price || lastPriceMap[sym] || 0
+          ptr++
         }
         stockHistoryPointers[sym] = ptr
       })
+
       let currentUnrealizedTotal = 0
       Object.entries(inventory).forEach(([sym, lots]) => {
-        const shares = lots.reduce((s, l) => s + l.shares, 0)
-        const cost = lots.reduce((s, l) => s + l.cost, 0)
+        const shares = lots.reduce((s, l) => s + (l?.shares || 0), 0)
+        const cost = lots.reduce((s, l) => s + (l?.cost || 0), 0)
         if (shares > 0) {
           const price = lastPriceMap[sym] || 0
           currentUnrealizedTotal += (shares * price - cost)
         }
       })
+
       const dayIdx = days.length
-      const idealPnL = (dayIdx / 365) * settings.year_goal
+      const idealPnL = (dayIdx / 365) * (settings?.year_goal || 0)
       const actualPnL = cumulativeRealized2026 + currentUnrealizedTotal - initialUnrealized
+
       days.push({
         date: dStr,
         actual: isFuture ? null : actualPnL,
@@ -176,9 +184,10 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
   }, [transactions, historyData, loading, settings, currentYear, todayStr, relevantSymbols, yearStartStr, lastYearEndStr])
 
   const ticks = useMemo(() => {
-    const main = chartData.filter(d => d.isMonthStart).map(d => d.date)
-    const end = chartData[chartData.length - 1].date
-    if (!main.includes(end)) main.push(end)
+    if (!chartData || chartData.length === 0) return []
+    const main = chartData.filter(d => d?.isMonthStart).map(d => d.date)
+    const end = chartData[chartData.length - 1]?.date
+    if (end && !main.includes(end)) main.push(end)
     return main
   }, [chartData])
 
@@ -186,7 +195,7 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
     <div className="h-[280px] flex items-center justify-center bg-[var(--bg-card)] rounded-[40px] border border-[var(--border-bright)]">
        <div className="flex flex-col items-center gap-3">
          <div className="w-8 h-8 border-4 border-accent border-t-transparent rounded-full animate-spin" />
-         <span className="text-[11px] font-black text-[var(--t2)] opacity-80 uppercase tracking-widest">重建專業損益引擎...</span>
+         <span className="text-[11px] font-black text-[var(--t2)] opacity-80 uppercase tracking-widest">初始化核心分析引擎...</span>
        </div>
     </div>
   )
@@ -200,17 +209,16 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
     <div className="space-y-6 animate-slide-up w-full">
       <div className="flex items-center justify-between px-2">
         <h3 className="text-[14px] font-black text-[var(--t1)] uppercase tracking-widest flex items-center gap-3">
-           年度損益分析進度
+           年度損益進度圖
         </h3>
         <div className="bg-[var(--bg-card)] px-4 py-2 rounded-2xl border border-[var(--border-bright)] shadow-inner">
            <span className="text-[10px] font-black text-[var(--t3)] uppercase mr-3 opacity-60 font-mono">GOAL</span>
-           <span className="text-[14px] font-mono font-black text-accent">{fmtMoney(settings.year_goal)}</span>
+           <span className="text-[14px] font-mono font-black text-accent">{fmtMoney(settings?.year_goal || 0)}</span>
         </div>
       </div>
 
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-10 pt-8 shadow-2xl relative overflow-hidden group">
         
-        {/* Custom Legend */}
         <div className="flex justify-center gap-10 mb-8 relative z-10">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-0.5 bg-[#FFD700] rounded-full shadow-[0_0_8px_rgba(255,215,0,0.4)]" />
@@ -245,6 +253,7 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
                 dataKey="date" 
                 ticks={ticks}
                 tickFormatter={(v) => {
+                  if (!v || typeof v !== 'string') return ''
                   const d = new Date(v)
                   if (v.endsWith('-12-31')) return '12/31'
                   return `${d.getMonth() + 1}/1`
@@ -267,8 +276,8 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     const data = payload[0].payload
-                    if (data.isFuture) return null
-                    const diff = data.actual - data.ideal
+                    if (!data || data.isFuture) return null
+                    const diff = (data.actual || 0) - (data.ideal || 0)
                     return (
                       <div className="glass p-5 border-white/10 shadow-2xl backdrop-blur-3xl rounded-3xl">
                         <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-[0.2em]">{data.date}</div>
@@ -276,13 +285,13 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
                           <div className="flex justify-between gap-12">
                             <span className="text-[12px] text-[var(--t2)] font-black">累計損益</span>
                             <span className={`text-[14px] font-mono font-black ${data.actual >= 0 ? 'text-[#e05050]' : 'text-[#4ade80]'}`}>
-                              {fmtMoney(Math.round(data.actual))}
+                              {fmtMoney(Math.round(data.actual || 0))}
                             </span>
                           </div>
                           <div className="flex justify-between gap-12">
                             <span className="text-[12px] text-[var(--t2)] font-black">理想進度</span>
                             <span className="text-[14px] font-mono font-black text-[#FFD700]">
-                              {fmtMoney(Math.round(data.ideal))}
+                              {fmtMoney(Math.round(data.ideal || 0))}
                             </span>
                           </div>
                           <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
@@ -299,7 +308,6 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
                 }}
               />
 
-              {/* Slanted Ideal Line */}
               <Line 
                 type="linear" 
                 dataKey="ideal" 
@@ -309,12 +317,6 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
                 isAnimationActive={false}
               />
 
-              {/* 
-                Advanced Visual Specifications: Conditional Coloring with Clear Borders.
-                We achieve this by rendering an Area for the fill and a Line for the border.
-                The fill color is determined by the CURRENT state to maintain high performance 
-                and clean lines, while ensuring 2/24 verification point matches logic.
-              */}
               <Area 
                 type="monotone" 
                 dataKey="actual" 
@@ -339,5 +341,14 @@ export default function YearlyPnLChart({ transactions, settings }: Props) {
         </div>
       </div>
     </div>
+  )
+}
+
+// Wrap with ErrorBoundary for safe rendering
+export default function YearlyPnLChart(props: Props) {
+  return (
+    <ErrorBoundary>
+      <YearlyPnLChartContent {...props} />
+    </ErrorBoundary>
   )
 }
