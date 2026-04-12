@@ -27,6 +27,35 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   })
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
 
+  const [isScrubbingMode, setIsScrubbingMode] = useState(false)
+  const isScrubModeRef = useRef(false)
+  const [scrubState, setScrubState] = useState<{ x: number, y: number, payload: any } | null>(null)
+  const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleTouchStart = () => {
+    if (isScrubModeRef.current) return
+    scrubTimerRef.current = setTimeout(() => {
+      setIsScrubbingMode(true)
+      isScrubModeRef.current = true
+      if (window.navigator?.vibrate) window.navigator.vibrate(10)
+    }, 1000)
+  }
+
+  const handleTouchEnd = () => {
+    if (scrubTimerRef.current) {
+      clearTimeout(scrubTimerRef.current)
+      scrubTimerRef.current = null
+    }
+  }
+
+  const handleChartClick = () => {
+    if (isScrubModeRef.current) {
+      setIsScrubbingMode(false)
+      isScrubModeRef.current = false
+      setScrubState(null)
+    }
+  }
+
   const chartYear = year || new Date().getFullYear()
   const yearStartStr = `${chartYear}-01-01`
   const todayStr = new Date().toISOString().split('T')[0]
@@ -387,34 +416,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const latestValid = [...filteredData].reverse().find(d => d.actual !== null)
   const currentActual = Math.round(latestValid?.actual || 0)
 
-  const [isScrubbingMode, setIsScrubbingMode] = useState(false)
-  const isScrubModeRef = useRef(false)
-  const [scrubState, setScrubState] = useState<{ x: number, y: number, payload: any } | null>(null)
-  const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleTouchStart = () => {
-    if (isScrubModeRef.current) return
-    scrubTimerRef.current = setTimeout(() => {
-      setIsScrubbingMode(true)
-      isScrubModeRef.current = true
-      if (window.navigator?.vibrate) window.navigator.vibrate(10)
-    }, 1000)
-  }
-
-  const handleTouchEnd = () => {
-    if (scrubTimerRef.current) {
-      clearTimeout(scrubTimerRef.current)
-      scrubTimerRef.current = null
-    }
-  }
-
-  const handleChartClick = () => {
-    if (isScrubModeRef.current) {
-      setIsScrubbingMode(false)
-      isScrubModeRef.current = false
-      setScrubState(null)
-    }
-  }
 
   return (
     <div className="space-y-4 animate-slide-up w-full">
