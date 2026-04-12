@@ -7,15 +7,19 @@ interface Props {
   value: string // YYYY-MM-DD
   onChange: (value: string) => void
   className?: string
+  fixedYear?: number
 }
 
 type View = 'CALENDAR' | 'YEAR' | 'MONTH'
 
-export default function DatePicker({ value, onChange, className = '' }: Props) {
+export default function DatePicker({ value, onChange, className = '', fixedYear }: Props) {
   const [isOpen, setIsOpen] = useState(false)
   const [view, setView] = useState<View>('CALENDAR')
   
   const initialDate = value ? new Date(value) : new Date()
+  if (fixedYear !== undefined) {
+    initialDate.setFullYear(fixedYear)
+  }
   const [viewDate, setViewDate] = useState(initialDate)
   
   const containerRef = useRef<HTMLDivElement>(null)
@@ -58,7 +62,15 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
         onClick={() => {
           setIsOpen(!isOpen)
           setView('CALENDAR')
-          if (value) setViewDate(new Date(value))
+          if (value) {
+            const d = new Date(value)
+            if (fixedYear !== undefined) d.setFullYear(fixedYear)
+            setViewDate(d)
+          } else if (fixedYear !== undefined) {
+            const d = new Date()
+            d.setFullYear(fixedYear)
+            setViewDate(d)
+          }
         }}
         className="input-base cursor-pointer focus:border-accent font-mono font-black"
         placeholder="選擇日期"
@@ -76,7 +88,11 @@ export default function DatePicker({ value, onChange, className = '' }: Props) {
             </button>
 
             <div className="flex gap-2 font-black text-[var(--t1)] text-[20px]">
-              <button onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} className={`px-2 rounded transition-colors ${view === 'YEAR' ? 'text-accent' : ''}`}>
+              <button 
+                onClick={() => setView(view === 'YEAR' ? 'CALENDAR' : 'YEAR')} 
+                disabled={fixedYear !== undefined}
+                className={`px-2 rounded transition-colors ${view === 'YEAR' ? 'text-accent' : ''} ${fixedYear !== undefined ? 'cursor-default' : ''}`}
+              >
                 {currentYear} 年
               </button>
               <button onClick={() => setView(view === 'MONTH' ? 'CALENDAR' : 'MONTH')} className={`px-2 rounded transition-colors ${view === 'MONTH' ? 'text-accent' : ''}`}>

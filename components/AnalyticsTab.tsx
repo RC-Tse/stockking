@@ -470,11 +470,11 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           <div className="flex items-center justify-end gap-3 px-1 py-1 animate-slide-up bg-[var(--bg-card)] rounded-2xl border border-[var(--border-bright)] shadow-xl">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
-              <DatePicker value={customStockStart} onChange={(v: string) => setCustomStockStart(v)} />
+              <DatePicker value={customStockStart} onChange={(v: string) => setCustomStockStart(v)} fixedYear={Number(selectedYear)} />
             </div>
             <div className="flex items-center gap-2 pr-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
-              <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} />
+              <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} fixedYear={Number(selectedYear)} />
             </div>
           </div>
         )}

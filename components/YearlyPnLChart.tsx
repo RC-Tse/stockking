@@ -329,12 +329,12 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         actualLineAbove: isAhead || d.isIntersection ? d.actual : null,
         actualLineBelow: !isAhead || d.isIntersection ? d.actual : null,
         // For Areas
-        fillRed: isAhead ? d.actual : 0,
+        fillRed: (d.actual !== null && isAhead) ? d.actual : null,
         // Green fill: Need to cover [actual, ideal] and [actual, 0].
         // Since ideal > 0, if actual < ideal, the union is [min(actual, 0), ideal].
         // To avoid overlap (and double opacity), we split into positive and negative parts.
-        fillGreenPos: !isAhead ? d.ideal : 0,
-        fillGreenNeg: !isAhead ? Math.min(d.actual, 0) : 0
+        fillGreenPos: (d.actual !== null && !isAhead) ? d.ideal : null,
+        fillGreenNeg: (d.actual !== null && !isAhead) ? Math.min(d.actual, 0) : null
       }
     })
 
@@ -429,11 +429,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           <div className="flex items-center justify-end gap-3 px-4 py-2 animate-slide-up bg-[var(--bg-card)] rounded-2xl border border-[var(--border-bright)] shadow-xl">
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
-              <DatePicker value={customStart} onChange={(v: string) => setCustomStart(v)} />
+              <DatePicker value={customStart} onChange={(v: string) => setCustomStart(v)} fixedYear={chartYear} />
             </div>
             <div className="flex items-center gap-2 pr-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
-              <DatePicker value={customEnd} onChange={(v: string) => setCustomEnd(v)} />
+              <DatePicker value={customEnd} onChange={(v: string) => setCustomEnd(v)} fixedYear={chartYear} />
             </div>
           </div>
         )}
