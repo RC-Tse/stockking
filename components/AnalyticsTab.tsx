@@ -16,8 +16,9 @@ interface Props {
 }
 
 export default function AnalyticsTab({ onRefresh }: Props) {
-  const { stats, quotes, settings, updateSettings } = usePortfolio()
-  const { holdings } = stats
+  const sortedHoldings = useMemo(() => {
+    return [...(stats.holdings || [])].sort((a, b) => (b.total_amount ?? 0) - (a.total_amount ?? 0))
+  }, [stats.holdings])
   
   const currentYear = new Date().getFullYear().toString()
   const [selectedYear, setSelectedYear] = useState(currentYear)
@@ -38,7 +39,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   }, [stats.fullHistoryStats])
 
   // ── Stock Chart States ──
-  const [selSym, setSelSym] = useState(holdings[0]?.symbol || '')
+  const [selSym, setSelSym] = useState(sortedHoldings[0]?.symbol || '')
   const [stockRange, setStockRange] = useState<StockRange>(settings.stock_chart_default_range || '1M')
   const [showCustomStock, setShowCustomStock] = useState(false)
   const [customStockStart, setCustomStockStart] = useState(() => {
@@ -68,7 +69,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     fetchHistory()
   }, [selSym, stockRange])
 
-  const selectedHolding = useMemo(() => holdings.find(h => h.symbol === selSym), [holdings, selSym])
+  const selectedHolding = useMemo(() => sortedHoldings.find(h => h.symbol === selSym), [sortedHoldings, selSym])
 
   const enrichedStockHistory = useMemo(() => {
     if (!stockHistory.length) return []
@@ -348,13 +349,26 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     const min = Math.min(...vals)
     const max = Math.max(...vals)
     const range = max - min
+    const pad = range * 0.1
+    let rawMin = min - pad
+    let rawMax = max + pad
+
+    // 取得最新收盤價以進行對齊
+    const latestClose = enrichedStockHistory[enrichedStockHistory.length - 1]?.close
     
-    // 尋找能被 4 整除的範圍以確保 5 個整數標籤等距
-    const pad = range * 0.05
-    let newMin = Math.floor(min - pad)
-    let newMax = Math.ceil(max + pad)
+    // 如果不是手動調整模式，實作「最新價在第 4 個刻度 (75% 深度)」邏輯
+    // 4th tick from top corresponds to Min + 0.25*(Max-Min)
+    if (!isManualY && latestClose) {
+      const targetRange = Math.max(range * 1.2, latestClose * 0.05) // 確保有足夠範圍
+      rawMin = latestClose - 0.25 * targetRange
+      rawMax = latestClose + 0.75 * targetRange
+    }
+
+    let newMin = Math.floor(rawMin)
+    let newMax = Math.ceil(rawMax)
     let newRange = newMax - newMin
-    while (newRange % 4 !== 0) {
+    // 確保 Range 正確且能被 4 整除
+    while (newRange % 4 !== 0 || newRange < 4) {
       newMax++
       newRange = newMax - newMin
     }
@@ -412,8 +426,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     return chartHeight - ((price - min) / (max - min)) * chartHeight
   }
 
-  // 初始視野校正：右對齊 + 根據範圍自動縮放
   useEffect(() => {
+    setIsManualY(false) // 切換個股時重置為自動對齊模式
     if (enrichedStockHistory.length > 0 && scrollerRef.current) {
       const chartWidth = scrollerRef.current.clientWidth - 32 // 扣除 padding
       
@@ -541,7 +555,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               onChange={e => setSelSym(e.target.value)}
               className="w-full bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t2)] outline-none focus:border-accent transition-all appearance-none cursor-pointer shadow-lg"
             >
-              {holdings.map(h => (
+              {sortedHoldings.map(h => (
                 <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">
                   {quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})
                 </option>
