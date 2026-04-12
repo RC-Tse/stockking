@@ -338,14 +338,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   // 計算圖表寬度比例
   // 1M 約 22 個交易日, 3M 約 66, 6M 約 132...
-  const pointsPerWindow = useMemo(() => {
+  const [pointsPerWindow, setPointsPerWindow] = useState(22)
+
+  // 根據選擇的範圍初始化點數
+  useEffect(() => {
     switch(stockRange) {
-      case '1M': return 22
-      case '3M': return 66
-      case '6M': return 132
-      case '9M': return 198
-      case '1Y': return 252
-      default: return Math.max(22, enrichedStockHistory.length)
+      case '1M': setPointsPerWindow(22); break
+      case '3M': setPointsPerWindow(66); break
+      case '6M': setPointsPerWindow(132); break
+      case '9M': setPointsPerWindow(198); break
+      case '1Y': setPointsPerWindow(252); break
+      default: setPointsPerWindow(Math.max(22, enrichedStockHistory.length))
     }
   }, [stockRange, enrichedStockHistory.length])
 
@@ -354,6 +357,75 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     const ratio = enrichedStockHistory.length / pointsPerWindow
     return `${Math.max(100, ratio * 100)}%`
   }, [enrichedStockHistory.length, pointsPerWindow])
+
+  const [yDomain, setYDomain] = useState<[number | string, number | string]>(['auto', 'auto'])
+  const pinchStartDist = useRef<number | null>(null)
+  const lastPointsPerWindow = useRef<number>(22)
+
+  // 監聽捲動與縮放
+  useEffect(() => {
+    const scroller = scrollerRef.current
+    if (!scroller || !enrichedStockHistory.length) return
+
+    const updateYAxis = () => {
+      const { scrollLeft, scrollWidth, clientWidth } = scroller
+      const totalPoints = enrichedStockHistory.length
+      const pointsInView = (clientWidth / scrollWidth) * totalPoints
+      const startIndex = Math.floor((scrollLeft / scrollWidth) * totalPoints)
+      const visibleData = enrichedStockHistory.slice(startIndex, startIndex + Math.ceil(pointsInView) + 1)
+      
+      if (visibleData.length > 0) {
+        const vals = visibleData.flatMap(d => [d.open, d.close, d.high, d.low, d.avgCost].filter(v => v !== null)) as number[]
+        const min = Math.min(...vals)
+        const max = Math.max(...vals)
+        const padding = (max - min) * 0.1
+        setYDomain([min - padding, max + padding])
+      }
+    }
+
+    const handleTouchStart = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        pinchStartDist.current = Math.hypot(
+          e.touches[0].pageX - e.touches[1].pageX,
+          e.touches[0].pageY - e.touches[1].pageY
+        )
+        lastPointsPerWindow.current = pointsPerWindow
+      }
+    }
+
+    const handleTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2 && pinchStartDist.current !== null) {
+        e.preventDefault() // 阻斷原生縮放與捲動
+        const currentDist = Math.hypot(
+          e.touches[0].pageX - e.touches[1].pageX,
+          e.touches[0].pageY - e.touches[1].pageY
+        )
+        const zoomFactor = pinchStartDist.current / currentDist
+        const nextPoints = lastPointsPerWindow.current * zoomFactor
+        // 限制點數在 10 ~ 300 之間
+        setPointsPerWindow(Math.min(300, Math.max(10, nextPoints)))
+      }
+    }
+
+    const handleTouchEnd = () => {
+      pinchStartDist.current = null
+    }
+
+    scroller.addEventListener('scroll', updateYAxis)
+    scroller.addEventListener('touchstart', handleTouchStart, { passive: false })
+    scroller.addEventListener('touchmove', handleTouchMove, { passive: false })
+    scroller.addEventListener('touchend', handleTouchEnd)
+    
+    // 初始化執行一次
+    updateYAxis()
+
+    return () => {
+      scroller.removeEventListener('scroll', updateYAxis)
+      scroller.removeEventListener('touchstart', handleTouchStart)
+      scroller.removeEventListener('touchmove', handleTouchMove)
+      scroller.removeEventListener('touchend', handleTouchEnd)
+    }
+  }, [enrichedStockHistory, pointsPerWindow])
 
   // 自動捲動到最右側
   useEffect(() => {
@@ -500,12 +572,12 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             className={`bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
             style={{ WebkitOverflowScrolling: 'touch', height: '320px' }}
           >
-            {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
+{loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
             
             <div style={{ width: chartWidthPercent, height: '280px', minWidth: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
                 {settings.stock_chart_style === 'detailed' ? (
-                  <ComposedChart data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap="-100%">
+                  <ComposedChart onMouseMove={handleMouseMove} data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap="-100%">
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                     <XAxis 
                       dataKey="timestamp" 
@@ -520,15 +592,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     />
                     <YAxis 
                       orientation="right"
-                      domain={['auto', 'auto']}
+                      domain={yDomain}
                       tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
                       axisLine={false}
                       tickLine={false}
-                      width={35}
+                      width={40}
+                      tickFormatter={(v) => v.toFixed(1)}
                     />
                     <Tooltip 
+                      active={isScrubbing}
                       content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
+                        if (isScrubbing && active && payload && payload.length) {
                           const data = payload[0].payload
                           return (
                             <div className="glass p-5 border-white/10 shadow-2xl backdrop-blur-3xl rounded-3xl min-w-[180px] border">
@@ -609,7 +683,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     />
                   </ComposedChart>
                 ) : (
-                  <LineChart data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                  <LineChart onMouseMove={handleMouseMove} data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
                     <XAxis 
                       dataKey="timestamp" 
@@ -624,15 +698,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     />
                     <YAxis 
                       orientation="right"
-                      domain={['auto', 'auto']}
+                      domain={yDomain}
                       tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
                       axisLine={false}
                       tickLine={false}
-                      width={35}
+                      width={40}
+                      tickFormatter={(v) => v.toFixed(1)}
                     />
                     <Tooltip 
+                      active={isScrubbing}
                       content={({ active, payload }) => {
-                        if (active && payload && payload.length) {
+                        if (isScrubbing && active && payload && payload.length) {
                           const data = payload[0].payload
                           return (
                             <div className="glass p-4 border-white/10 shadow-2xl backdrop-blur-3xl rounded-2xl border">
@@ -699,23 +775,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                 )}
               </ResponsiveContainer>
             </div>
-          </div>
-
-          {/* 右側固定 Y 軸 - 懸浮刻度 (無背景遮罩) */}
-          <div 
-            className="absolute right-0 top-0 bottom-0 w-[42px] z-20 pointer-events-none border-l border-white/5 flex flex-col justify-between py-[46px] px-1"
-          >
-            {yAxisMetrics.ticks.map((t, i) => (
-              <div 
-                key={i} 
-                className="text-[9px] font-black text-[var(--t1)] text-right font-mono pr-1"
-                style={{ 
-                  textShadow: '0px 0px 4px rgba(0, 0, 0, 0.9), 0px 0px 8px rgba(0, 0, 0, 0.6)'
-                }}
-              >
-                {t.toFixed(0)}
-              </div>
-            ))}
           </div>
 
           {/* 右側固定 Y 軸價格標籤 - 查價模式 */}
