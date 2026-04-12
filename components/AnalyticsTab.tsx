@@ -19,7 +19,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const { stats, quotes, settings, updateSettings } = usePortfolio()
 
   const sortedHoldings = useMemo(() => {
-    return [...(stats.holdings || [])].sort((a, b) => (b.total_amount ?? 0) - (a.total_amount ?? 0))
+    return [...(stats.holdings || [])].sort((a, b) => (b.total_cost ?? 0) - (a.total_cost ?? 0))
   }, [stats.holdings])
   
   const currentYear = new Date().getFullYear().toString()

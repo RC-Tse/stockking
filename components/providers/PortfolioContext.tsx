@@ -32,19 +32,21 @@ interface PortfolioContextType {
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined)
 
+interface PortfolioProviderProps {
+  children: React.ReactNode
+  transactions: Transaction[]
+  quotes: Record<string, Quote>
+  settings: UserSettings
+  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>
+}
+
 export function PortfolioProvider({ 
   children, 
   transactions, 
   quotes, 
   settings,
   updateSettings
-}: { 
-  children: React.ReactNode, 
-  transactions: Transaction[], 
-  quotes: Record<string, Quote>, 
-  settings: UserSettings, 
-  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>
-}) {
+}: PortfolioProviderProps) {
   const [snapshotQuotes, setSnapshotQuotes] = React.useState<Record<string, any>>({})
   
   // Back-calculate 12/31 Snapshot prices
