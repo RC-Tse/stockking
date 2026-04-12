@@ -322,7 +322,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const yDomain = (() => {
     const goal = settings?.year_goal || 0
     const vals = filteredData.filter(d => d.actual !== null && !d.isIntersection).flatMap(d => [d.actual, d.ideal])
-    if (vals.length === 0) return [0, goal * 1.05]
+    if (vals.length === 0) {
+      const g = goal * 1.05
+      return { domain: [0, g], ticks: [0, g] }
+    }
 
     const dataMin = Math.min(0, ...vals)
     const dataMax = Math.max(...vals)
