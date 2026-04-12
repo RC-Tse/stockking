@@ -395,6 +395,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         })
       },
       onDrag: ({ delta: [, dy], first }) => {
+        if (isScrubbingMode) return // 查價時不移動圖表
         if (first) setIsManualY(true)
         const rangeY = yDomain[1] - yDomain[0]
         const pricePerPixel = rangeY / chartHeight
@@ -763,7 +764,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           
           {loadingStock && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
 
-          {isScrubbing && activeIdx !== null && enrichedStockHistory[activeIdx] && (
+          {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
             <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200 min-w-[120px]">
                <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
