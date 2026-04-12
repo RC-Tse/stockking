@@ -278,7 +278,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     // Dynamic Ticks: Start, End, and 1st of each month in between
     const ticks: string[] = []
     if (filtered.length > 0) {
-      ticks.push(startDate)
+      // 確保將真正的資料範圍起點放入 ticks 中，這樣 Recharts 的 ReferenceLine 才抓得到該點來畫白線
+      ticks.push(filtered[0].date)
       
       // Monthly 1st points
       // Generate all 1st days between start and end
