@@ -117,14 +117,13 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   }
 
   return (
-    <PortfolioProvider transactions={txs} quotes={quotes} settings={settings}>
+    <PortfolioProvider transactions={txs} quotes={quotes} settings={settings} updateSettings={handleSaveSettings}>
         <DashboardInner 
         user={user} tab={tab} setTab={setTab} 
         refresh={refresh} refreshQuotesOnly={refreshQuotesOnly} loading={loading} 
         drawerOpen={drawerOpen} setDrawerOpen={setDrawerOpen}
         settings={settings} setSettings={setSettings}
       />
-
     </PortfolioProvider>
   )
 }

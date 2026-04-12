@@ -27,6 +27,7 @@ interface PortfolioContextType {
   settings: UserSettings
   quotes: Record<string, Quote>
   loading: boolean
+  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>
 }
 
 const PortfolioContext = createContext<PortfolioContextType | undefined>(undefined)
@@ -35,12 +36,14 @@ export function PortfolioProvider({
   children, 
   transactions, 
   quotes, 
-  settings 
+  settings,
+  updateSettings
 }: { 
   children: React.ReactNode, 
   transactions: Transaction[], 
   quotes: Record<string, Quote>, 
   settings: UserSettings 
+  updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>
 }) {
   const [snapshotQuotes, setSnapshotQuotes] = React.useState<Record<string, any>>({})
   
@@ -334,7 +337,7 @@ export function PortfolioProvider({
 
 
   return (
-    <PortfolioContext.Provider value={{ stats, settings, quotes, loading: false }}>
+    <PortfolioContext.Provider value={{ stats, settings, quotes, loading: false, updateSettings }}>
       {children}
     </PortfolioContext.Provider>
   )
