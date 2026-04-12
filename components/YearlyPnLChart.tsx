@@ -119,14 +119,16 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           } else {
             const { absNet: net_sell } = calculateTxParts(t.shares, t.price, 'SELL', t.symbol, settings)
             let rem = t.shares
+            let sellProceedsRemaining = net_sell
             while (rem > 0 && inventory[t.symbol].length > 0) {
               const lot = inventory[t.symbol][0]
               const take = Math.min(lot.shares, rem)
               
               const mBuyCost = take === lot.shares ? lot.cost : Math.floor(lot.cost * (take / lot.shares))
-              const mSellNet = take === t.shares ? net_sell : Math.floor(net_sell * (take / t.shares))
+              const mSellNet = take === rem ? sellProceedsRemaining : Math.floor(net_sell * (take / t.shares))
 
               cumulativeRealizedThisYear += (mSellNet - mBuyCost)
+              sellProceedsRemaining -= mSellNet
               
               lot.shares -= take
               lot.cost -= mBuyCost
@@ -150,6 +152,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
       let unrealizedThisYear = 0
       Object.entries(inventory).forEach(([sym, lots]) => {
+        const netShares = lots.reduce((s, l) => s + l.shares, 0)
+        if (netShares <= 0) return
+        
         const q = lastPriceMap[sym] || 0
         if (q <= 0) {
           lots.forEach(l => {
@@ -158,10 +163,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           return
         }
         
-        lots.forEach(l => {
-          const { absNet } = calculateTxParts(l.shares, q, 'SELL', sym, settings)
-          unrealizedThisYear += (absNet - l.cost)
-        })
+        const { absNet: totalNetMV } = calculateTxParts(netShares, q, 'SELL', sym, settings)
+        const totalCost = lots.reduce((s, l) => s + l.cost, 0)
+        unrealizedThisYear += (totalNetMV - totalCost)
       })
 
       const dayIdx = rawDays.length

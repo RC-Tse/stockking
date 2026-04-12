@@ -108,7 +108,10 @@ export function PortfolioProvider({
           total_cost: absNet 
         })
 
-        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee, net: -absNet })
+        if (!isSnapshotPass) {
+          stock.fee += fee
+          stock.history.push({ ...tx, type: 'BUY', fee, net: -absNet })
+        }
 
       } else if (tx.action === 'SELL') {
         const gross_sell = Math.floor(tx.shares * tx.price)
@@ -117,6 +120,7 @@ export function PortfolioProvider({
         const net_sell = gross_sell - fee_sell - tax_sell
         
         let sellRem = tx.shares
+        let sellProceedsRemaining = net_sell
         let matchedBuyCostTotal = 0
         let matchedSellNetTotal = 0
         const matches = []
@@ -133,12 +137,13 @@ export function PortfolioProvider({
             : Math.floor(lot.total_cost * (take / lot.shares))
           
           // Integer Partitioning for matched sell proceeds
-          const mSellNet = take === tx.shares
-            ? net_sell
+          const mSellNet = take === sellRem
+            ? sellProceedsRemaining
             : Math.floor(net_sell * (take / tx.shares))
 
           matchedBuyCostTotal += mBuyCost
           matchedSellNetTotal += mSellNet
+          sellProceedsRemaining -= mSellNet
 
           matches.push({ 
             date: lot.date, 
@@ -243,7 +248,10 @@ export function PortfolioProvider({
         const q = quotes[sym]
         const cp = q?.price || 0
         
-        // Per-lot detail calculation for visual parity (Discrete Summation)
+        // Aggregate Position Estimation (Source of Truth for Brokerage Parity)
+        const { gross: totalGross, absNet: totalNetMV, fee: totalSellFee, tax: totalSellTax } = calculateTxParts(netShares, cp, 'SELL', sym, settings)
+        
+        // Per-lot detail calculation (For display, may have 1-2元 rounding drift due to discrete lot estimation)
         const lotDetails = lots.map(l => {
           const { gross, absNet, fee, tax } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
           const roundedCost = l.total_cost
@@ -259,9 +267,8 @@ export function PortfolioProvider({
           }
         })
 
-        const summedNetMV = lotDetails.reduce((s, ld) => s + ld.net_market_value, 0)
         const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
-        const upnl = summedNetMV - summedCost
+        const upnl = totalNetMV - summedCost
 
         return [{
           symbol: sym,
@@ -269,10 +276,10 @@ export function PortfolioProvider({
           avg_cost: summedCost / netShares,
           total_cost: summedCost,
           current_price: cp,
-          market_value: Math.floor(cp * netShares),
-          net_market_value: summedNetMV,
-          sell_fee: lotDetails.reduce((s, ld) => s + ld.sell_fee, 0),
-          sell_tax: lotDetails.reduce((s, ld) => s + ld.sell_tax, 0),
+          market_value: totalGross,
+          net_market_value: totalNetMV,
+          sell_fee: totalSellFee,
+          sell_tax: totalSellTax,
           unrealized_pnl: upnl,
           pnl_pct: summedCost ? (upnl / summedCost) * 100 : 0,
           lots: lotDetails,
