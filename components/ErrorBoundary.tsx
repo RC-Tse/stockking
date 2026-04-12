@@ -10,16 +10,17 @@ interface Props {
 
 interface State {
   hasError: boolean
+  errorMsg: string
 }
 
 export default class ErrorBoundary extends React.Component<Props, State> {
   constructor(props: Props) {
     super(props)
-    this.state = { hasError: false }
+    this.state = { hasError: false, errorMsg: '' }
   }
 
-  static getDerivedStateFromError(_: Error) {
-    return { hasError: true }
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, errorMsg: error?.message || 'Unknown Error' }
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
@@ -36,9 +37,12 @@ export default class ErrorBoundary extends React.Component<Props, State> {
             <AlertTriangle className="text-red-500" size={24} />
           </div>
           <h4 className="text-[14px] font-black text-[var(--t1)] uppercase tracking-wider mb-2">圖表引擎載入異常</h4>
-          <p className="text-[11px] text-[var(--t3)] leading-relaxed max-w-[200px] mb-6 font-bold uppercase tracking-tight">
+          <p className="text-[11px] text-[var(--t3)] leading-relaxed max-w-[200px] mb-2 font-bold uppercase tracking-tight">
             目前無法處理部分歷史股價資料，請重新整理頁面。
           </p>
+          <div className="w-full max-w-[300px] mb-6 p-2 bg-red-900/20 text-red-400 text-xs text-left overflow-auto rounded whitespace-normal break-words font-mono">
+            {this.state.errorMsg}
+          </div>
           <button 
             onClick={() => window.location.reload()}
             className="flex items-center gap-2 px-6 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black text-[var(--t2)] uppercase tracking-widest transition-all hover:scale-105 active:scale-95"
