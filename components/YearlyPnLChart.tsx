@@ -206,7 +206,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 // If ahead (isAbv), color everything below Actual as Lead (Red).
                 // If behind (!isAbv), color everything from Actual to Ideal (which includes Actual to 0) as Lag (Green).
                 areaLead: isAbv && d.actual !== null ? [Math.min(0, d.ideal), d.actual] : null,
-                areaLag: !isAbv && d.actual !== null ? [d.actual, Math.max(0, d.ideal)] : null
+                areaLag: !isAbv && d.actual !== null ? [Math.min(d.actual, 0), Math.max(0, d.ideal)] : null
             }
         }
         

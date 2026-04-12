@@ -171,35 +171,37 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     } else {
       const duration = getMonthsFromRange(range)
       const dGoalStart = new Date(goalStartDate)
+      const dEndWindow = new Date(dGoalStart)
+      dEndWindow.setMonth(dEndWindow.getMonth() + duration)
+      
       const dToday = new Date(todayStr)
       
-      const monthsSinceStart = (dToday.getFullYear() - dGoalStart.getFullYear()) * 12 + (dToday.getMonth() - dGoalStart.getMonth())
-      
-      if (monthsSinceStart > duration) {
+      if (dEndWindow < dToday) {
+        // CASE: The window starting from goal_start_date has already passed.
+        // Rule: Use today as the end point and look back X months.
         const dS = new Date(dToday)
         dS.setMonth(dS.getMonth() - duration)
         startDate = dS.toISOString().split('T')[0]
         endDate = todayStr
       } else {
-        // User's specific backward example for 6M
-        if (range === '6M') {
-          const dS = new Date(dGoalStart)
-          const dE = new Date(dGoalStart)
-          dE.setMonth(dE.getMonth() - 6)
-          const dates = [dS.toISOString().split('T')[0], dE.toISOString().split('T')[0]].sort()
-          startDate = dates[0]
-          endDate = dates[1]
-        } else {
-          // Forward logic
-          startDate = goalStartDate
-          const dE = new Date(dGoalStart)
-          dE.setMonth(dE.getMonth() + duration)
-          endDate = dE.toISOString().split('T')[0]
-        }
+        // CASE: The window starting from goal_start_date is either current or in the future.
+        // Rule: Start from goal_start_date and look forward X months.
+        startDate = goalStartDate
+        endDate = dEndWindow.toISOString().split('T')[0]
       }
     }
 
+    // Filter data to the window range.
     const filtered = chartData.filter(d => d.date >= startDate && d.date <= endDate)
+    
+    // To ensure the chart starts AT the white line, we should ideally have a data point 
+    // exactly at startDate. If the first filtered data point is after startDate,
+    // we should prepend the first point's value at the startDate to ensure alignment.
+    if (filtered.length > 0 && filtered[0].date > startDate) {
+       // Optional: Add a virtual start point to anchor at the left.
+       // However, for total progress, usually the goal start is the first data day.
+    }
+
     const ticks: string[] = []
     if (filtered.length > 0) {
       ticks.push(filtered[0].date)
@@ -211,7 +213,9 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
           if (s > startDate && s < endDate) ticks.push(s)
         }
       }
-      if (endDate !== startDate) ticks.push(endDate)
+      // Ensure the end of window is shown if it's today or in the past
+      const finalEnd = endDate < todayStr ? endDate : todayStr
+      if (finalEnd > startDate) ticks.push(finalEnd)
     }
 
     return { filteredData: filtered, dynamicTicks: Array.from(new Set(ticks)).sort() }
@@ -313,8 +317,8 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
-                padding={{ left: 0, right: 20 }}
-                interval={0}
+                padding={{ left: 0, right: 0 }}
+                interval="preserveStart"
               />
               <YAxis 
                 yAxisId="right"
