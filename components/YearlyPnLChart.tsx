@@ -204,7 +204,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 actualBelow: !isAbv ? d.actual : null,
                 // Differential Area Fill (strictly between lines)
                 rangeAbove: isAbv && d.actual !== null ? [d.ideal, d.actual] : null,
-                rangeBelow: !isAbv && d.actual !== null ? [d.actual, d.ideal] : null
+                rangeBelow: !isAbv && d.actual !== null ? [d.actual, d.ideal] : null,
+                // PnL Area Fill (relative to Y=0)
+                pnlAreaPos: d.actual !== null && d.actual > 0 ? [0, d.actual] : null,
+                pnlAreaNeg: d.actual !== null && d.actual < 0 ? [d.actual, 0] : null
             }
         }
         
@@ -557,13 +560,33 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 isAnimationActive={true}
               />
               
-              {/* DIFFERENTIAL AREAS */}
+              {/* PnL AREAS (Relative to Y=0) */}
+              <Area 
+                yAxisId="right"
+                type="linear" 
+                dataKey="pnlAreaPos" 
+                fill="#ef4444" 
+                fillOpacity={0.15} 
+                stroke="none" 
+                isAnimationActive={true}
+              />
+              <Area 
+                yAxisId="right"
+                type="linear" 
+                dataKey="pnlAreaNeg" 
+                fill="#22c55e" 
+                fillOpacity={0.15} 
+                stroke="none" 
+                isAnimationActive={true}
+              />
+
+              {/* DIFFERENTIAL AREAS (Between lines) - Kept but with reduced opacity */}
               <Area 
                 yAxisId="right"
                 type="linear" 
                 dataKey="rangeAbove" 
                 fill="#ef4444" 
-                fillOpacity={0.25} 
+                fillOpacity={0.15} 
                 stroke="none" 
                 isAnimationActive={true}
               />
@@ -572,7 +595,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 type="linear" 
                 dataKey="rangeBelow" 
                 fill="#22c55e" 
-                fillOpacity={0.25} 
+                fillOpacity={0.15} 
                 stroke="none" 
                 isAnimationActive={true}
               />

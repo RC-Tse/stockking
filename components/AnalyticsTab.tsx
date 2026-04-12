@@ -8,6 +8,7 @@ import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info } from 'lucide-re
 import DatePicker from './DatePicker'
 import { usePortfolio } from './providers/PortfolioContext'
 import YearlyPnLChart from './YearlyPnLChart'
+import TotalPnLChart from './TotalPnLChart'
 
 type StockRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'CUSTOM'
 
@@ -845,6 +846,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             </div>
           </div>
         )}
+      </section>
+
+      {/* ── 00. 總進度圖 (移至最下方) ── */}
+      <section className="space-y-4">
+        <div className="px-1">
+          <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">總進度回顧</span>
+        </div>
+        <TotalPnLChart 
+          transactions={stats.fullHistoryStats ? Object.values(stats.fullHistoryStats).flatMap((s: any) => s.history) : []} 
+          settings={settings} 
+        />
       </section>
     </div>
   )
