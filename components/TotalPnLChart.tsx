@@ -222,18 +222,26 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
   }, [chartData, range, customStart, customEnd, goalStartDate, todayStr])
 
   const yDomain = useMemo(() => {
-    const vals = filteredData.map(d => d.actual || 0)
-    const goal = settings.total_goal || 0
-    const maxVal = Math.max(...vals, goal)
-    const safeMax = isFinite(maxVal) && maxVal > 0 ? maxVal : 10000
+    const vals = filteredData.filter(d => d.actual !== null).map(d => d.actual as number)
+    const maxActual = vals.length > 0 ? Math.max(...vals) : 1000
+    const minActual = vals.length > 0 ? Math.min(...vals) : 0
 
-    let step = Math.ceil(safeMax / 5 / 100) * 100
-    if (step <= 0) step = 2000
-    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
+    // Positive max = max actual with 5% headroom
+    const rawPosMax = Math.max(maxActual, 100)
+    const posMaxWithPad = rawPosMax * 1.05
 
-    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
-    return { domain: [-step, step * 5] as [number, number], ticks }
-  }, [filteredData, settings.total_goal])
+    // Step: divide into 5 equal segments, round up to clean 100s
+    let step = Math.ceil(posMaxWithPad / 5 / 100) * 100
+    if (step <= 0) step = 1000
+    while (step * 5 < posMaxWithPad) step += 100
+
+    // Negative tick: actual min with 5% extra, rounded down to nearest 100
+    const negRaw = minActual < 0 ? minActual * 1.05 : -step
+    const negTick = Math.floor(negRaw / 100) * 100
+
+    const ticks = [negTick, 0, step, step * 2, step * 3, step * 4, step * 5]
+    return { domain: [negTick, step * 5] as [number, number], ticks }
+  }, [filteredData])
 
   if (loading) return (
     <div className="h-[400px] flex items-center justify-center bg-[var(--bg-card)] rounded-[48px] border border-[var(--border-bright)]">

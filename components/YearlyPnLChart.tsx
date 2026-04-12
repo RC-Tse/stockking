@@ -341,18 +341,32 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   }, [chartData, range, customStart, customEnd, chartYear, todayStr, yearStartStr, settings.chart_default_range])
 
   const yDomain = useMemo(() => {
-    const goal = settings?.year_goal || 0
-    const vals = filteredData.filter(d => d.actual !== null && !d.isIntersection).flatMap(d => [d.actual, d.ideal])
-    const dataMax = vals.length > 0 ? Math.max(...vals, goal) : goal
-    const safeMax = isFinite(dataMax) && dataMax > 0 ? dataMax : 10000
+    const nonFuture = filteredData.filter(d => !d.isIntersection && !d.isFuture && d.actual !== null)
+    const actuals = nonFuture.map(d => d.actual as number)
+    const ideals = nonFuture.map(d => d.ideal as number)
 
-    let step = Math.ceil(safeMax / 5 / 100) * 100
-    if (step <= 0) step = 2000
-    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
+    const maxActual = actuals.length > 0 ? Math.max(...actuals) : 0
+    const minActual = actuals.length > 0 ? Math.min(...actuals) : 0
+    // Last ideal in the selected range (end of period ideal target)
+    const lastIdeal = ideals.length > 0 ? Math.max(...ideals) : 0
 
-    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
-    return { domain: [-step, step * 5] as [number, number], ticks }
-  }, [filteredData, settings?.year_goal])
+    // Positive max = higher of ideal-end or actual-max, with 5% headroom
+    const rawPosMax = Math.max(lastIdeal, maxActual, 100)
+    const posMaxWithPad = rawPosMax * 1.05
+
+    // Step: divide into 5 equal segments, round up to clean 100s
+    let step = Math.ceil(posMaxWithPad / 5 / 100) * 100
+    if (step <= 0) step = 1000
+    while (step * 5 < posMaxWithPad) step += 100
+
+    // Negative tick: actual min with 5% extra, rounded down to nearest 100
+    const negRaw = minActual < 0 ? minActual * 1.05 : -step
+    const negTick = Math.floor(negRaw / 100) * 100
+
+    const ticks = [negTick, 0, step, step * 2, step * 3, step * 4, step * 5]
+    // Domain: a bit extra below negTick, and step*5 already has 5% built in
+    return { domain: [negTick, step * 5] as [number, number], ticks }
+  }, [filteredData])
 
   if (loading) return (
     <div className="h-[400px] flex items-center justify-center bg-[var(--bg-card)] rounded-[48px] border border-[var(--border-bright)]">
