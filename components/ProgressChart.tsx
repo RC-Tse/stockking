@@ -28,7 +28,6 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
   const [isScrubbingMode, setIsScrubbingMode] = useState(false)
   
   const viewBoxWidth = 1000
-  const chartHeight = 420
 
   // Calculate Y Domain
   const yAxis = useMemo(() => {
@@ -72,6 +71,19 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
       ticks: ticks.sort((a,b) => a-b) 
     }
   }, [data, goal])
+
+  const chartHeight = useMemo(() => {
+    if (data.length <= 1) return 420
+    const idealStart = data[0].ideal || 0
+    const idealEnd = data[data.length - 1].ideal || 0
+    const idealDelta = Math.abs(idealEnd - idealStart)
+    const yRange = yAxis.domain[1] - yAxis.domain[0]
+    
+    if (idealDelta === 0 || yRange === 0) return 420
+    
+    const h = viewBoxWidth * (yRange / idealDelta)
+    return Math.max(300, Math.min(h, 2000))
+  }, [data, yAxis.domain, viewBoxWidth])
 
   const yScale = (val: number) => {
     const [min, max] = yAxis.domain
