@@ -21,7 +21,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const [loading, setLoading] = useState(true)
   
   type ChartRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
-  const [range, setRange] = useState<ChartRange>('ALL')
+  const [range, setRange] = useState<ChartRange>((settings.chart_default_range as any) || '1M')
   const [showCustom, setShowCustom] = useState(false)
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
@@ -295,15 +295,20 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       if (endDate !== startDate) ticks.push(endDate)
     }
 
-    // Split area logic for baseValue=0
-    const enhanced = filtered.map(d => ({
-      ...d,
-      actualPos: d.actual !== null && d.actual >= 0 ? d.actual : 0,
-      actualNeg: d.actual !== null && d.actual < 0 ? d.actual : 0
-    }))
+    // Split area logic for coloring relative to IDEAL, but filling to Y=0
+    const enhanced = filtered.map(d => {
+      const isAhead = d.actual !== null && d.actual >= d.ideal
+      return {
+        ...d,
+        actualAbove: isAhead ? d.actual : null,
+        actualBelow: !isAhead ? d.actual : null,
+        fillRed: isAhead ? d.actual : 0,
+        fillGreen: !isAhead ? d.actual : 0
+      }
+    })
 
     return { filteredData: enhanced, dynamicTicks: Array.from(new Set(ticks)).sort() }
-  }, [chartData, range, customStart, customEnd, chartYear, todayStr, yearStartStr])
+  }, [chartData, range, customStart, customEnd, chartYear, todayStr, yearStartStr, settings.chart_default_range])
 
   if (loading) return (
     <div className="h-[400px] flex items-center justify-center bg-[var(--bg-card)] rounded-[48px] border border-[var(--border-bright)]">
@@ -400,9 +405,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
             <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">理想進度</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex h-0.5 w-6 rounded-full overflow-hidden">
-              <div className="bg-[#ef4444] flex-1" />
-              <div className="bg-[#22c55e] flex-1" />
+            <div className="flex h-[3px] w-6 rounded-full overflow-hidden items-center">
+              <div className="bg-[#ef4444] h-full flex-1" />
+              <div className="bg-[#22c55e] h-full flex-1" />
             </div>
             <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">實際進度</span>
           </div>
@@ -514,10 +519,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 opacity={0.8}
               />
 
-              {/* ACTUAL AREAS FILL TO Y=0 */}
+              {/* ACTUAL AREAS FILL TO Y=0 based on state */}
               <Area 
                 type="monotone" 
-                dataKey="actualPos" 
+                dataKey="fillRed" 
                 fill="url(#areaRed)"
                 stroke="none"
                 baseValue={0}
@@ -526,7 +531,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               />
               <Area 
                 type="monotone" 
-                dataKey="actualNeg" 
+                dataKey="fillGreen" 
                 fill="url(#areaGreen)"
                 stroke="none"
                 baseValue={0}
@@ -534,19 +539,27 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 connectNulls
               />
 
-              {/* ACTUAL LINE - restored and styled */}
+              {/* ACTUAL LINE - restored and styled with differential coloring */}
               <Line 
                 type="monotone" 
-                dataKey="actual" 
-                stroke="#666" // Neutral base, or use dynamic logic below
+                dataKey="actualAbove" 
+                stroke="#ef4444" 
                 strokeWidth={2.5} 
                 dot={false}
                 connectNulls
                 isAnimationActive={true}
-                strokeLinecap="round"
+              />
+              <Line 
+                type="monotone" 
+                dataKey="actualBelow" 
+                stroke="#22c55e" 
+                strokeWidth={2.5} 
+                dot={false}
+                connectNulls
+                isAnimationActive={true}
               />
 
-              <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
+              <ReferenceLine y={0} stroke="#fff" strokeWidth={2} strokeOpacity={0.8} />
               {chartYear === new Date().getFullYear() && filteredData.some(d => d.date === todayStr) && (
                 <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
               )}

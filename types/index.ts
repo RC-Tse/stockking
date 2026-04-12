@@ -112,6 +112,7 @@ export interface UserSettings {
   total_goal: number
   total_goal_start_date: string
   theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
+  chart_default_range: '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL'
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -131,7 +132,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   year_goals: { "2026": 10000 },
   total_goal: 0,
   total_goal_start_date: new Date().toISOString().split('T')[0],
-  theme: 'dark'
+  theme: 'dark',
+  chart_default_range: '1M'
 }
 
 // ETF codes for tax calculation

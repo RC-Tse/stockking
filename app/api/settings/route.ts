@@ -15,6 +15,7 @@ const DB_COLUMNS = [
   'year_goal', 'year_goals', 'total_goal', 'total_goal_start_date',
   'theme',
   'year_goal_type',
+  'chart_default_range',
 ] as const
 
 export async function GET() {
