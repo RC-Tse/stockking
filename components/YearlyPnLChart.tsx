@@ -331,9 +331,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         actualLineBelow: !isAhead || d.isIntersection ? d.actual : null,
         // For Areas
         fillRed: isAhead ? d.actual : 0,
-        // Green fill: min(actual, 0) up to ideal (covers actual->0 and actual->ideal)
-        fillGreenTop: !isAhead ? d.ideal : 0,
-        fillGreenBottom: !isAhead ? Math.min(d.actual, 0) : 0
+        // Green fill: Need to cover [actual, ideal] and [actual, 0].
+        // Since ideal > 0, if actual < ideal, the union is [min(actual, 0), ideal].
+        // To avoid overlap (and double opacity), we split into positive and negative parts.
+        fillGreenPos: !isAhead ? d.ideal : 0,
+        fillGreenNeg: !isAhead ? Math.min(d.actual, 0) : 0
       }
     })
 
@@ -545,14 +547,24 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 connectNulls
               />
 
-              {/* GREEN AREA: Behind target (actual < ideal) -> Combined Fill from min(actual,0) to Ideal */}
+              {/* GREEN AREA: Combined Fill from min(actual,0) to Ideal */}
               <Area 
                 type="linear" 
-                dataKey="fillGreenTop" 
+                dataKey="fillGreenPos" 
                 stroke="none"
                 fill="#22c55e"
                 fillOpacity={0.2}
-                baseValue="fillGreenBottom"
+                baseValue={0}
+                isAnimationActive={true}
+                connectNulls
+              />
+              <Area 
+                type="linear" 
+                dataKey="fillGreenNeg" 
+                stroke="none"
+                fill="#22c55e"
+                fillOpacity={0.2}
+                baseValue={0}
                 isAnimationActive={true}
                 connectNulls
               />
