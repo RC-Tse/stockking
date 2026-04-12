@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName, codeOnly } from '@/types'
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Legend
+  ResponsiveContainer, Legend, ComposedChart, Bar, Cell
 } from 'recharts'
 import { TrendingUp, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker from './DatePicker'
@@ -148,14 +148,25 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       const totalCost = inventory.reduce((s, lot) => s + lot.cost, 0)
       currentAvgCost = totalShares > 0 ? totalCost / totalShares : null
       
+      
+      const open = h.open ?? h.price
+      const close = h.price
+      const high = h.high ?? h.price
+      const low = h.low ?? h.price
+
       return {
         ...h,
+        open, high, low,
         isBuy,
         txPrice,
         txShares,
         avgCost: currentAvgCost,
         pnlDiff: currentAvgCost !== null ? (h.price - currentAvgCost) * totalShares : 0,
-        pnlPct: currentAvgCost !== null && currentAvgCost !== 0 ? ((h.price - currentAvgCost) / currentAvgCost) * 100 : 0
+        pnlPct: currentAvgCost !== null && currentAvgCost !== 0 ? ((h.price - currentAvgCost) / currentAvgCost) * 100 : 0,
+        // For Candlestick
+        candleBody: [Math.min(open, close), Math.max(open, close)],
+        candleWick: [low, high],
+        isUp: close >= open
       }
     })
 
@@ -465,7 +476,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
               <DatePicker value={customStockStart} onChange={(v: string) => setCustomStockStart(v)} fixedYear={Number(selectedYear)} />
-            </div>
             <div className="flex items-center gap-2 pr-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
               <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} fixedYear={Number(selectedYear)} />
@@ -474,8 +484,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         )}
 
         <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-black text-[var(--t2)] opacity-80 animate-slide-up">
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: 'var(--accent)' }} /> 股價線</div>
-          <div className="flex items-center gap-1.5"><div className="w-4 h-0 border-b-2 border-dashed" style={{ borderColor: 'rgba(255,255,255,0.8)' }} /> 買入均價</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: settings.stock_chart_style === 'detailed' ? '#ef4444' : 'var(--accent)' }} /> {settings.stock_chart_style === 'detailed' ? '陽線 (漲)' : '股價線'}</div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} /> {settings.stock_chart_style === 'detailed' ? '陰線 (跌)' : '買入均價'}</div>
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full border-2 border-white bg-[#e05050]" /> 買入點</div>
         </div>
 
@@ -493,23 +503,199 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             
             <div style={{ width: chartWidthPercent, height: '280px', minWidth: '100%' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart 
-                  data={enrichedStockHistory} 
-                  margin={{ top: 10, right: 45, left: 0, bottom: 5 }}
-                  onMouseMove={handleMouseMove}
-                  onMouseLeave={() => setActivePoint(null)}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" vertical={true} />
-                  <XAxis dataKey="timestamp" type="number" scale="time" domain={['dataMin', 'dataMax']} ticks={customTicks} tickFormatter={formatTick} tick={{fontSize: 11, fontWeight: 900, fill: 'var(--t2)', opacity: 0.6}} axisLine={{ stroke: 'rgba(255,255,255,0.1)' }} interval={0} />
-                  <YAxis domain={[yAxisMetrics.min, yAxisMetrics.max]} orientation="right" tick={false} axisLine={false} tickLine={false} hide />
-                  <Tooltip 
-                    content={<StockTooltip />} 
-                    active={isScrubbing}
-                  />
-                  <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" isAnimationActive={false} />
-                  <Line type="linear" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" isAnimationActive={false} />
-                  <Line type="linear" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" isAnimationActive={false} />
-                </LineChart>
+                {settings.stock_chart_style === 'detailed' ? (
+                  <ComposedChart data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap="-100%">
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis 
+                      dataKey="timestamp" 
+                      type="number"
+                      domain={['auto', 'auto']}
+                      ticks={customTicks}
+                      tickFormatter={formatTick}
+                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      minTickGap={30}
+                    />
+                    <YAxis 
+                      orientation="right"
+                      domain={['auto', 'auto']}
+                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={35}
+                    />
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload
+                          return (
+                            <div className="glass p-5 border-white/10 shadow-2xl backdrop-blur-3xl rounded-3xl min-w-[180px] border">
+                              <div className="text-[10px] text-[var(--t3)] font-black mb-3 uppercase tracking-widest border-b border-white/5 pb-2">
+                                {data.date}
+                              </div>
+                              <div className="space-y-2">
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-[var(--t2)] font-black">開盤</span>
+                                  <span className="text-[12px] font-mono font-black text-[var(--t1)]">{data.open}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-[var(--t2)] font-black text-red-400">最高</span>
+                                  <span className="text-[12px] font-mono font-black text-red-400">{data.high}</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                  <span className="text-[10px] text-[var(--t2)] font-black text-green-400">最低</span>
+                                  <span className="text-[12px] font-mono font-black text-green-400">{data.low}</span>
+                                </div>
+                                <div className="flex justify-between items-center pt-1 border-t border-white/5">
+                                  <span className="text-[10px] text-[var(--t2)] font-black">收盤</span>
+                                  <span className={`text-[14px] font-mono font-black ${data.isUp ? 'text-red-400' : 'text-green-400'}`}>{data.price}</span>
+                                </div>
+                                {data.avgCost && (
+                                  <div className="pt-1 mt-1 border-t border-white/5 flex justify-between items-center">
+                                    <span className="text-[10px] text-[var(--t2)] opacity-60 font-black">均價</span>
+                                    <span className="text-[12px] font-mono font-black text-[var(--t3)]">{fmtMoney(data.avgCost)}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                    
+                    {/* Wicks */}
+                    <Bar dataKey="candleWick" barSize={1} isAnimationActive={false}>
+                      {enrichedStockHistory.map((entry, index) => (
+                        <Cell key={`wick-${index}`} fill={entry.isUp ? '#ef4444' : '#22c55e'} />
+                      ))}
+                    </Bar>
+                    
+                    {/* Bodies */}
+                    <Bar dataKey="candleBody" barSize={8} isAnimationActive={true}>
+                      {enrichedStockHistory.map((entry, index) => (
+                        <Cell key={`body-${index}`} fill={entry.isUp ? '#ef4444' : '#22c55e'} />
+                      ))}
+                    </Bar>
+
+                    {/* Avg Cost Line */}
+                    <Line 
+                      type="stepAfter" 
+                      dataKey="avgCost" 
+                      stroke="rgba(255,255,255,0.7)" 
+                      strokeWidth={1.5} 
+                      strokeDasharray="4 4" 
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls
+                    />
+
+                    {/* Buy Points */}
+                    <Line 
+                      type="monotone" 
+                      dataKey="txPrice" 
+                      stroke="none" 
+                      dot={(props: any) => {
+                        const { cx, cy, payload } = props
+                        if (payload.isBuy) {
+                          return (
+                            <circle key={`buy-${payload.date}`} cx={cx} cy={cy} r={4} fill="#e05050" stroke="#fff" strokeWidth={2} />
+                          )
+                        }
+                        return <></>
+                      }}
+                    />
+                  </ComposedChart>
+                ) : (
+                  <LineChart data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <XAxis 
+                      dataKey="timestamp" 
+                      type="number"
+                      domain={['auto', 'auto']}
+                      ticks={customTicks}
+                      tickFormatter={formatTick}
+                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      minTickGap={30}
+                    />
+                    <YAxis 
+                      orientation="right"
+                      domain={['auto', 'auto']}
+                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
+                      axisLine={false}
+                      tickLine={false}
+                      width={35}
+                    />
+                    <Tooltip 
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload
+                          return (
+                            <div className="glass p-4 border-white/10 shadow-2xl backdrop-blur-3xl rounded-2xl border">
+                              <div className="text-[10px] text-[var(--t3)] font-black mb-2 uppercase tracking-widest">{data.date}</div>
+                              <div className="space-y-2">
+                                <div className="flex justify-between gap-8">
+                                  <span className="text-[11px] text-[var(--t2)] font-black">當前股價</span>
+                                  <span className="text-[13px] font-mono font-black text-accent">{fmtMoney(data.price)}</span>
+                                </div>
+                                {data.avgCost !== null && (
+                                  <div className="flex justify-between gap-8">
+                                    <span className="text-[11px] text-[var(--t2)] opacity-60 font-black">庫存均價</span>
+                                    <span className="text-[13px] font-mono font-black text-[var(--t3)]">{fmtMoney(data.avgCost)}</span>
+                                  </div>
+                                )}
+                                {data.pnlDiff !== 0 && (
+                                  <div className="pt-2 border-t border-white/5 flex justify-between gap-8">
+                                    <span className="text-[10px] text-[var(--t2)] font-black">累積損益</span>
+                                    <span className={`text-[12px] font-mono font-black ${data.pnlDiff >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                                      {data.pnlDiff >= 0 ? '+' : ''}{fmtMoney(data.pnlDiff)} ({data.pnlPct >= 0 ? '+' : ''}{data.pnlPct.toFixed(2)}%)
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          )
+                        }
+                        return null
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="price" 
+                      stroke="var(--accent)" 
+                      strokeWidth={3} 
+                      dot={false}
+                      isAnimationActive={true}
+                    />
+                    <Line 
+                      type="stepAfter" 
+                      dataKey="avgCost" 
+                      stroke="rgba(255,255,255,0.7)" 
+                      strokeWidth={1.5} 
+                      strokeDasharray="4 4" 
+                      dot={false}
+                      isAnimationActive={false}
+                      connectNulls
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="txPrice" 
+                      stroke="none" 
+                      dot={(props: any) => {
+                        const { cx, cy, payload } = props
+                        if (payload.isBuy) {
+                          return (
+                            <circle key={`buy-${payload.date}`} cx={cx} cy={cy} r={4} fill="#e05050" stroke="#fff" strokeWidth={2} />
+                          )
+                        }
+                        return <></>
+                      }}
+                    />
+                  </LineChart>
+                )}
               </ResponsiveContainer>
             </div>
           </div>

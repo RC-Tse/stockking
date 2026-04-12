@@ -116,6 +116,7 @@ export interface UserSettings {
   theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
   chart_default_range: ChartRange
   stock_chart_default_range: ChartRange
+  stock_chart_style: 'simple' | 'detailed'
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {
@@ -137,7 +138,8 @@ export const DEFAULT_SETTINGS: UserSettings = {
   total_goal_start_date: new Date().toISOString().split('T')[0],
   theme: 'dark',
   chart_default_range: '1M',
-  stock_chart_default_range: '1M'
+  stock_chart_default_range: '1M',
+  stock_chart_style: 'simple'
 }
 
 // ETF codes for tax calculation

@@ -3,14 +3,9 @@
 import { useState, useEffect } from 'react'
 import { UserSettings } from '@/types'
 import { 
-  Settings as SettingsIcon, 
-  Layout, 
-  Palette, 
-  ChevronRight, 
-  ChevronLeft,
-  ChevronDown,
-  LogOut,
-  TrendingUp
+  ChevronLeft, ChevronRight, LogOut, Layout, Target, 
+  Palette, Calculator, TrendingUp, ChevronDown, Check,
+  Info, X, Settings as SettingsIcon
 } from 'lucide-react'
 
 import DatePicker from './DatePicker'
@@ -40,6 +35,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
   const [showGoalTypeInfo, setShowGoalTypeInfo] = useState(false)
   const [editingYear, setEditingYear] = useState(new Date().getFullYear().toString())
   const [showHistory, setShowHistory] = useState(false)
+  const [showStyleInfo, setShowStyleInfo] = useState(false)
 
   // Sync with parent settings when they update (e.g. after localStorage load)
   useEffect(() => { setLocalSettings(settings) }, [settings])
@@ -379,7 +375,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
 
           <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-6 space-y-8 shadow-2xl">
             <div className="space-y-3">
-              <Label>單一個股走勢預設時間軸</Label>
+              <Label>單一個股預設顯示範圍</Label>
               <select 
                 value={localSettings.stock_chart_default_range || '1M'} 
                 onChange={e => handleSave({ stock_chart_default_range: e.target.value as any })}
@@ -389,12 +385,84 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
                   <option key={r} value={r}>{r}</option>
                 ))}
               </select>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <Label>圖表顯示樣式</Label>
+                <button 
+                  onClick={() => setShowStyleInfo(true)}
+                  className="w-8 h-8 flex items-center justify-center rounded-full bg-accent/10 text-accent active:scale-75 transition-all"
+                >
+                  <Info size={16} />
+                </button>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { id: 'simple', label: '精簡模式', desc: '收盤價曲線' },
+                  { id: 'detailed', label: '詳細模式', desc: '專業 K 線圖' }
+                ].map(s => (
+                  <button
+                    key={s.id}
+                    onClick={() => handleSave({ stock_chart_style: s.id as any })}
+                    className={`p-4 rounded-xl border transition-all text-left space-y-1 ${localSettings.stock_chart_style === s.id ? 'bg-accent/10 border-accent shadow-lg shadow-accent/10' : 'bg-black/20 border-white/10 opacity-60'}`}
+                  >
+                    <div className="text-[14px] font-black text-[var(--t1)]">{s.label}</div>
+                    <div className="text-[10px] font-bold text-[var(--t2)] opacity-50 uppercase tracking-widest">{s.desc}</div>
+                  </button>
+                ))}
+              </div>
               <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
-                每次進入單一個股分析頁面時圖表預設顯示的時間長度。
+                切換圖表顯示呈現方式，詳細模式包含開高低收。
               </p>
             </div>
           </div>
           {renderSaveButton()}
+
+          {/* Style Info Modal Overlay */}
+          {showStyleInfo && (
+            <div className="fixed inset-0 z-[110] flex items-center justify-center p-6 bg-black/60 backdrop-blur-md animate-in fade-in duration-200" onClick={() => setShowStyleInfo(false)}>
+              <div 
+                className="bg-[var(--bg-card)] border border-white/10 p-8 rounded-[32px] max-w-sm w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200"
+                onClick={e => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between">
+                  <div className="w-12 h-12 bg-accent/20 rounded-2xl flex items-center justify-center text-accent">
+                    <TrendingUp size={24} />
+                  </div>
+                  <button onClick={() => setShowStyleInfo(false)} className="w-8 h-8 flex items-center justify-center rounded-full bg-white/5 text-[var(--t3)] active:scale-90 transition-all">
+                    <X size={18} />
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  <h4 className="text-[19px] font-black text-[var(--t1)]">圖表樣式說明</h4>
+                  <p className="text-[13px] text-[var(--t2)] opacity-60 leading-relaxed font-medium">
+                    選擇最適合您的個股分析呈現方式
+                  </p>
+                </div>
+
+                <div className="space-y-4">
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+                    <div className="text-[14px] font-black text-accent">精簡模式 (Simple)</div>
+                    <div className="text-[12px] text-[var(--t2)] opacity-70 leading-relaxed font-medium">使用平滑的收盤價曲線圖，幫助您快速判斷長期的股價走勢與趨勢，適合休閒投資者。</div>
+                  </div>
+                  <div className="p-4 rounded-2xl bg-white/5 border border-white/5 space-y-1">
+                    <div className="text-[14px] font-black text-red-400">詳細模式 (Detailed)</div>
+                    <div className="text-[12px] text-[var(--t2)] opacity-70 leading-relaxed font-medium">顯示完整的 K 線圖（包含開盤、最高、最低、收盤價）。紅色代表上漲，綠色代表下跌，適合深入技術面分析。</div>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => setShowStyleInfo(false)}
+                  className="w-full py-4 rounded-2xl bg-accent text-bg-base font-black text-[15px] active:scale-[0.98] transition-all shadow-xl shadow-accent/20"
+                >
+                  我知道了
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -35,12 +35,18 @@ export async function GET(req: NextRequest) {
 
     const quotes = result.indicators?.quote?.[0]
     const closes = quotes?.close || []
+    const opens = quotes?.open || []
+    const highs = quotes?.high || []
+    const lows = quotes?.low || []
     const timestamps = result.timestamp || []
     
     // Map history
     const history = timestamps.map((ts: number, i: number) => ({
       date: new Date(ts * 1000).toISOString().split('T')[0],
-      price: closes[i] ? Math.round(closes[i] * 100) / 100 : null
+      price: closes[i] ? Math.round(closes[i] * 100) / 100 : null,
+      open: opens[i] ? Math.round(opens[i] * 100) / 100 : null,
+      high: highs[i] ? Math.round(highs[i] * 100) / 100 : null,
+      low: lows[i] ? Math.round(lows[i] * 100) / 100 : null,
     })).filter((item: any) => item.price !== null)
 
     const validCloses = closes.filter((c: any) => c !== null)
