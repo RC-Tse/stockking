@@ -392,7 +392,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         setYDomain([yDomain[0] + shiftY, yDomain[1] + shiftY])
       }
     },
-    { drag: { filterTaps: true, threshold: 5 }, pinch: { axis: 'y' } }
+    { drag: { filterTaps: true, threshold: 5 }, pinch: { eventOptions: { passive: false } } }
   )
 
   const yScale = (price: number) => {
@@ -540,7 +540,9 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} fixedYear={Number(selectedYear)} />
             </div>
           </div>
-        )        <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
+        )}
+
+        <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
           <div className="flex h-[320px]">
             {/* 1. Plot Area (Scrollable) */}
             <div 
@@ -713,12 +715,14 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-4 shadow-xl">
               <div className="text-[11px] font-black text-[var(--t2)] opacity-70 uppercase mb-1">現時平均成本</div>
-              <div className="text-[18px] font-black text-[var(--t1)] font-mono">{(selectedHolding.avg_cost ?? 0).toFixed(2)}</div>
+              <div className="text-[18px] font-black text-[var(--t1)] font-mono">
+                {(selectedHolding.avg_cost ?? 0).toFixed(2)}
+              </div>
             </div>
             <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-4 shadow-xl">
               <div className="text-[11px] font-black text-[var(--t2)] opacity-70 uppercase mb-1">現時股價 vs 成本</div>
               <div className={`text-[18px] font-black font-mono ${(selectedHolding.pnl_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {(selectedHolding.pnl_pct ?? 0) >= 0 ? '+' : ''}{(selectedHolding.pnl_pct ?? 0).toFixed(2)}%
+                {selectedHolding.pnl_pct !== undefined ? `${selectedHolding.pnl_pct >= 0 ? '+' : ''}${selectedHolding.pnl_pct.toFixed(2)}%` : '0.00%'}
               </div>
             </div>
           </div>
