@@ -592,7 +592,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               {...bind()}
               ref={scrollerRef}
               onScroll={handleScroll}
-              className="flex-1 relative overflow-x-auto overflow-y-hidden scrollbar-hide py-4 pl-4"
+              className={`flex-1 relative ${isScrubbingMode ? 'overflow-x-hidden' : 'overflow-x-auto'} overflow-y-hidden scrollbar-hide py-4 pl-4`}
               style={{ WebkitOverflowScrolling: 'touch', touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
             >
               <div style={{ width: `${totalWidth}px`, height: `${chartHeight}px`, position: 'relative' }}>
