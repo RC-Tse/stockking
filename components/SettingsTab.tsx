@@ -251,8 +251,8 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
                 onChange={e => handleSave({ chart_default_range: e.target.value as any })}
                 className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[15px] font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
               >
-                {['1M', '3M', '6M', '9M', '1Y', 'ALL'].map(r => (
-                  <option key={r} value={r}>{r === 'ALL' ? '全部 (1Y)' : r}</option>
+                {['1M', '3M', '6M', '9M', '1Y'].map(r => (
+                  <option key={r} value={r}>{r}</option>
                 ))}
               </select>
               <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">

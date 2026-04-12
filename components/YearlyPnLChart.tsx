@@ -20,7 +20,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const [historyData, setHistoryData] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
   
-  type ChartRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
   const [range, setRange] = useState<ChartRange>((settings.chart_default_range as any) || '1M')
   const [showCustom, setShowCustom] = useState(false)
   const [customStart, setCustomStart] = useState(() => {
@@ -408,19 +407,19 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
       {/* Range Selector Integration - Moved outside the card */}
       <div className="px-4 flex flex-col gap-4 relative z-20">
-        <div className="flex w-full gap-2 overflow-x-auto scrollbar-hide">
-          {(['1M', '3M', '6M', '9M', '1Y', 'ALL'] as ChartRange[]).map(r => (
+        <div className="flex w-full gap-1.5 scrollbar-hide">
+          {(['1M', '3M', '6M', '9M', '1Y'] as ChartRange[]).map(r => (
             <button 
               key={r} 
               onClick={() => { setRange(r); setShowCustom(false); }}
-              className={`flex-1 py-2 rounded-xl text-[11px] font-black transition-all border ${range === r && !showCustom ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)] whitespace-nowrap'}`}
+              className={`flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all border ${range === r && !showCustom ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)] whitespace-nowrap'}`}
             >
-              {r === 'ALL' ? '全部' : r}
+              {r}
             </button>
           ))}
           <button 
             onClick={() => { setRange('CUSTOM'); setShowCustom(!showCustom); }}
-            className={`px-4 py-2 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${range === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)]'}`}
+            className={`px-4 py-2.5 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${range === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)]'}`}
           >
             <CalendarIcon size={14} />
           </button>

@@ -94,6 +94,8 @@ export interface CalendarEntry {
   }[]
 }
 
+export type ChartRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'CUSTOM'
+
 export interface UserSettings {
   broker_name: string
   buy_fee_rate: number
@@ -108,11 +110,11 @@ export interface UserSettings {
   max_holdings: number
   font_size: 'small' | 'medium' | 'large'
   year_goal: number
-  year_goals: Record<string, number> // [NEW] Historical goals: { "2024": 50000, "2025": 80000 }
+  year_goals: Record<string, number> 
   total_goal: number
   total_goal_start_date: string
   theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
-  chart_default_range: '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL'
+  chart_default_range: ChartRange
 }
 
 export const DEFAULT_SETTINGS: UserSettings = {

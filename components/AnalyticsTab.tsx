@@ -11,7 +11,7 @@ import DatePicker from './DatePicker'
 import { usePortfolio } from './providers/PortfolioContext'
 import YearlyPnLChart from './YearlyPnLChart'
 
-type StockRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
+type StockRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'CUSTOM'
 
 interface Props {
   onRefresh: () => void
@@ -74,13 +74,40 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   const enrichedStockHistory = useMemo(() => {
     if (!stockHistory.length) return []
+    
+    // 1. Create a full sequence of calendar days within the fetched range
+    const sortedRaw = [...stockHistory].sort((a,b) => a.date.localeCompare(b.date))
+    const firstDate = sortedRaw[0].date
+    const lastDate = sortedRaw[sortedRaw.length - 1].date
+    
+    const allDays: string[] = []
+    let curr = new Date(firstDate)
+    const end = new Date(lastDate)
+    while (curr <= end) {
+      allDays.push(curr.toISOString().split('T')[0])
+      curr.setDate(curr.getDate() + 1)
+    }
+
+    const historyMap = new Map(sortedRaw.map(h => [h.date, h]))
+    let lastKnownPrice = sortedRaw[0].price
+
+    // 2. Padding logic (If holiday, use previous close)
+    const padded = allDays.map(date => {
+      const existing = historyMap.get(date)
+      if (existing) {
+        lastKnownPrice = existing.price
+        return { ...existing }
+      }
+      return { date, price: lastKnownPrice, isPadded: true }
+    })
+
     const txs = [...transactions].filter(t => t.symbol === selSym).sort((a, b) => a.trade_date.localeCompare(b.trade_date))
     
     let txIdx = 0
     let inventory: { shares: number, cost: number }[] = []
     let currentAvgCost: number | null = null
-    const firstDate = stockHistory[0].date
 
+    // Pre-start inventory
     while (txIdx < txs.length && txs[txIdx].trade_date < firstDate) {
       const tx = txs[txIdx]
       if (tx.action !== 'SELL') {
@@ -95,7 +122,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       txIdx++
     }
 
-    const processed = stockHistory.map((h, i) => {
+    const processed = padded.map((h) => {
       let isBuy = false
       let txPrice = 0
       let txShares = 0
@@ -203,8 +230,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     const prices = enrichedStockHistory.map(d => d.price)
     const avgCosts = enrichedStockHistory.filter(d => d.avgCost !== null).map(d => d.avgCost as number)
     const allVals = [...prices, ...avgCosts]
-    const min = Math.min(...allVals) * 0.98
-    const max = Math.max(...allVals) * 1.02
+    const min = Math.min(...allVals) * 0.95
+    const max = Math.max(...allVals) * 1.05
     
     const count = 5
     const step = (max - min) / (count - 1)
@@ -410,12 +437,12 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             </select>
 
             <div className="flex w-full gap-1.5 scrollbar-hide">
-              {(['1M', '3M', '6M', '9M', '1Y', 'ALL'] as StockRange[]).map(r => (
+              {(['1M', '3M', '6M', '9M', '1Y'] as StockRange[]).map(r => (
                 <button 
                   key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
                   className={`flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)] whitespace-nowrap'}`}
                 >
-                  {r === 'ALL' ? '全部' : r}
+                  {r}
                 </button>
               ))}
               <button 
@@ -475,8 +502,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     active={isScrubbing}
                   />
                   <Line type="stepAfter" dataKey="avgCost" stroke="rgba(255,255,255,0.8)" strokeDasharray="5 5" strokeWidth={2} dot={false} name="買入均價" isAnimationActive={false} />
-                  <Line type="monotone" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" isAnimationActive={false} />
-                  <Line type="monotone" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" isAnimationActive={false} />
+                  <Line type="linear" dataKey="price" stroke="var(--accent)" strokeWidth={2} dot={renderBuyDot} name="股價線" isAnimationActive={false} />
+                  <Line type="linear" dataKey="price" stroke="#e05050" strokeWidth={0} activeDot={false} dot={false} name="買入點" isAnimationActive={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
