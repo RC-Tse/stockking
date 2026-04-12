@@ -390,12 +390,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             </select>
           </div>
 
-          {hasGoal && (
-            <div className="border border-[#fbbf24]/40 bg-[#fbbf24]/10 backdrop-blur-md px-4 py-2 rounded-2xl flex flex-col items-end shadow-lg scale-90 origin-right transition-all hover:scale-95">
-              <span className="text-[9px] font-black text-[#fbbf24] opacity-70 uppercase tracking-widest">{selectedYear} 年度獲益目標</span>
-              <span className="text-[13px] font-black text-[#fbbf24] font-mono">{fmtMoney(Math.round(yearGoal))}</span>
-            </div>
-          )}
         </div>
 
         {hasGoal ? (
