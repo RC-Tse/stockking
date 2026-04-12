@@ -295,15 +295,45 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       if (endDate !== startDate) ticks.push(endDate)
     }
 
-    // Split area logic for coloring relative to IDEAL, but filling to Y=0
-    const enhanced = filtered.map(d => {
+    // Continuity Fix: Inject intersection points where actual crosses ideal
+    const result: any[] = []
+    for (let i = 0; i < filtered.length; i++) {
+        const curr = filtered[i]
+        const next = filtered[i + 1]
+        
+        result.push(curr)
+        
+        if (next && curr.actual !== null && next.actual !== null) {
+            const currDiff = curr.actual - curr.ideal
+            const nextDiff = next.actual - next.ideal
+            
+            if (currDiff * nextDiff < 0) {
+                // Crossing! Calculate t where actual - ideal == 0
+                const t = Math.abs(currDiff) / (Math.abs(currDiff) + Math.abs(nextDiff))
+                const intersectY = curr.ideal + t * (next.ideal - curr.ideal)
+                
+                result.push({
+                    date: curr.date, // Use curr date for simplicity in X-Axis
+                    actual: intersectY,
+                    ideal: intersectY,
+                    isIntersection: true
+                })
+            }
+        }
+    }
+
+    const enhanced = result.map(d => {
       const isAhead = d.actual !== null && d.actual >= d.ideal
       return {
         ...d,
-        actualAbove: isAhead ? d.actual : null,
-        actualBelow: !isAhead ? d.actual : null,
+        // For lines: include intersection point in BOTH segments to connect them
+        actualLineAbove: isAhead || d.isIntersection ? d.actual : null,
+        actualLineBelow: !isAhead || d.isIntersection ? d.actual : null,
+        // For Areas
         fillRed: isAhead ? d.actual : 0,
-        fillGreen: !isAhead ? d.actual : 0
+        // Green fill: min(actual, 0) up to ideal (covers actual->0 and actual->ideal)
+        fillGreenTop: !isAhead ? d.ideal : 0,
+        fillGreenBottom: !isAhead ? Math.min(d.actual, 0) : 0
       }
     })
 
@@ -491,24 +521,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 }}
               />
 
-              {/* DYNAMIC GAP FILLING AREAS */}
-              <Area 
-                type="monotone" 
-                dataKey="rangeAbove" 
-                fill="url(#areaRed)"
-                stroke="none"
-                isAnimationActive={true}
-                connectNulls
-              />
-              <Area 
-                type="monotone" 
-                dataKey="rangeBelow" 
-                fill="url(#areaGreen)"
-                stroke="none"
-                isAnimationActive={true}
-                connectNulls
-              />
-
               {/* IDEAL LINE (YELLOW DASHED) */}
               <Line 
                 type="linear" 
@@ -521,8 +533,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 opacity={0.8}
               />
 
+              {/* RED AREA: Ahead of target (actual >= ideal) -> Fill 0 to Actual */}
               <Area 
-                type="monotone" 
+                type="linear" 
                 dataKey="fillRed" 
                 fill="#ef4444"
                 fillOpacity={0.2}
@@ -531,35 +544,39 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 isAnimationActive={true}
                 connectNulls
               />
+
+              {/* GREEN AREA: Behind target (actual < ideal) -> Combined Fill from min(actual,0) to Ideal */}
               <Area 
-                type="monotone" 
-                dataKey="fillGreen" 
+                type="linear" 
+                dataKey="fillGreenTop" 
+                stroke="none"
                 fill="#22c55e"
                 fillOpacity={0.2}
-                stroke="none"
-                baseValue={0}
+                baseValue="fillGreenBottom"
                 isAnimationActive={true}
                 connectNulls
               />
 
-              {/* ACTUAL LINE - restored and styled with differential coloring */}
+              {/* ACTUAL LINE - restored and styled with differential coloring and continuity fixes */}
               <Line 
-                type="monotone" 
-                dataKey="actualAbove" 
+                type="linear" 
+                dataKey="actualLineAbove" 
                 stroke="#ef4444" 
                 strokeWidth={2.5} 
                 dot={false}
                 connectNulls
                 isAnimationActive={true}
+                strokeLinecap="round"
               />
               <Line 
-                type="monotone" 
-                dataKey="actualBelow" 
+                type="linear" 
+                dataKey="actualLineBelow" 
                 stroke="#22c55e" 
                 strokeWidth={2.5} 
                 dot={false}
                 connectNulls
                 isAnimationActive={true}
+                strokeLinecap="round"
               />
 
               <ReferenceLine y={0} stroke="#fff" strokeWidth={2} strokeOpacity={0.8} />
