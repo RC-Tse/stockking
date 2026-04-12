@@ -122,6 +122,7 @@ export function PortfolioProvider({
         let sellRem = tx.shares
         let sellProceedsRemaining = net_sell
         let matchedBuyCostTotal = 0
+        let matchedBuyFeeTotal = 0
         let matchedSellNetTotal = 0
         const matches = []
 
@@ -129,12 +130,14 @@ export function PortfolioProvider({
           const lot = lots[0]
           const take = Math.min(lot.shares, sellRem)
           
-          // Integer Partitioning for matched buy cost
-          // Rule: matched = floor(total_cost * (take / lot_shares))
-          // Last part takes the remainder to avoid 1-yuan leakage
+          // Integer Partitioning for matched buy costs and fees
           const mBuyCost = take === lot.shares 
             ? lot.total_cost 
             : Math.floor(lot.total_cost * (take / lot.shares))
+            
+          const mBuyFee = take === lot.shares
+            ? lot.rawFee
+            : Math.floor(lot.rawFee * (take / lot.shares))
           
           // Integer Partitioning for matched sell proceeds
           const mSellNet = take === sellRem
@@ -142,6 +145,7 @@ export function PortfolioProvider({
             : Math.floor(net_sell * (take / tx.shares))
 
           matchedBuyCostTotal += mBuyCost
+          matchedBuyFeeTotal += mBuyFee
           matchedSellNetTotal += mSellNet
           sellProceedsRemaining -= mSellNet
 
@@ -191,7 +195,8 @@ export function PortfolioProvider({
             net: matchedSellNetTotal, 
             realizedCost: matchedBuyCostTotal, 
             fee: fee_sell, 
-            tax: tax_sell
+            tax: tax_sell,
+            matchedBuyFee: matchedBuyFeeTotal 
           })
         }
       }
