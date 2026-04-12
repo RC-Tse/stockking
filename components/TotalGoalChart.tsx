@@ -226,6 +226,7 @@ function TotalGoalChartContent({ transactions, settings }: Props) {
         goal={settings.total_goal}
         currentValue={currentValue}
         loading={loading}
+        mode="single"
       />
     </div>
   )

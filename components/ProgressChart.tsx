@@ -18,16 +18,17 @@ interface ProgressChartProps {
   goal: number
   currentValue: number
   loading?: boolean
+  mode?: 'comparison' | 'single'
 }
 
-export default function ProgressChart({ title, subtitle, data, goal, currentValue, loading }: ProgressChartProps) {
+export default function ProgressChart({ title, subtitle, data, goal, currentValue, loading, mode = 'comparison' }: ProgressChartProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
   const [isScrubbingMode, setIsScrubbingMode] = useState(false)
   
   const viewBoxWidth = 1000
-  const chartHeight = 320
+  const chartHeight = 420
 
   // Calculate Y Domain
   const yAxis = useMemo(() => {
@@ -37,8 +38,8 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
     const dataMin = Math.min(0, ...vals)
     const dataMax = Math.max(goal, ...vals)
     
-    const bufferMax = dataMax > 0 ? dataMax * 1.15 : 0
-    const bufferMin = dataMin < 0 ? dataMin * 1.15 : - (dataMax * 0.05)
+    const bufferMax = dataMax > 0 ? dataMax * 1.05 : 0
+    const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
     
     const range = bufferMax - bufferMin
     
@@ -158,25 +159,31 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
         
         {/* Legends - Moved to Top Center */}
         <div className="absolute top-6 left-0 right-0 flex justify-center gap-8 z-10 pointer-events-none">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-0 border-t-[3px] border-[#fbbf24] border-dashed opacity-80" />
-            <span className="text-[14px] font-black text-white/80 uppercase tracking-widest">理想進度</span>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-[6px] w-8 rounded-full overflow-hidden items-center shadow-sm">
-              <div className="bg-[#ef4444] h-full flex-1" />
-              <div className="bg-[#22c55e] h-full flex-1" />
+          {mode === 'comparison' && (
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-0 border-t-[3px] border-[#fbbf24] border-dashed opacity-80" />
+              <span className="text-[14px] font-black text-white/80 uppercase tracking-widest">理想進度</span>
             </div>
+          )}
+          <div className="flex items-center gap-2.5">
+            {mode === 'comparison' ? (
+              <div className="flex h-[6px] w-8 rounded-full overflow-hidden items-center shadow-sm">
+                <div className="bg-[#ef4444] h-full flex-1" />
+                <div className="bg-[#22c55e] h-full flex-1" />
+              </div>
+            ) : (
+              <div className="w-8 h-1.5 rounded-full bg-[#fbbf24] shadow-sm" />
+            )}
             <span className="text-[14px] font-black text-white/80 uppercase tracking-widest">實際進度</span>
           </div>
         </div>
 
         <div 
           ref={containerRef}
-          className="h-[420px] w-full pt-20 pb-10 px-0 select-none touch-none"
+          className="w-full pt-28 pb-14 px-0 select-none touch-none"
         >
           <div 
-            style={{ width: '100%', height: '100%', position: 'relative' }}
+            style={{ width: '100%', height: 'auto', position: 'relative' }}
             onClick={handleChartClick}
             onTouchStart={handleTouchStart}
             onTouchMove={handleChartMove}
@@ -184,13 +191,13 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
             onMouseMove={handleChartMove}
             onMouseLeave={() => { if (!isScrubbingMode) setActiveIdx(null) }}
           >
-            <svg viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
+            <svg viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`} className="w-full h-auto overflow-visible">
               <g>
                 {/* Y-Axis Grid */}
                 {yAxis.ticks.map(t => (
                   <g key={t}>
                     <line x1="0" y1={yScale(t)} x2="100%" y2={yScale(t)} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-                    <text x={viewBoxWidth - 6} y={yScale(t) - 6} fill="white" fillOpacity="0.8" fontSize="14" fontWeight="900" textAnchor="end">
+                    <text x={viewBoxWidth - 6} y={yScale(t) - 8} fill="white" fillOpacity="0.8" fontSize="16" fontWeight="900" textAnchor="end">
                       {Math.abs(t) >= 1000 ? `${(t/1000).toLocaleString()}K` : t.toLocaleString()}
                     </text>
                   </g>
@@ -203,17 +210,35 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                 <line x1="0" y1="0" x2="0" y2={chartHeight} stroke="#ffffff" strokeWidth="2" opacity="0.6" />
 
                 {/* Ideal Path (Dashed) */}
-                <path 
-                  d={data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${yScale(d.ideal)}`).join(' ')}
-                  fill="none"
-                  stroke="#fbbf24"
-                  strokeWidth="3.5"
-                  strokeDasharray="8 6"
-                  opacity="0.6"
-                />
+                {mode === 'comparison' && (
+                  <path 
+                    d={data.map((d, i) => `${i === 0 ? 'M' : 'L'} ${getX(i)} ${yScale(d.ideal)}`).join(' ')}
+                    fill="none"
+                    stroke="#fbbf24"
+                    strokeWidth="3.5"
+                    strokeDasharray="8 6"
+                    opacity="0.6"
+                  />
+                )}
 
                 {/* Actual Area & Line (Red/Green logic) */}
                 {(() => {
+                   if (mode === 'single') {
+                     const validPoints = data.map((d, i) => ({ x: getX(i), y: d.actual !== null ? yScale(d.actual) : null, isFuture: d.isFuture }))
+                                             .filter(p => p.y !== null && !p.isFuture)
+                     if (validPoints.length === 0) return null
+                     return (
+                        <path 
+                          d={validPoints.map((p, pi) => `${pi === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+                          fill="none"
+                          stroke="#fbbf24"
+                          strokeWidth="6"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                     )
+                   }
+
                    const segments: { type: 'red' | 'green', points: [number, number][] }[] = []
                    let currentSegment: { type: 'red' | 'green', points: [number, number][] } | null = null
                    
@@ -307,7 +332,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                   
                   return (
                     <g key={i}>
-                      <text x={x} y={chartHeight + 24} fill="white" fillOpacity="0.8" fontSize="14" fontWeight="900" textAnchor="middle">
+                      <text x={x} y={chartHeight + 28} fill="white" fillOpacity="0.8" fontSize="16" fontWeight="900" textAnchor="middle">
                         {label}
                       </text>
                     </g>
@@ -318,7 +343,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                 {isScrubbingMode && activeIdx !== null && data[activeIdx] && !data[activeIdx].isFuture && (
                   <g>
                     <line x1={getX(activeIdx)} y1="0" x2={getX(activeIdx)} y2={chartHeight} stroke="var(--accent)" strokeWidth="1.5" />
-                    <circle cx={getX(activeIdx)} cy={yScale(data[activeIdx].actual || 0)} r="7" fill="var(--accent)" stroke="#fff" strokeWidth="2.5" />
+                    <circle cx={getX(activeIdx)} cy={yScale(data[activeIdx].actual || 0)} r="8" fill="var(--accent)" stroke="#fff" strokeWidth="2.5" />
                   </g>
                 )}
               </g>
@@ -339,22 +364,26 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                   <div className="space-y-3">
                     <div className="flex justify-between gap-6 items-center">
                       <span className="text-[13px] text-white/80 font-black">實際進度</span>
-                      <span className={`text-[15px] font-mono font-black ${(data[activeIdx].actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                      <span className={`text-[15px] font-mono font-black ${mode === 'single' ? 'text-[#fbbf24]' : ((data[activeIdx].actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]')}`}>
                         {fmtMoney(data[activeIdx].actual || 0)}
                       </span>
                     </div>
-                    <div className="flex justify-between gap-6 items-center">
-                      <span className="text-[13px] text-white/80 font-black">理想目標</span>
-                      <span className="text-[15px] font-mono font-black text-[#fbbf24]">
-                        {fmtMoney(data[activeIdx].ideal || 0)}
-                      </span>
-                    </div>
-                    <div className="pt-3 border-t border-white/10 flex justify-between gap-6 items-center">
-                      <span className="text-[12px] text-white/60 font-black">差距</span>
-                      <span className={`text-[14px] font-mono font-black ${(data[activeIdx].actual || 0) - data[activeIdx].ideal >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                        {fmtMoney((data[activeIdx].actual || 0) - data[activeIdx].ideal)}
-                      </span>
-                    </div>
+                    {mode === 'comparison' && (
+                      <>
+                        <div className="flex justify-between gap-6 items-center">
+                          <span className="text-[13px] text-white/80 font-black">理想目標</span>
+                          <span className="text-[15px] font-mono font-black text-[#fbbf24]">
+                            {fmtMoney(data[activeIdx].ideal || 0)}
+                          </span>
+                        </div>
+                        <div className="pt-3 border-t border-white/10 flex justify-between gap-6 items-center">
+                          <span className="text-[12px] text-white/60 font-black">差距</span>
+                          <span className={`text-[14px] font-mono font-black ${(data[activeIdx].actual || 0) - data[activeIdx].ideal >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                            {fmtMoney((data[activeIdx].actual || 0) - data[activeIdx].ideal)}
+                          </span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
