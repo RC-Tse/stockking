@@ -355,17 +355,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     let rawMin = min - pad
     let rawMax = max + pad
 
-    // 取得最新收盤價以進行對齊
-    const latestClose = enrichedStockHistory[enrichedStockHistory.length - 1]?.close
-    
-    // 如果不是手動調整模式，實作「最新價在第 4 個刻度 (75% 深度)」邏輯
-    // 4th tick from top corresponds to Min + 0.25*(Max-Min)
-    if (!isManualY && latestClose) {
-      const targetRange = Math.max(range * 1.2, latestClose * 0.05) // 確保有足夠範圍
-      rawMin = latestClose - 0.5 * targetRange
-      rawMax = latestClose + 0.5 * targetRange
-    }
-
+    // 移除強制將最新收盤價置中於 Y 軸的邏輯，讓 K 線自然展開並平均分散在 Y 軸上
     let newMin = Math.floor(rawMin)
     let newMax = Math.ceil(rawMax)
     let newRange = newMax - newMin
@@ -433,14 +423,14 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     if (enrichedStockHistory.length > 0 && scrollerRef.current) {
       const chartWidth = scrollerRef.current.clientWidth - 32 // 扣除 padding
       
-      // 根據範圍設定目標顯示的天數 (調高以預設顯示更密集的 K 線)
+      // 根據範圍設定目標顯示的天數
       const targetDaysMap: Record<string, number> = {
-        '1M': 60,
-        '3M': 120,
-        '6M': 180,
-        '9M': 250,
-        '1Y': 300,
-        'CUSTOM': 120
+        '1M': 22,
+        '3M': 66,
+        '6M': 132,
+        '9M': 200,
+        '1Y': 250,
+        'CUSTOM': 30
       }
       const targetDays = targetDaysMap[stockRange] || 30
       
@@ -776,11 +766,18 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             </div>
 
             {/* 2. Sticky Y-Axis Zone (Right Aligned, Fixed) */}
-            <div className="w-14 bg-black/40 backdrop-blur-md border-l border-white/5 flex flex-col justify-between py-6 z-30 sticky right-0" style={{ height: '320px' }}>
-              {[1, 0.75, 0.5, 0.25, 0].map(p => {
+            <div className="w-14 bg-black/40 backdrop-blur-md border-l border-white/5 relative z-30 sticky right-0" style={{ height: '320px' }}>
+              {[0, 1, 2, 3, 4].map(i => {
+                const p = 1 - (i * 0.25)
                 const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
+                const y = 320 * (i * 0.25)
                 return (
-                  <div key={p} className="pl-3 pr-2">
+                  <div 
+                    key={p} 
+                    className="absolute w-full flex items-center pr-2"
+                    style={{ top: y, transform: 'translateY(-50%)' }}
+                  >
+                    <div className="w-2 h-[1px] bg-white/20 mr-1.5" />
                     <div className="text-[10px] font-black text-white/60 tabular-nums">
                       {Math.round(val ?? 0).toLocaleString()}
                     </div>

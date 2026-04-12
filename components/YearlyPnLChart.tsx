@@ -608,6 +608,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
               <ReferenceLine y={0} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
               
+              {filteredData.length > 0 && (
+                <ReferenceLine x={filteredData[0].date} stroke="#ffffff" strokeWidth={1.5} strokeOpacity={0.8} />
+              )}
+
               {chartYear === new Date().getFullYear() && filteredData.some(d => d.date === todayStr) && (
                 <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
               )}
