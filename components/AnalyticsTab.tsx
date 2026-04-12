@@ -353,8 +353,11 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   const yearMetrics = useMemo(() => {
     if (!enrichedStockHistory.length) return null
-    // 取得所有資料中的極值 (通常 API 回傳 1-2 年)
-    const vals = enrichedStockHistory.flatMap(d => [d.open, d.high, d.low, d.close].filter(v => v !== null)) as number[]
+    // 取得所有資料中的極值，並強制過濾掉 0 或非數值
+    const vals = enrichedStockHistory.flatMap(d => [d.open, d.high, d.low, d.close]
+      .filter(v => typeof v === 'number' && v > 0)) as number[]
+    
+    if (vals.length === 0) return null
     return {
       min: Math.min(...vals),
       max: Math.max(...vals)
@@ -565,7 +568,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             onPointerCancel={handlePointerUp}
             onPointerLeave={handlePointerUp}
             className={`bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
-            style={{ WebkitOverflowScrolling: 'touch', height: '320px', touchAction: 'pan-x pinch-zoom' }}
+            style={{ WebkitOverflowScrolling: 'touch', height: '320px', touchAction: 'pan-x' }}
           >
 {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
             
