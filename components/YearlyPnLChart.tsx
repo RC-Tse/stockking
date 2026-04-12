@@ -35,6 +35,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
   const handleTouchStart = () => {
     if (isScrubModeRef.current) return
+    if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current)
     scrubTimerRef.current = setTimeout(() => {
       setIsScrubbingMode(true)
       isScrubModeRef.current = true
@@ -43,6 +44,14 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       }
       if (window.navigator?.vibrate) window.navigator.vibrate(10)
     }, 1000)
+  }
+
+  const handleTouchMove = () => {
+    // If not in scrub mode yet, moving finger invalidates the long-press (allows page scrolling)
+    if (!isScrubModeRef.current && scrubTimerRef.current) {
+      clearTimeout(scrubTimerRef.current)
+      scrubTimerRef.current = null
+    }
   }
 
   const handleTouchEnd = () => {
@@ -394,27 +403,36 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     const dataMin = Math.min(0, ...vals)
     const dataMax = Math.max(...vals)
     
-    // Y-axis max: max(actual, ideal) + 5% buffer as requested
-    const bufferMax = dataMax * 1.05
-    const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
+    // Y-Axis Positive: Max of Actual or Last Day's Ideal, rounded up to 8 nice segments
+    const lastDayIdeal = filteredData[filteredData.length - 1]?.ideal || 0
+    const targetMax = Math.max(lastDayIdeal, dataMax)
+
+    let step = Math.ceil(targetMax / 80) * 10
+    if (step <= 0) step = 100
+    const finalMax = step * 8
     
-    // Dynamic Snapping logic
-    const rangeVal = bufferMax - bufferMin
-    const snapUnit = rangeVal > 10000 ? 1000 : 500
-    
-    const finalMax = Math.ceil(bufferMax / snapUnit) * snapUnit
-    const finalMin = dataMin < 0 ? Math.floor(bufferMin / snapUnit) * snapUnit : 0
-    
-    // Explicit ticks including 0
-    const ticks = []
-    for (let v = finalMin; v <= finalMax; v += snapUnit) {
-      ticks.push(v)
-    }
-    if (finalMin <= 0 && finalMax >= 0 && !ticks.includes(0)) {
-      ticks.push(0)
+    const positiveTicks = []
+    for (let i = 0; i <= 8; i++) {
+      positiveTicks.push(i * step)
     }
 
-    return { domain: [finalMin, finalMax], ticks: Array.from(new Set(ticks)).sort((a,b) => a-b) }
+    // Y-Axis Negative: Maintain existing 500 snap logic
+    const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
+    const snapUnit = 500
+    const finalMin = dataMin < 0 ? Math.floor(bufferMin / snapUnit) * snapUnit : 0
+    
+    const negativeTicks = []
+    if (finalMin < 0) {
+      for (let v = finalMin; v < 0; v += snapUnit) {
+        negativeTicks.push(v)
+      }
+    }
+
+    const rawTicks = [...negativeTicks, ...positiveTicks]
+    if (finalMin <= 0 && finalMax >= 0 && !rawTicks.includes(0)) rawTicks.push(0)
+
+    const ticks = Array.from(new Set(rawTicks)).sort((a,b) => a-b)
+    return { domain: [finalMin, finalMax], ticks }
   })()
 
   const latestValid = [...filteredData].reverse().find(d => d.actual !== null)
@@ -493,11 +511,12 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
         <div 
           className="h-[460px] w-full relative cursor-crosshair"
-          onTouchStart={handleTouchStart}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleTouchStart}
-          onMouseUp={handleTouchEnd}
-          onClick={handleChartClick}
+          onTouchStartCapture={handleTouchStart}
+          onTouchMoveCapture={handleTouchMove}
+          onTouchEndCapture={handleTouchEnd}
+          onMouseDownCapture={handleTouchStart}
+          onMouseUpCapture={handleTouchEnd}
+          onClickCapture={handleChartClick}
           onMouseLeave={handleTouchEnd}
         >
           <ResponsiveContainer width="100%" height="100%">
@@ -569,6 +588,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 baseValue={0}
                 isAnimationActive={true}
                 connectNulls
+                activeDot={false}
               />
 
               {/* GREEN AREA: Combined Fill from min(actual,0) to Ideal */}
@@ -581,6 +601,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 baseValue={0}
                 isAnimationActive={true}
                 connectNulls
+                activeDot={false}
               />
               <Area 
                 type="linear" 
@@ -591,6 +612,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 baseValue={0}
                 isAnimationActive={true}
                 connectNulls
+                activeDot={false}
               />
 
               {/* ACTUAL LINE - restored and styled with differential coloring and continuity fixes */}
