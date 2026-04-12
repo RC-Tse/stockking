@@ -350,6 +350,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const [yDomain, setYDomain] = useState<[number | string, number | string]>(['auto', 'auto'])
   const pinchStartDist = useRef<number | null>(null)
   const lastYZoomFactor = useRef<number>(1.0)
+  const pointers = useRef<Map<number, {x: number, y: number}>>(new Map())
 
   const yearMetrics = useMemo(() => {
     if (!enrichedStockHistory.length) return null
@@ -364,72 +365,30 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     }
   }, [enrichedStockHistory])
 
-  // 監聽捲動與縮放
+  // 監聽捲動比例更新 Y 軸 (僅在初次或數據變動時)
   useEffect(() => {
     const scroller = scrollerRef.current
     if (!scroller || !enrichedStockHistory.length || !yearMetrics) return
 
     const updateYAxis = () => {
-      // 基準範圍鎖定在一年極值，並加上 5% 緩衝
       const range = yearMetrics.max - yearMetrics.min
       const baseMin = yearMetrics.min - range * 0.05
       const baseMax = yearMetrics.max + range * 0.05
       
       const mid = (baseMax + baseMin) / 2
       const span = (baseMax - baseMin) * yZoomFactor
-      setYDomain([mid - span / 2, mid + span / 2])
-    }
-
-    const handleTouchStart = (e: TouchEvent) => {
-      if (e.touches.length === 2) {
-        pinchStartDist.current = Math.hypot(
-          e.touches[0].pageX - e.touches[1].pageX,
-          e.touches[0].pageY - e.touches[1].pageY
-        )
-        lastYZoomFactor.current = yZoomFactor
-      }
-    }
-
-    const handleTouchMove = (e: TouchEvent) => {
-      if (e.touches.length === 2 && pinchStartDist.current !== null) {
-        e.preventDefault() 
-        const currentDist = Math.hypot(
-          e.touches[0].pageX - e.touches[1].pageX,
-          e.touches[0].pageY - e.touches[1].pageY
-        )
-        // 放大手勢 (currentDist 變大) -> zoomFactor 變小 -> yDomain 縮小 -> K線變長
-        const zoomFactor = pinchStartDist.current / currentDist
-        const nextZoom = lastYZoomFactor.current * zoomFactor
-        // 限制縮放倍率在 0.1 ~ 5.0 之間
-        setYZoomFactor(Math.min(5.0, Math.max(0.1, nextZoom)))
-      }
-    }
-
-    const handleTouchEnd = () => {
-      pinchStartDist.current = null
+      setYDomain([Number((mid - span / 2).toFixed(2)), Number((mid + span / 2).toFixed(2))])
     }
 
     scroller.addEventListener('scroll', updateYAxis)
-    scroller.addEventListener('touchstart', handleTouchStart, { passive: false })
-    scroller.addEventListener('touchmove', handleTouchMove, { passive: false })
-    scroller.addEventListener('touchend', handleTouchEnd)
-    
-    // 初始化執行一次
     updateYAxis()
-
-    return () => {
-      scroller.removeEventListener('scroll', updateYAxis)
-      scroller.removeEventListener('touchstart', handleTouchStart)
-      scroller.removeEventListener('touchmove', handleTouchMove)
-      scroller.removeEventListener('touchend', handleTouchEnd)
-    }
-  }, [enrichedStockHistory, yZoomFactor])
+    return () => scroller.removeEventListener('scroll', updateYAxis)
+  }, [enrichedStockHistory, yZoomFactor, yearMetrics])
 
   // 自動捲動到最右側
   useEffect(() => {
     if (scrollerRef.current && enrichedStockHistory.length) {
       const el = scrollerRef.current
-      // 延遲執行確保 DOM 已經渲染完成
       const timer = setTimeout(() => {
         el.scrollLeft = el.scrollWidth
       }, 200)
@@ -437,22 +396,46 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     }
   }, [enrichedStockHistory.length, stockRange])
 
-  const handlePointerDown = (e: React.PointerEvent) => {
-    // 只有觸控或左鍵長按才觸發
-    if (e.pointerType === 'mouse' && e.button !== 0) return
+  const onPointerDown = (e: React.PointerEvent) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     
-    scrubTimer.current = setTimeout(() => {
-      setIsScrubbing(true)
-      if (window.navigator.vibrate) try { window.navigator.vibrate(10) } catch(e){}
-    }, 300)
+    if (pointers.current.size === 1) {
+      scrubTimer.current = setTimeout(() => {
+        setIsScrubbing(true)
+        if (window.navigator.vibrate) try { window.navigator.vibrate(10) } catch(err){}
+      }, 300)
+    } else if (pointers.current.size === 2) {
+      clearTimeout(scrubTimer.current)
+      setIsScrubbing(false)
+      const pts = Array.from(pointers.current.values())
+      pinchStartDist.current = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+      lastYZoomFactor.current = yZoomFactor
+    }
   }
 
-  const handlePointerUp = () => {
-    if (scrubTimer.current) {
-      clearTimeout(scrubTimer.current)
-      scrubTimer.current = null
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!pointers.current.has(e.pointerId)) return
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+
+    if (pointers.current.size === 2 && pinchStartDist.current !== null) {
+      const pts = Array.from(pointers.current.values())
+      const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
+      const zoomFactor = pinchStartDist.current / currentDist
+      const nextZoom = lastYZoomFactor.current * zoomFactor
+      setYZoomFactor(Math.min(5.0, Math.max(0.1, nextZoom)))
     }
-    setIsScrubbing(false)
+  }
+
+  const onPointerUp = (e: React.PointerEvent) => {
+    pointers.current.delete(e.pointerId)
+    if (pointers.current.size < 2) pinchStartDist.current = null
+    if (pointers.current.size === 0) {
+      if (scrubTimer.current) {
+        clearTimeout(scrubTimer.current)
+        scrubTimer.current = null
+      }
+      setIsScrubbing(false)
+    }
   }
 
   return (
@@ -563,10 +546,11 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         <div className="relative group">
           <div 
             ref={scrollerRef}
-            onPointerDown={handlePointerDown}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerUp}
-            onPointerLeave={handlePointerUp}
+            onPointerDown={onPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={onPointerUp}
+            onPointerLeave={onPointerUp}
             className={`bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
             style={{ WebkitOverflowScrolling: 'touch', height: '320px', touchAction: 'pan-x' }}
           >
@@ -590,7 +574,9 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     />
                     <YAxis 
                       orientation="right"
+                      type="number"
                       domain={yDomain}
+                      allowDataOverflow={true}
                       tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
                       axisLine={false}
                       tickLine={false}
@@ -696,7 +682,9 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     />
                     <YAxis 
                       orientation="right"
+                      type="number"
                       domain={yDomain}
+                      allowDataOverflow={true}
                       tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
                       axisLine={false}
                       tickLine={false}
