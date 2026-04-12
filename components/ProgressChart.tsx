@@ -35,7 +35,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
     if (vals.length === 0) return { domain: [0, goal || 100], ticks: [0, (goal || 100) / 2, goal || 100] }
 
     const dataMin = Math.min(0, ...vals)
-    const dataMax = Math.max(goal, ...vals)
+    const dataMax = Math.max(0, ...vals)
     
     const bufferMax = dataMax > 0 ? dataMax * 1.05 : 0
     const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
@@ -240,19 +240,27 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                                              .filter(p => p.y !== null && !p.isFuture)
                      if (validPoints.length === 0) return null
                      return (
-                        <path 
-                          d={validPoints.map((p, pi) => `${pi === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
-                          fill="none"
-                          stroke="#fbbf24"
-                          strokeWidth="6"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
+                        <g>
+                          <path 
+                            d={`M ${validPoints[0].x} ${yScale(0)} L ${validPoints[0].x} ${validPoints[0].y} ` + validPoints.map(p => `L ${p.x} ${p.y}`).join(' ') + ` L ${validPoints[validPoints.length-1].x} ${yScale(0)} Z`}
+                            fill="#fbbf24"
+                            fillOpacity="0.25"
+                            stroke="none"
+                          />
+                          <path 
+                            d={validPoints.map((p, pi) => `${pi === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ')}
+                            fill="none"
+                            stroke="#fbbf24"
+                            strokeWidth="6"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                        </g>
                      )
                    }
 
-                   const segments: { type: 'red' | 'green', points: [number, number][] }[] = []
-                   let currentSegment: { type: 'red' | 'green', points: [number, number][] } | null = null
+                   const segments: { type: 'red' | 'green', points: [number, number][], idealPoints: [number, number][] }[] = []
+                   let currentSegment: { type: 'red' | 'green', points: [number, number][], idealPoints: [number, number][] } | null = null
                    
                    for (let i = 0; i < data.length; i++) {
                      const d = data[i]
@@ -266,12 +274,14 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                      const type = isAhead ? 'red' : 'green'
                      const x = getX(i)
                      const y = yScale(d.actual)
+                     const yi = yScale(d.ideal)
                      
                      if (!currentSegment || currentSegment.type !== type) {
                         if (currentSegment) segments.push(currentSegment)
-                        currentSegment = { type, points: [[x, y]] }
+                        currentSegment = { type, points: [[x, y]], idealPoints: [[x, yi]] }
                      } else {
                         currentSegment.points.push([x, y])
+                        currentSegment.idealPoints.push([x, yi])
                      }
                      
                      if (next && next.actual !== null && !next.isFuture) {
@@ -285,34 +295,38 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                              const crossX = x + t * (getX(i+1) - x)
                              const crossY = yScale(d.actual + t * dyActual)
                              currentSegment.points.push([crossX, crossY])
+                             currentSegment.idealPoints.push([crossX, crossY])
                              segments.push(currentSegment)
-                             currentSegment = { type: nextAhead ? 'red' : 'green', points: [[crossX, crossY]] }
+                             currentSegment = { type: nextAhead ? 'red' : 'green', points: [[crossX, crossY]], idealPoints: [[crossX, crossY]] }
                           }
                        }
                      }
                    }
                    if (currentSegment) segments.push(currentSegment)
                    
-                   return segments.map((seg, si) => (
-                     <React.Fragment key={si}>
-                        {/* Solid Area Filler */}
-                        <path 
-                          d={`M ${seg.points[0][0]} ${yScale(yAxis.domain[0])} L ${seg.points[0][0]} ${seg.points[0][1]} ` + seg.points.map(p => `L ${p[0]} ${p[1]}`).join(' ') + ` L ${seg.points[seg.points.length-1][0]} ${yScale(yAxis.domain[0])} Z`}
-                          fill={seg.type === 'red' ? '#ef4444' : '#22c55e'}
-                          fillOpacity="0.25"
-                          stroke="none"
-                        />
-                        {/* Actual Line */}
-                        <path 
-                          d={seg.points.map((p, pi) => `${pi === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ')}
-                          fill="none"
-                          stroke={seg.type === 'red' ? '#ef4444' : '#22c55e'}
-                          strokeWidth="5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                     </React.Fragment>
-                   ))
+                   return segments.map((seg, si) => {
+                     const idealReversed = [...seg.idealPoints].reverse()
+                     return (
+                       <React.Fragment key={si}>
+                          {/* Solid Area Filler (Actual to Ideal) */}
+                          <path 
+                            d={`M ${seg.points[0][0]} ${seg.points[0][1]} ` + seg.points.map(p => `L ${p[0]} ${p[1]}`).join(' ') + ` ` + idealReversed.map(p => `L ${p[0]} ${p[1]}`).join(' ') + ` Z`}
+                            fill={seg.type === 'red' ? '#ef4444' : '#22c55e'}
+                            fillOpacity="0.25"
+                            stroke="none"
+                          />
+                          {/* Actual Line */}
+                          <path 
+                            d={seg.points.map((p, pi) => `${pi === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ')}
+                            fill="none"
+                            stroke={seg.type === 'red' ? '#ef4444' : '#22c55e'}
+                            strokeWidth="5"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                          />
+                       </React.Fragment>
+                     )
+                   })
                 })()}
 
                 {/* X-Axis Month markers */}
@@ -344,6 +358,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                   
                   return (
                     <g key={i}>
+                      <line x1={x} y1="0" x2={x} y2={chartHeight} stroke="rgba(255,255,255,0.06)" strokeWidth="1.5" />
                       <text x={x} y={chartHeight + 28} fill="white" fillOpacity="0.8" fontSize="16" fontWeight="900" textAnchor="middle">
                         {label}
                       </text>
