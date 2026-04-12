@@ -16,6 +16,7 @@ const DB_COLUMNS = [
   'theme',
   'year_goal_type',
   'chart_default_range',
+  'stock_chart_default_range',
 ] as const
 
 export async function GET() {

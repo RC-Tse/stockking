@@ -41,7 +41,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   // ── Stock Chart States ──
   const [selSym, setSelSym] = useState(holdings[0]?.symbol || '')
-  const [stockRange, setStockRange] = useState<StockRange>('1M')
+  const { settings } = usePortfolio()
+  const [stockRange, setStockRange] = useState<StockRange>(settings.stock_chart_default_range || '1M')
   const [showCustomStock, setShowCustomStock] = useState(false)
   const [customStockStart, setCustomStockStart] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
@@ -218,7 +219,21 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         }
       })
     })
-    return results.sort((a,b) => a - b)
+
+    // [MOD] 強制加入今日 (最後一筆) 與起始日 (第一筆)
+    const first = data[0].timestamp
+    const last = data[data.length - 1].timestamp
+    
+    // 避讓邏輯：若既有刻度與強制刻度相差 5 天內 (5 * 24 * 3600 * 1000) 則過濾掉既有刻度
+    const PROXIMITY_MS = 5 * 24 * 3600 * 1000
+    const filteredResults = results.filter(ts => {
+      const distToFirst = Math.abs(ts - first)
+      const distToLast = Math.abs(ts - last)
+      return distToFirst > PROXIMITY_MS && distToLast > PROXIMITY_MS
+    })
+
+    const finalTicks = [...filteredResults, first, last]
+    return finalTicks.sort((a,b) => a - b)
   }, [enrichedStockHistory, stockRange, customStockStart, customStockEnd])
 
   // 計算全域價格極值與固定刻度

@@ -244,20 +244,38 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               </p>
             </div>
 
-            <div className="space-y-3 pt-4 border-t border-white/5">
-              <Label>圖表預設時間軸</Label>
-              <select 
-                value={localSettings.chart_default_range || '1M'} 
-                onChange={e => handleSave({ chart_default_range: e.target.value as any })}
-                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[15px] font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
-              >
-                {['1M', '3M', '6M', '9M', '1Y'].map(r => (
-                  <option key={r} value={r}>{r}</option>
-                ))}
-              </select>
-              <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
-                每次進入分析頁面時圖表預設顯示的時間長度。
-              </p>
+            <div className="space-y-6 pt-6 border-t border-white/5">
+              <div className="space-y-3">
+                <Label>年度進度圖表預設時間軸</Label>
+                <select 
+                  value={localSettings.chart_default_range || '1M'} 
+                  onChange={e => handleSave({ chart_default_range: e.target.value as any })}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[15px] font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
+                >
+                  {['1M', '3M', '6M', '9M', '1Y'].map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
+                  Dashboard 年度獲利目標進度圖預設顯示的時間長度。
+                </p>
+              </div>
+
+              <div className="space-y-3">
+                <Label>單一個股走勢預設時間軸</Label>
+                <select 
+                  value={localSettings.stock_chart_default_range || '1M'} 
+                  onChange={e => handleSave({ stock_chart_default_range: e.target.value as any })}
+                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[15px] font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
+                >
+                  {['1M', '3M', '6M', '9M', '1Y'].map(r => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </select>
+                <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
+                  單一個股走勢分析圖表預設顯示的時間長度。
+                </p>
+              </div>
             </div>
           </div>
           {renderSaveButton()}
