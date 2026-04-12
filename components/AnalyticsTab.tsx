@@ -79,6 +79,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     
     const txs = [...transactions].filter(t => t.symbol === selSym).sort((a, b) => a.trade_date.localeCompare(b.trade_date))
     
+    let txIdx = 0
     let currentAvgCost: number | null = null
     let inventory: { shares: number, cost: number }[] = []
 

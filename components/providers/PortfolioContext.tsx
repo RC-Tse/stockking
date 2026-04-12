@@ -42,7 +42,7 @@ export function PortfolioProvider({
   children: React.ReactNode, 
   transactions: Transaction[], 
   quotes: Record<string, Quote>, 
-  settings: UserSettings 
+  settings: UserSettings, 
   updateSettings: (newSettings: Partial<UserSettings>) => Promise<void>
 }) {
   const [snapshotQuotes, setSnapshotQuotes] = React.useState<Record<string, any>>({})
