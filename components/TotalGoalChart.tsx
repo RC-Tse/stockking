@@ -3,39 +3,37 @@
 import React, { useMemo, useState, useEffect } from 'react'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker from './DatePicker'
-import { type ChartRange, Transaction, UserSettings, calculateTxParts } from '@/types'
+import { Transaction, UserSettings, calculateTxParts, fmtMoney } from '@/types'
 import ErrorBoundary from './ErrorBoundary'
 import ProgressChart from './ProgressChart'
 
 interface Props {
   transactions: Transaction[]
   settings: UserSettings
-  year?: number
 }
 
-function YearlyPnLChartContent({ transactions, settings, year }: Props) {
+type TotalRange = '1M' | '6M' | '1Y' | '3Y' | '5Y' | 'CUSTOM'
+
+function TotalGoalChartContent({ transactions, settings }: Props) {
   const [historyData, setHistoryData] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
   
-  const [range, setRange] = useState<ChartRange>(settings.chart_default_range || '1M')
+  const [range, setRange] = useState<TotalRange>('1Y')
   const [showCustom, setShowCustom] = useState(false)
-  const [customStart, setCustomStart] = useState(() => {
-    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
-  })
-  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
-
-  const chartYear = year || new Date().getFullYear()
-  const yearStartStr = `${chartYear}-01-01`
+  
+  const startDateStr = settings.total_goal_start_date || new Date().toISOString().split('T')[0]
   const todayStr = new Date().toISOString().split('T')[0]
+
+  const [customStart, setCustomStart] = useState(startDateStr)
+  const [customEnd, setCustomEnd] = useState(todayStr)
 
   const relevantSymbols = useMemo(() => {
     const syms = new Set<string>()
-    transactions.forEach(t => {
-      if (t?.symbol) syms.add(t.symbol)
-    })
+    transactions.forEach(t => { if (t?.symbol) syms.add(t.symbol) })
     return Array.from(syms)
   }, [transactions])
 
+  // Fetch full history for all relevant symbols
   useEffect(() => {
     if (relevantSymbols.length === 0) {
       setLoading(false)
@@ -46,7 +44,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       const results: Record<string, any[]> = {}
       await Promise.all(relevantSymbols.map(async (sym) => {
         try {
-          const res = await fetch(`/api/stocks/info?symbol=${sym}&year=${chartYear}`)
+          // Fetch up to 5 years of history
+          const res = await fetch(`/api/stocks/info?symbol=${sym}&range=5y`)
           if (res.ok) {
             const data = await res.json()
             results[sym] = Array.isArray(data?.history) ? data.history : []
@@ -57,22 +56,43 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       setLoading(false)
     }
     fetchAllHistory()
-  }, [relevantSymbols, chartYear])
+  }, [relevantSymbols])
 
   const chartData = useMemo(() => {
-    if (loading) return []
-    const start = new Date(`${chartYear}-01-01`)
-    const end = new Date(`${chartYear}-12-31`)
+    if (loading || !transactions.length) return []
+    
+    // 1. Determine Window
+    let rangeStart: Date
+    let rangeEnd: Date
+    
+    const baseStart = new Date(startDateStr)
+    const now = new Date(todayStr)
+
+    if (range === 'CUSTOM') {
+      rangeStart = new Date(customStart)
+      rangeEnd = new Date(customEnd)
+    } else {
+      rangeStart = new Date(baseStart)
+      // Range End depends on selection
+      rangeEnd = new Date(baseStart)
+      if (range === '1M') rangeEnd.setMonth(rangeEnd.getMonth() + 1)
+      else if (range === '6M') rangeEnd.setMonth(rangeEnd.getMonth() + 6)
+      else if (range === '1Y') rangeEnd.setFullYear(rangeEnd.getFullYear() + 1)
+      else if (range === '3Y') rangeEnd.setFullYear(rangeEnd.getFullYear() + 3)
+      else if (range === '5Y') rangeEnd.setFullYear(rangeEnd.getFullYear() + 5)
+    }
+
+    // Optimization: Pre-calculate daily balances using transaction ledger
     const sortedTxs = [...transactions]
       .filter(t => t?.trade_date)
       .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
     
     let inventory: Record<string, any[]> = {}
+    let cumulativeRealizedOverall = 0
     let txIdx = 0
-    let cumulativeRealizedThisYear = 0
     
-    // Phase 1: Pre-Year Inventory
-    while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date < yearStartStr) {
+    // Skip transactions BEFORE rangeStart but update state accordingly
+    while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date < rangeStart.toISOString().split('T')[0]) {
       const t = sortedTxs[txIdx]
       if (!inventory[t.symbol]) inventory[t.symbol] = []
       if (t.action !== 'SELL') {
@@ -81,12 +101,16 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       } else {
         const { absNet: net_sell } = calculateTxParts(t.shares, t.price, 'SELL', t.symbol, settings)
         let rem = t.shares
+        let sellProceedsRemaining = net_sell
         while (rem > 0 && inventory[t.symbol].length > 0) {
           const lot = inventory[t.symbol][0]
           const take = Math.min(lot.shares, rem)
           const mBuyCost = take === lot.shares ? lot.cost : Math.floor(lot.cost * (take / lot.shares))
-          lot.cost -= mBuyCost
+          const mSellNet = take === rem ? sellProceedsRemaining : Math.floor(net_sell * (take / t.shares))
+          cumulativeRealizedOverall += (mSellNet - mBuyCost)
+          sellProceedsRemaining -= mSellNet
           lot.shares -= take
+          lot.cost -= mBuyCost
           rem -= take
           if (lot.shares <= 0) inventory[t.symbol].shift()
         }
@@ -94,19 +118,18 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       txIdx++
     }
 
-    // Phase 2: Annual Loop
     const rawDays: any[] = []
     const lastPriceMap: Record<string, number> = {}
     const stockHistoryPointers: Record<string, number> = {}
-    
     relevantSymbols.forEach(s => {
       stockHistoryPointers[s] = 0
       const hist = historyData[s] || []
-      if (hist.length > 0) lastPriceMap[s] = hist[0].price || 0
-      else lastPriceMap[s] = 0
+      lastPriceMap[s] = hist.length > 0 ? (hist[0].price || 0) : 0
     })
 
-    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+    const durationDays = (rangeEnd.getTime() - rangeStart.getTime()) / (1000 * 60 * 60 * 24) || 1
+
+    for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
       const dStr = d.toISOString().split('T')[0]
       const isFuture = dStr > todayStr
       
@@ -126,7 +149,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               const take = Math.min(lot.shares, rem)
               const mBuyCost = take === lot.shares ? lot.cost : Math.floor(lot.cost * (take / lot.shares))
               const mSellNet = take === rem ? sellProceedsRemaining : Math.floor(net_sell * (take / t.shares))
-              cumulativeRealizedThisYear += (mSellNet - mBuyCost)
+              cumulativeRealizedOverall += (mSellNet - mBuyCost)
               sellProceedsRemaining -= mSellNet
               lot.shares -= take
               lot.cost -= mBuyCost
@@ -148,19 +171,19 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         stockHistoryPointers[sym] = ptr
       })
 
-      let unrealizedThisYear = 0
+      let unrealizedOverall = 0
       Object.entries(inventory).forEach(([sym, lots]) => {
         const netShares = lots.reduce((s, l) => s + l.shares, 0)
         if (netShares <= 0) return
         const q = lastPriceMap[sym] || 0
         const { absNet: totalNetMV } = calculateTxParts(netShares, q, 'SELL', sym, settings)
         const totalCost = lots.reduce((s, l) => s + l.cost, 0)
-        unrealizedThisYear += (totalNetMV - totalCost)
+        unrealizedOverall += (totalNetMV - totalCost)
       })
 
       const dayIdx = rawDays.length
-      const idealPnL = (dayIdx / 365) * (settings?.year_goal || 0)
-      const actualPnL = isFuture ? null : (cumulativeRealizedThisYear + unrealizedThisYear)
+      const idealPnL = (dayIdx / durationDays) * (settings?.total_goal || 0)
+      const actualPnL = isFuture ? null : (cumulativeRealizedOverall + unrealizedOverall)
       
       rawDays.push({
         date: dStr,
@@ -170,36 +193,15 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       })
     }
     return rawDays
-  }, [transactions, historyData, loading, settings, chartYear, todayStr, relevantSymbols, yearStartStr])
+  }, [transactions, historyData, loading, settings, range, customStart, customEnd, startDateStr, todayStr, relevantSymbols])
 
-  const filteredData = useMemo(() => {
-    if (!chartData.length) return []
-    let startDate: string
-    let endDate: string
-    const baseline = todayStr < `${chartYear}-12-31` ? todayStr : `${chartYear}-12-31`
-
-    if (range === '1Y') { startDate = `${chartYear}-01-01`; endDate = `${chartYear}-12-31`; }
-    else if (range === '9M') { startDate = `${chartYear}-01-01`; endDate = `${chartYear}-09-30`; }
-    else if (range === '6M') { startDate = `${chartYear}-01-01`; endDate = `${chartYear}-06-30`; }
-    else if (range === 'CUSTOM') { startDate = customStart; endDate = customEnd; }
-    else {
-      const numMonths = parseInt(range)
-      const dS = new Date(baseline); dS.setMonth(dS.getMonth() - numMonths)
-      startDate = dS.toISOString().split('T')[0]
-      if (startDate < yearStartStr) startDate = yearStartStr
-      endDate = baseline
-    }
-    return chartData.filter(d => d.date >= startDate && d.date <= endDate)
-  }, [chartData, range, customStart, customEnd, chartYear, todayStr, yearStartStr])
-
-  const currentActual = Math.round(filteredData.findLast(d => d.actual !== null)?.actual || 0)
+  const currentValue = Math.round(chartData.findLast(d => d.actual !== null)?.actual || 0)
 
   return (
     <div className="space-y-6">
-      {/* Range UI moved out to wrapper */}
       <div className="px-4 flex flex-col gap-4 relative z-20">
         <div className="flex w-full gap-1.5 scrollbar-hide">
-          {(['1M', '3M', '6M', '9M', '1Y'] as ChartRange[]).map(r => (
+          {(['1M', '6M', '1Y', '3Y', '5Y'] as TotalRange[]).map(r => (
             <button 
               key={r} 
               onClick={() => { setRange(r); setShowCustom(false); }}
@@ -215,37 +217,24 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
             <CalendarIcon size={14} />
           </button>
         </div>
-
-        {showCustom && range === 'CUSTOM' && (
-          <div className="flex items-center justify-end gap-3 px-4 py-2 animate-slide-up bg-[var(--bg-card)] rounded-2xl border border-[var(--border-bright)] shadow-xl">
-             <div className="flex items-center gap-2">
-               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
-               <DatePicker value={customStart} onChange={(v: string) => setCustomStart(v)} fixedYear={chartYear} />
-             </div>
-             <div className="flex items-center gap-2 pr-2">
-               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
-               <DatePicker value={customEnd} onChange={(v: string) => setCustomEnd(v)} fixedYear={chartYear} />
-             </div>
-          </div>
-        )}
       </div>
 
       <ProgressChart 
-        title="年度目標進度"
-        subtitle="當前累計年度損益"
-        data={filteredData}
-        goal={settings.year_goal}
-        currentValue={currentActual}
+        title="總目標進度"
+        subtitle="當前累計總損益"
+        data={chartData}
+        goal={settings.total_goal}
+        currentValue={currentValue}
         loading={loading}
       />
     </div>
   )
 }
 
-export default function YearlyPnLChart(props: Props) {
+export default function TotalGoalChart(props: Props) {
   return (
     <ErrorBoundary>
-      <YearlyPnLChartContent {...props} />
+      <TotalGoalChartContent {...props} />
     </ErrorBoundary>
   )
 }

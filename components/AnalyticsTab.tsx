@@ -8,6 +8,7 @@ import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info } from 'lucide-re
 import DatePicker from './DatePicker'
 import { usePortfolio } from './providers/PortfolioContext'
 import YearlyPnLChart from './YearlyPnLChart'
+import TotalGoalChart from './TotalGoalChart'
 
 type StockRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'CUSTOM'
 
@@ -475,10 +476,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       clearTimeout(scrubTimerRef.current)
       scrubTimerRef.current = null
     }
-    // 注意：不再這裡 setIsScrubbingMode(false)，實現黏性保留
   }
 
-  // 單點螢幕退出查價模式
   const handleChartClick = () => {
     if (isScrubbingMode) {
       setIsScrubbingMode(false)
@@ -487,18 +486,10 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   }
 
   const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (e.type === 'touchmove' && !isScrubbingMode) {
-      // 如果不是查價模式，讓瀏覽器處理原生捲動
-      return
-    }
-
-    if (e.type === 'touchmove' && isScrubbingMode) {
-      e.preventDefault() // 禁用捲動
-    }
-
+    if (e.type === 'touchmove' && !isScrubbingMode) return
+    if (e.type === 'touchmove' && isScrubbingMode) e.preventDefault()
     if (!scrollerRef.current || enrichedStockHistory.length === 0) return
     const scroller = scrollerRef.current
-    if (!scroller) return
     const rect = scroller.getBoundingClientRect()
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const scrollX = clientX - rect.left + scroller.scrollLeft
@@ -509,53 +500,9 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   }
 
   return (
-    <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
-      {/* ── 0. 年度進度圖 ── */}
-      <section className="space-y-4">
-        <div className="flex items-center justify-between px-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">年度進度回顧</span>
-            <select 
-              value={selectedYear}
-              onChange={e => setSelectedYear(e.target.value)}
-              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-[12px] font-black text-accent outline-none ml-2"
-            >
-              {['2023', '2024', '2025', '2026', '2027'].map(y => <option key={y} value={y}>{y} 年</option>)}
-            </select>
-          </div>
-
-        </div>
-
-        {hasGoal ? (
-          <YearlyPnLChart 
-            transactions={transactions} 
-            settings={{ ...settings, year_goal: yearGoal }} 
-            year={Number(selectedYear)}
-          />
-        ) : (
-          <div className="bg-[var(--bg-card)] border border-dashed border-accent/20 rounded-[48px] p-12 text-center space-y-4 shadow-sm">
-            <div className="w-16 h-16 bg-accent/5 rounded-full flex items-center justify-center mx-auto mb-2">
-              <span className="text-2xl">🎯</span>
-            </div>
-            <h4 className="text-[15px] font-black text-[var(--t1)]">尚未設定 {selectedYear} 年度目標</h4>
-            <p className="text-[12px] text-[var(--t2)] opacity-60 leading-relaxed max-w-[200px] mx-auto">
-              請前往「設定」頁面為該年份設定投資獲利目標，以便開始追蹤進度。
-            </p>
-            <div className="pt-2">
-              <button 
-               onClick={() => {
-                 window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' }))
-               }}
-               className="px-6 py-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent text-[12px] font-black active:scale-95 transition-all"
-              >
-                前往設定
-              </button>
-            </div>
-          </div>
-        )}
-      </section>
-
-      {/* ── 1. 各股分析 ── */}
+    <div className="p-4 space-y-12 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
+      
+      {/* ── 1. 各股分析 (Moved to TOP) ── */}
       <section className="space-y-4">
         <div className="flex flex-col space-y-3 px-1">
           <h3 className="flex items-center gap-2 text-[13px] font-black text-[var(--t2)] uppercase tracking-wider whitespace-nowrap">
@@ -581,7 +528,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                   key={r} onClick={() => { 
                     setStockRange(r); 
                     setShowCustomStock(false);
-                    // 儲存預設範圍至資料庫
                     updateSettings({ stock_chart_default_range: r });
                   }}
                   className={`flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)] whitespace-nowrap'}`}
@@ -614,7 +560,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
         <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
           <div className="flex h-[320px]">
-            {/* 1. Plot Area (Scrollable) */}
             <div 
               {...bind()}
               ref={scrollerRef}
@@ -636,28 +581,15 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     onTouchEnd={handleTouchEnd}
                   >
                     <g>
-                      {/* Horizontal Grid Lines (aligned with price ticks) */}
                       {[0, 1, 2, 3, 4].map(i => {
                         const y = chartHeight * (i * 0.25)
-                        return (
-                          <line key={i} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
-                        )
+                        return <line key={i} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
                       })}
-
-                      {/* Vertical Grid Lines (Month starts & Buy days) */}
                       {enrichedStockHistory.map((d, i) => {
                         const isMonthStart = i === 0 || d.date.slice(5, 7) !== enrichedStockHistory[i - 1].date.slice(5, 7)
-                        if (!isMonthStart && !d.isBuy) return null
-
+                        if (!isMonthStart) return null
                         const x = i * pointWidth + pointWidth / 2
-                        return (
-                          <line 
-                            key={`vgrid-${i}`} 
-                            x1={x} y1="0" x2={x} y2={chartHeight} 
-                            stroke="rgba(255,255,255,0.06)" 
-                            strokeWidth="1" 
-                          />
-                        )
+                        return <line key={`vgrid-${i}`} x1={x} y1="0" x2={x} y2={chartHeight} stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
                       })}
                     </g>
                   
@@ -672,19 +604,10 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                         const bodyTop = Math.min(yOpen, yClose)
                         const bodyHeight = Math.max(1, Math.abs(yOpen - yClose))
                         const color = d.isUp ? '#ef4444' : '#22c55e'
-                        
                         return (
                           <g key={i}>
-                            {/* Vertical Align: K-line center at midX */}
                             <line x1={midX} y1={yHigh} x2={midX} y2={yLow} stroke={color} strokeWidth="1.5" />
-                            <rect 
-                              x={midX - candleWidth / 2} 
-                              y={bodyTop} 
-                              width={candleWidth} 
-                              height={bodyHeight} 
-                              fill={color} 
-                              rx="1"
-                            />
+                            <rect x={midX - candleWidth / 2} y={bodyTop} width={candleWidth} height={bodyHeight} fill={color} rx="1" />
                           </g>
                         )
                       })}
@@ -701,81 +624,55 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     />
                   )}
 
-                  {/* Step Cost Line (Piecewise Horizontal Path) - Moved AFTER candles to be on top */}
-                  <path 
-                    d={(() => {
-                      let pathStr = ''
-                      let isDrawing = false
-                      enrichedStockHistory.forEach((d, i) => {
-                        const x = i * pointWidth + pointWidth / 2
-                        const nextX = (i + 1) * pointWidth + pointWidth / 2
-                        if (d.avgCost !== null) {
-                          const y = yScale(d.avgCost)
-                          if (!isDrawing) {
-                            pathStr += `M ${x} ${y} L ${nextX} ${y} `
-                            isDrawing = true
-                          } else {
-                            pathStr += `L ${x} ${y} L ${nextX} ${y} `
-                          }
-                        } else {
-                          isDrawing = false
-                        }
-                      })
-                      return pathStr
-                    })()}
-                    fill="none"
-                    stroke="#ffffff"
-                    strokeWidth="1.5"
-                    strokeDasharray="4 4"
-                    opacity="0.6"
-                  />
+                  <g>
+                    <path 
+                      d={(() => {
+                        let pathStr = ''
+                        let isDrawing = false
+                        enrichedStockHistory.forEach((d, i) => {
+                          const x = i * pointWidth + pointWidth / 2
+                          const nextX = (i + 1) * pointWidth + pointWidth / 2
+                          if (d.avgCost !== null) {
+                            const y = yScale(d.avgCost)
+                            if (!isDrawing) { pathStr += `M ${x} ${y} L ${nextX} ${y} `; isDrawing = true; }
+                            else { pathStr += `L ${x} ${y} L ${nextX} ${y} `; }
+                          } else { isDrawing = false; }
+                        })
+                        return pathStr
+                      })()}
+                      fill="none"
+                      stroke="#ffffff"
+                      strokeWidth="3"
+                      strokeDasharray="6 4"
+                      opacity="0.8"
+                    />
+                    {enrichedStockHistory.map((d, i) => {
+                      if (!d.isBuy || d.avgCost === null) return null
+                      const x = i * pointWidth + pointWidth / 2
+                      const y = yScale(d.avgCost)
+                      return <circle key={`buy-dot-${i}`} cx={x} cy={y} r="3.5" fill="#ffffff" stroke="rgba(0,0,0,0.2)" strokeWidth="1" />
+                    })}
+                  </g>
 
-                  {/* Scrubbing Indicators */}
                   {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
                     <g>
-                      <line 
-                        x1={activeIdx * pointWidth + pointWidth / 2} 
-                        y1="0" 
-                        x2={activeIdx * pointWidth + pointWidth / 2} 
-                        y2={chartHeight} 
-                        stroke="var(--accent)" 
-                        strokeWidth="1.5" 
-                      />
-                      <circle 
-                        cx={activeIdx * pointWidth + pointWidth / 2} 
-                        cy={yScale(enrichedStockHistory[activeIdx].close)} 
-                        r="4" 
-                        fill="var(--accent)" 
-                        stroke="#fff" 
-                        strokeWidth="2" 
-                      />
+                      <line x1={activeIdx * pointWidth + pointWidth / 2} y1="0" x2={activeIdx * pointWidth + pointWidth / 2} y2={chartHeight} stroke="var(--accent)" strokeWidth="1.5" />
+                      <circle cx={activeIdx * pointWidth + pointWidth / 2} cy={yScale(enrichedStockHistory[activeIdx].close)} r="4" fill="var(--accent)" stroke="#fff" strokeWidth="2" />
                     </g>
                   )}
                 </svg>
                 
-                {/* X-Axis Dates */}
                 <div className="absolute bottom-0 left-0 right-0 h-4 flex items-center pointer-events-none">
                   {enrichedStockHistory.map((d, i) => {
                     const isMonthStart = i === 0 || d.date.slice(5, 7) !== enrichedStockHistory[i - 1].date.slice(5, 7)
-                    if (!isMonthStart && !d.isBuy) return null 
-                    
-                    const label = isMonthStart ? `${parseInt(d.date.slice(5, 7))}月` : d.date.slice(5)
-
-                    return (
-                      <div 
-                        key={i} 
-                        className={`absolute text-[9px] font-black whitespace-nowrap -translate-x-1/2 transition-all px-1.5 py-0.5 rounded-sm ${d.isBuy ? 'bg-[#facc15] text-black z-20 shadow-md transform scale-110' : 'text-white/20'}`} 
-                        style={{ left: i * pointWidth + pointWidth / 2, bottom: d.isBuy ? '2px' : '0px' }}
-                      >
-                        {label}
-                      </div>
-                    )
+                    if (!isMonthStart) return null 
+                    const label = `${parseInt(d.date.slice(5, 7))}月`
+                    return <div key={i} className="absolute text-[10px] font-black text-[var(--t3)] -translate-x-1/2" style={{ left: `${i * pointWidth + pointWidth / 2}px` }}>{label}</div>
                   })}
                 </div>
               </div>
             </div>
 
-            {/* 2. Sticky Y-Axis Zone (Right Aligned, Fixed) */}
             <div className="w-14 bg-black/40 backdrop-blur-md border-l border-white/5 flex flex-col justify-between py-6 z-30 sticky right-0" style={{ height: '320px' }}>
               {[1, 0.75, 0.5, 0.25, 0].map(p => {
                 const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
@@ -847,6 +744,59 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           </div>
         )}
       </section>
+
+      {/* ── 2. 年度目標進度 ── */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">年度目標進度</span>
+            <select 
+              value={selectedYear}
+              onChange={e => setSelectedYear(e.target.value)}
+              className="bg-white/5 border border-white/10 rounded-lg px-3 py-1 text-[12px] font-black text-accent outline-none ml-2"
+            >
+              {[2023, 2024, 2025, 2026, 2027].map(y => <option key={y} value={y}>{y} 年</option>)}
+            </select>
+          </div>
+        </div>
+
+        {hasGoal ? (
+          <YearlyPnLChart 
+            transactions={transactions} 
+            settings={{ ...settings, year_goal: yearGoal }} 
+            year={Number(selectedYear)}
+          />
+        ) : (
+          <div className="bg-[var(--bg-card)] border border-dashed border-accent/20 rounded-[48px] p-12 text-center space-y-4 shadow-sm">
+            <div className="w-16 h-16 bg-accent/5 rounded-full flex items-center justify-center mx-auto mb-2">
+              <span className="text-2xl">🎯</span>
+            </div>
+            <h4 className="text-[15px] font-black text-[var(--t1)]">尚未設定 {selectedYear} 年度目標</h4>
+            <p className="text-[12px] text-[var(--t2)] opacity-60 leading-relaxed max-w-[200px] mx-auto">
+              請前往「設定」頁面為該年份設定投資獲利目標，以便開始追蹤進度。
+            </p>
+            <div className="pt-2">
+              <button 
+               onClick={() => { window.dispatchEvent(new CustomEvent('changeTab', { detail: 'settings' })) }}
+               className="px-6 py-2.5 rounded-xl bg-accent/10 border border-accent/20 text-accent text-[12px] font-black active:scale-95 transition-all"
+              >
+                前往設定
+              </button>
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ── 3. 總目標進度 ── */}
+      <section className="space-y-4">
+        <div className="flex items-center justify-between px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">總目標進度</span>
+          </div>
+        </div>
+        <TotalGoalChart transactions={transactions} settings={settings} />
+      </section>
+
     </div>
   )
 }
