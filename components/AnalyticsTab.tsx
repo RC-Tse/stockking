@@ -338,19 +338,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   // 計算圖表寬度比例
   // 1M 約 22 個交易日, 3M 約 66, 6M 約 132...
-  const [pointsPerWindow, setPointsPerWindow] = useState(22)
-
-  // 根據選擇的範圍初始化點數
-  useEffect(() => {
-    switch(stockRange) {
-      case '1M': setPointsPerWindow(22); break
-      case '3M': setPointsPerWindow(66); break
-      case '6M': setPointsPerWindow(132); break
-      case '9M': setPointsPerWindow(198); break
-      case '1Y': setPointsPerWindow(252); break
-      default: setPointsPerWindow(Math.max(22, enrichedStockHistory.length))
-    }
-  }, [stockRange, enrichedStockHistory.length])
+  const [pointsPerWindow] = useState(25) // 固定一屏顯示 25 天，確保 K 線寬度足夠
+  const [yZoomFactor, setYZoomFactor] = useState(1.0) // Y 軸縮放比例
 
   const chartWidthPercent = useMemo(() => {
     if (!enrichedStockHistory.length) return '100%'
@@ -360,7 +349,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   const [yDomain, setYDomain] = useState<[number | string, number | string]>(['auto', 'auto'])
   const pinchStartDist = useRef<number | null>(null)
-  const lastPointsPerWindow = useRef<number>(22)
+  const lastYZoomFactor = useRef<number>(1.0)
 
   // 監聽捲動與縮放
   useEffect(() => {
@@ -378,8 +367,10 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         const vals = visibleData.flatMap(d => [d.open, d.close, d.high, d.low, d.avgCost].filter(v => v !== null)) as number[]
         const min = Math.min(...vals)
         const max = Math.max(...vals)
-        const padding = (max - min) * 0.1
-        setYDomain([min - padding, max + padding])
+        
+        const mid = (max + min) / 2
+        const halfRange = ((max - min) / 2 + 1) * yZoomFactor // +1 避免完全重疊
+        setYDomain([mid - halfRange, mid + halfRange])
       }
     }
 
@@ -389,21 +380,22 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           e.touches[0].pageX - e.touches[1].pageX,
           e.touches[0].pageY - e.touches[1].pageY
         )
-        lastPointsPerWindow.current = pointsPerWindow
+        lastYZoomFactor.current = yZoomFactor
       }
     }
 
     const handleTouchMove = (e: TouchEvent) => {
       if (e.touches.length === 2 && pinchStartDist.current !== null) {
-        e.preventDefault() // 阻斷原生縮放與捲動
+        e.preventDefault() 
         const currentDist = Math.hypot(
           e.touches[0].pageX - e.touches[1].pageX,
           e.touches[0].pageY - e.touches[1].pageY
         )
+        // 放大手勢 (currentDist 變大) -> zoomFactor 變小 -> yDomain 縮小 -> K線變長
         const zoomFactor = pinchStartDist.current / currentDist
-        const nextPoints = lastPointsPerWindow.current * zoomFactor
-        // 限制點數在 10 ~ 300 之間
-        setPointsPerWindow(Math.min(300, Math.max(10, nextPoints)))
+        const nextZoom = lastYZoomFactor.current * zoomFactor
+        // 限制縮放倍率在 0.1 ~ 5.0 之間
+        setYZoomFactor(Math.min(5.0, Math.max(0.1, nextZoom)))
       }
     }
 
@@ -425,7 +417,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       scroller.removeEventListener('touchmove', handleTouchMove)
       scroller.removeEventListener('touchend', handleTouchEnd)
     }
-  }, [enrichedStockHistory, pointsPerWindow])
+  }, [enrichedStockHistory, yZoomFactor])
 
   // 自動捲動到最右側
   useEffect(() => {
@@ -648,7 +640,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     </Bar>
                     
                     {/* Bodies */}
-                    <Bar dataKey="candleBody" barSize={8} isAnimationActive={true}>
+                    <Bar dataKey="candleBody" barSize={12} isAnimationActive={true}>
                       {enrichedStockHistory.map((entry, index) => (
                         <Cell key={`body-${index}`} fill={entry.isUp ? '#ef4444' : '#22c55e'} />
                       ))}
