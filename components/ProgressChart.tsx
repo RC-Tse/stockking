@@ -37,28 +37,46 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
     const dataMin = Math.min(0, ...vals)
     const dataMax = Math.max(goal, ...vals)
     
-    const bufferMax = dataMax * 1.15
+    const bufferMax = dataMax > 0 ? dataMax * 1.15 : 0
     const bufferMin = dataMin < 0 ? dataMin * 1.15 : - (dataMax * 0.05)
     
     const range = bufferMax - bufferMin
-    const snapUnit = range > 20000 ? 5000 : range > 10000 ? 2000 : 1000
     
+    // Nice numbers for steps
+    const findStep = (target: number) => {
+      const exp = Math.floor(Math.log10(target))
+      const frac = target / Math.pow(10, exp)
+      let niceFrac
+      if (frac <= 1) niceFrac = 1
+      else if (frac <= 2) niceFrac = 2
+      else if (frac <= 5) niceFrac = 5
+      else niceFrac = 10
+      return niceFrac * Math.pow(10, exp)
+    }
+    
+    const targetTicks = 6
+    const snapUnit = findStep(range / targetTicks)
+    
+    // Align min/max to snapUnit
     const finalMax = Math.ceil(bufferMax / snapUnit) * snapUnit
     const finalMin = Math.floor(bufferMin / snapUnit) * snapUnit
     
     const ticks = []
     for (let v = finalMin; v <= finalMax; v += snapUnit) {
-      ticks.push(v)
+      if (!ticks.includes(v)) ticks.push(v)
     }
+
     return { 
       domain: [finalMin, finalMax] as [number, number], 
-      ticks: Array.from(new Set(ticks)).sort((a,b) => a-b) 
+      ticks: ticks.sort((a,b) => a-b) 
     }
   }, [data, goal])
 
   const yScale = (val: number) => {
     const [min, max] = yAxis.domain
-    return chartHeight - ((val - min) / (max - min)) * chartHeight
+    const range = max - min
+    if (range === 0) return chartHeight / 2
+    return chartHeight - ((val - min) / range) * chartHeight
   }
 
   const getX = (i: number) => {
@@ -111,6 +129,10 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
       </div>
     )
   }
+
+  const firstYear = data.length > 0 ? data[0].date.slice(0, 4) : ''
+  const lastYear = data.length > 0 ? data[data.length - 1].date.slice(0, 4) : ''
+  const isCrossYear = firstYear !== lastYear
 
   return (
     <div className="space-y-4 animate-slide-up w-full overflow-hidden">
@@ -168,8 +190,8 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                 {yAxis.ticks.map(t => (
                   <g key={t}>
                     <line x1="0" y1={yScale(t)} x2="100%" y2={yScale(t)} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-                    <text x={viewBoxWidth - 4} y={yScale(t) - 6} fill="white" fillOpacity="0.2" fontSize="9" fontWeight="900" textAnchor="end">
-                      {Math.abs(t) >= 1000 ? `${(t/1000).toFixed(0)}K` : t.toLocaleString()}
+                    <text x={viewBoxWidth - 4} y={yScale(t) - 4} fill="white" fillOpacity="0.2" fontSize="9" fontWeight="900" textAnchor="end">
+                      {Math.abs(t) >= 1000 ? `${(t/1000).toLocaleString()}K` : t.toLocaleString()}
                     </text>
                   </g>
                 ))}
@@ -260,23 +282,33 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                 {data.map((d, i) => {
                   const day = d.date.slice(8)
                   if (day !== '01') return null
+                  const year = d.date.slice(0, 4)
                   const month = parseInt(d.date.slice(5, 7))
                   const x = getX(i)
 
-                  // Density logic
+                  // User requirements:
+                  // 1. Label 1st of each month as month.
+                  // 2. 3Y+ (long range) show only Jan and July.
+                  // 3. If crossed year, label year on Jan.
+                  
                   let shouldShow = false
-                  if (data.length <= 40) shouldShow = true // 1M
-                  else if (data.length <= 200) shouldShow = month % 2 !== 0 // 6M, show odd months
-                  else if (data.length <= 400) shouldShow = month % 3 === 1 // 1Y, show Q1, Q2..
-                  else if (data.length <= 1200) shouldShow = month === 1 || month === 7 // 3Y, show Jan & July
-                  else shouldShow = month === 1 // 5Y, show only Jan
+                  if (data.length <= 800) {
+                    // Small to medium ranges (1M to ~2Y)
+                    shouldShow = true 
+                  } else {
+                    // Long ranges (3Y+)
+                    shouldShow = (month === 1 || month === 7)
+                  }
 
                   if (!shouldShow) return null
                   
+                  const isJan = month === 1
+                  const label = (isCrossYear && isJan) ? `${year}/${month}` : `${month}月`
+                  
                   return (
                     <g key={i}>
-                      <text x={x} y={chartHeight + 20} fill="#888" fontSize="10" fontWeight="900" textAnchor="middle">
-                        {data.length > 400 && month === 1 ? `${d.date.slice(0, 4)}` : `${month}月`}
+                      <text x={x} y={chartHeight + 20} fill="white" fillOpacity="0.3" fontSize="10" fontWeight="900" textAnchor="middle">
+                        {label}
                       </text>
                     </g>
                   )
