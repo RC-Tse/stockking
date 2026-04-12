@@ -408,15 +408,23 @@ const chartWidthPercent = useMemo(() => {
     }
   }
 
+  const onPointerDown = (e: React.PointerEvent) => {
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    if (scrubTimer.current) clearTimeout(scrubTimer.current)
+    scrubTimer.current = setTimeout(() => {
+      setIsScrubbing(true)
+    }, 150)
+  }
+
   const onPointerUp = (e: React.PointerEvent) => {
     pointers.current.delete(e.pointerId)
-    if (pointers.current.size < 2) pinchStartDist.current = null
     if (pointers.current.size === 0) {
       if (scrubTimer.current) {
         clearTimeout(scrubTimer.current)
         scrubTimer.current = null
       }
       setIsScrubbing(false)
+      setActiveIdx(null)
     }
   }
 
@@ -521,7 +529,10 @@ const chartWidthPercent = useMemo(() => {
 
         <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-black text-[var(--t2)] opacity-80 animate-slide-up">
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: settings.stock_chart_style === 'detailed' ? '#ef4444' : 'var(--accent)' }} /> {settings.stock_chart_style === 'detailed' ? '陽線 (漲)' : '股價線'}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} /> {settings.stock_chart_style === '        <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: settings.stock_chart_style === 'detailed' ? '#22c55e' : 'rgba(255,255,255,0.7)' }} /> {settings.stock_chart_style === 'detailed' ? '陰線 (跌)' : '買入均價'}</div>
+        </div>
+
+        <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
           <div className="flex">
             {/* 1. Plot Area (Scrollable) */}
             <div 
