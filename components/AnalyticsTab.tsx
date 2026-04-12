@@ -2,11 +2,9 @@
 
 import { useState, useMemo, useEffect, useRef } from 'react'
 import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName, codeOnly } from '@/types'
-import { 
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, Legend, ComposedChart, Bar, Cell
-} from 'recharts'
-import { TrendingUp, RefreshCw, Calendar as CalendarIcon } from 'lucide-react'
+import { useGesture } from '@use-gesture/react'
+import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion'
+import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info } from 'lucide-react'
 import DatePicker from './DatePicker'
 import { usePortfolio } from './providers/PortfolioContext'
 import YearlyPnLChart from './YearlyPnLChart'
@@ -338,91 +336,75 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   // 計算圖表寬度比例
   // 1M 約 22 個交易日, 3M 約 66, 6M 約 132...
-  const [pointsPerWindow] = useState(25) // 固定一屏顯示 25 天，確保 K 線寬度足夠
-  const [yZoomFactor, setYZoomFactor] = useState(1.0) // Y 軸縮放比例
-
-  const chartWidthPercent = useMemo(() => {
+  const [pointsPerWindow] = useState(25)
+  const [yDomain, setYDomain] = useState<[number, number]>([0, 100])
+  const [isManualY, setIsManualY] = useState(false)
+  const pointers = useRef<Map<number, {x: number, y: number}>>(new Map())
+  const chartHeight = 280
+  const yPadding = 0.05 // 5% padding
+const chartWidthPercent = useMemo(() => {
     if (!enrichedStockHistory.length) return '100%'
     const ratio = enrichedStockHistory.length / pointsPerWindow
     return `${Math.max(100, ratio * 100)}%`
   }, [enrichedStockHistory.length, pointsPerWindow])
 
-  const [yDomain, setYDomain] = useState<[number | string, number | string]>(['auto', 'auto'])
-  const pinchStartDist = useRef<number | null>(null)
-  const lastYZoomFactor = useRef<number>(1.0)
-  const pointers = useRef<Map<number, {x: number, y: number}>>(new Map())
-
   const yearMetrics = useMemo(() => {
     if (!enrichedStockHistory.length) return null
-    // 取得所有資料中的極值，並強制過濾掉 0 或非數值
     const vals = enrichedStockHistory.flatMap(d => [d.open, d.high, d.low, d.close]
       .filter(v => typeof v === 'number' && v > 0)) as number[]
-    
     if (vals.length === 0) return null
-    return {
-      min: Math.min(...vals),
-      max: Math.max(...vals)
-    }
+    return { min: Math.min(...vals), max: Math.max(...vals) }
   }, [enrichedStockHistory])
 
-  // 監聽捲動比例更新 Y 軸 (僅在初次或數據變動時)
+  // 初始化 Y 軸對齊
   useEffect(() => {
-    const scroller = scrollerRef.current
-    if (!scroller || !enrichedStockHistory.length || !yearMetrics) return
-
-    const updateYAxis = () => {
+    if (yearMetrics && !isManualY) {
       const range = yearMetrics.max - yearMetrics.min
-      const baseMin = yearMetrics.min - range * 0.05
-      const baseMax = yearMetrics.max + range * 0.05
-      
-      const mid = (baseMax + baseMin) / 2
-      const span = (baseMax - baseMin) * yZoomFactor
-      setYDomain([Number((mid - span / 2).toFixed(2)), Number((mid + span / 2).toFixed(2))])
+      setYDomain([yearMetrics.min - range * yPadding, yearMetrics.max + range * yPadding])
     }
+  }, [yearMetrics, isManualY])
 
-    scroller.addEventListener('scroll', updateYAxis)
-    updateYAxis()
-    return () => scroller.removeEventListener('scroll', updateYAxis)
-  }, [enrichedStockHistory, yZoomFactor, yearMetrics])
+  // 手勢控制：雙指縮放與垂直平移
+  const bind = useGesture(
+    {
+      onPinch: ({ offset: [d], first, last }) => {
+        if (first) setIsManualY(true)
+        const zoom = Math.pow(1.01, -d) // 縮放係數
+        const range = yDomain[1] - yDomain[0]
+        const mid = (yDomain[1] + yDomain[0]) / 2
+        const newRange = range * zoom
+        setYDomain([mid - newRange / 2, mid + newRange / 2])
+      },
+      onDrag: ({ delta: [, dy], first }) => {
+        if (first) setIsManualY(true)
+        const range = yDomain[1] - yDomain[0]
+        const pricePerPixel = range / chartHeight
+        const shift = dy * pricePerPixel
+        setYDomain([yDomain[0] + shift, yDomain[1] + shift])
+      }
+    },
+    { drag: { filterTaps: true, threshold: 5 } }
+  )
 
-  // 自動捲動到最右側
-  useEffect(() => {
-    if (scrollerRef.current && enrichedStockHistory.length) {
-      const el = scrollerRef.current
-      const timer = setTimeout(() => {
-        el.scrollLeft = el.scrollWidth
-      }, 200)
-      return () => clearTimeout(timer)
-    }
-  }, [enrichedStockHistory.length, stockRange])
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-    
-    if (pointers.current.size === 1) {
-      scrubTimer.current = setTimeout(() => {
-        setIsScrubbing(true)
-        if (window.navigator.vibrate) try { window.navigator.vibrate(10) } catch(err){}
-      }, 300)
-    } else if (pointers.current.size === 2) {
-      clearTimeout(scrubTimer.current)
-      setIsScrubbing(false)
-      const pts = Array.from(pointers.current.values())
-      pinchStartDist.current = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
-      lastYZoomFactor.current = yZoomFactor
-    }
+  const yScale = (price: number) => {
+    const min = yDomain[0]
+    const max = yDomain[1]
+    return chartHeight - ((price - min) / (max - min)) * chartHeight
   }
 
-  const onPointerMove = (e: React.PointerEvent) => {
-    if (!pointers.current.has(e.pointerId)) return
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
-
-    if (pointers.current.size === 2 && pinchStartDist.current !== null) {
-      const pts = Array.from(pointers.current.values())
-      const currentDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)
-      const zoomFactor = pinchStartDist.current / currentDist
-      const nextZoom = lastYZoomFactor.current * zoomFactor
-      setYZoomFactor(Math.min(5.0, Math.max(0.1, nextZoom)))
+  // 查價位置管理
+  const [activeIdx, setActiveIdx] = useState<number | null>(null)
+  const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
+    if (!isScrubbing || !enrichedStockHistory.length) return
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const rect = scroller.getBoundingClientRect()
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const scrollX = clientX - rect.left + scroller.scrollLeft
+    const totalWidth = scroller.scrollWidth
+    const idx = Math.floor((scrollX / totalWidth) * enrichedStockHistory.length)
+    if (idx >= 0 && idx < enrichedStockHistory.length) {
+      setActiveIdx(idx)
     }
   }
 
@@ -539,246 +521,164 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
         <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-black text-[var(--t2)] opacity-80 animate-slide-up">
           <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: settings.stock_chart_style === 'detailed' ? '#ef4444' : 'var(--accent)' }} /> {settings.stock_chart_style === 'detailed' ? '陽線 (漲)' : '股價線'}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} /> {settings.stock_chart_style === 'detailed' ? '陰線 (跌)' : '買入均價'}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full border-2 border-white bg-[#e05050]" /> 買入點</div>
-        </div>
+          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: '#22c55e' }} /> {settings.stock_chart_style === '        <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex">
+            {/* 1. Plot Area (Scrollable) */}
+            <div 
+              {...bind()}
+              ref={scrollerRef}
+              onMouseMove={handleChartMove}
+              onTouchMove={handleChartMove}
+              onPointerDown={onPointerDown}
+              onPointerUp={onPointerUp}
+              onPointerCancel={onPointerUp}
+              onPointerLeave={onPointerUp}
+              className={`flex-1 relative overflow-x-auto overflow-y-hidden scrollbar-hide py-4 pl-4 ${isScrubbing ? 'overflow-x-hidden' : ''}`}
+              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
+            >
+              {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
+              
+              <div style={{ width: chartWidthPercent, height: `${chartHeight}px`, minWidth: '100%' }}>
+                <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
+                  {/* Grid Lines (Horizontal) */}
+                  {[0, 0.25, 0.5, 0.75, 1].map(p => {
+                    const price = yDomain[0] + (yDomain[1] - yDomain[0]) * p
+                    const y = yScale(price)
+                    return (
+                      <line key={p} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
+                    )
+                  })}
+                  
+                  {/* Cost Line */}
+                  {selectedHolding && selectedHolding.avg_cost > 0 && (
+                    <g>
+                      <line 
+                        x1="0" 
+                        y1={yScale(selectedHolding.avg_cost)} 
+                        x2="100%" 
+                        y2={yScale(selectedHolding.avg_cost)} 
+                        stroke="#ffffff" 
+                        strokeWidth="1.5" 
+                        strokeDasharray="4 4" 
+                        opacity="0.4"
+                      />
+                      <text 
+                        x="4" 
+                        y={yScale(selectedHolding.avg_cost) - 4} 
+                        fill="#ffffff" 
+                        fontSize="10" 
+                        fontWeight="900" 
+                        opacity="0.4"
+                      >
+                        成本 {selectedHolding.avg_cost.toFixed(1)}
+                      </text>
+                    </g>
+                  )}
 
-        <div className="relative group">
-          <div 
-            ref={scrollerRef}
-            onPointerDown={onPointerDown}
-            onPointerMove={onPointerMove}
-            onPointerUp={onPointerUp}
-            onPointerCancel={onPointerUp}
-            onPointerLeave={onPointerUp}
-            className={`bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
-            style={{ WebkitOverflowScrolling: 'touch', height: '320px', touchAction: 'pan-x' }}
-          >
-{loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
-            
-            <div style={{ width: chartWidthPercent, height: '280px', minWidth: '100%' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                {settings.stock_chart_style === 'detailed' ? (
-                  <ComposedChart onMouseMove={handleMouseMove} data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap="-100%">
-                    <CartesianGrid vertical={true} horizontal={true} stroke="rgba(255,255,255,0.1)" strokeWidth={0.5} />
-                    <XAxis 
-                      dataKey="timestamp" 
-                      type="number"
-                      domain={['auto', 'auto']}
-                      ticks={customTicks}
-                      tickFormatter={formatTick}
-                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      minTickGap={30}
+                  {settings.stock_chart_style === 'detailed' ? (
+                    <g>
+                      {enrichedStockHistory.map((d, i) => {
+                        const x = `${(i / (enrichedStockHistory.length - 1)) * 100}%`
+                        const yHigh = yScale(d.high)
+                        const yLow = yScale(d.low)
+                        const yOpen = yScale(d.open)
+                        const yClose = yScale(d.close)
+                        const bodyTop = Math.min(yOpen, yClose)
+                        const bodyHeight = Math.max(1, Math.abs(yOpen - yClose))
+                        const color = d.isUp ? '#ef4444' : '#22c55e'
+                        
+                        return (
+                          <g key={i}>
+                            <line x1={x} y1={yHigh} x2={x} y2={yLow} stroke={color} strokeWidth="1.2" />
+                            <rect 
+                              x={i === 0 ? 0 : `calc(${x} - 6px)`} 
+                              y={bodyTop} 
+                              width="12" 
+                              height={bodyHeight} 
+                              fill={color} 
+                              rx="1"
+                            />
+                          </g>
+                        )
+                      })}
+                    </g>
+                  ) : (
+                    <path 
+                      d={enrichedStockHistory.map((d, i) => {
+                        const x = `${(i / (enrichedStockHistory.length - 1)) * 100}%`
+                        return `${i === 0 ? 'M' : 'L'} ${x} ${yScale(d.close)}`
+                      }).join(' ')}
+                      fill="none"
+                      stroke="var(--accent)"
+                      strokeWidth="3"
                     />
-                    <YAxis 
-                      orientation="right"
-                      type="number"
-                      domain={yDomain}
-                      allowDataOverflow={true}
-                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={40}
-                      tickFormatter={(v) => v.toFixed(1)}
-                    />
-                    <Tooltip 
-                      active={isScrubbing}
-                      content={({ active, payload }) => {
-                        if (isScrubbing && active && payload && payload.length) {
-                          const data = payload[0].payload
-                          return (
-                            <div className="glass p-5 border-white/10 shadow-2xl backdrop-blur-3xl rounded-3xl min-w-[180px] border">
-                              <div className="text-[10px] text-[var(--t3)] font-black mb-3 uppercase tracking-widest border-b border-white/5 pb-2">
-                                {data.date}
-                              </div>
-                              <div className="space-y-2">
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[10px] text-[var(--t2)] font-black">開盤</span>
-                                  <span className="text-[12px] font-mono font-black text-[var(--t1)]">{data.open}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[10px] text-[var(--t2)] font-black text-red-400">最高</span>
-                                  <span className="text-[12px] font-mono font-black text-red-400">{data.high}</span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                  <span className="text-[10px] text-[var(--t2)] font-black text-green-400">最低</span>
-                                  <span className="text-[12px] font-mono font-black text-green-400">{data.low}</span>
-                                </div>
-                                <div className="flex justify-between items-center pt-1 border-t border-white/5">
-                                  <span className="text-[10px] text-[var(--t2)] font-black">收盤</span>
-                                  <span className={`text-[14px] font-mono font-black ${data.isUp ? 'text-red-400' : 'text-green-400'}`}>{data.price}</span>
-                                </div>
-                                {data.avgCost && (
-                                  <div className="pt-1 mt-1 border-t border-white/5 flex justify-between items-center">
-                                    <span className="text-[10px] text-[var(--t2)] opacity-60 font-black">均價</span>
-                                    <span className="text-[12px] font-mono font-black text-[var(--t3)]">{fmtMoney(data.avgCost)}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        }
-                        return null
-                      }}
-                    />
-                    
-                    {/* Wicks */}
-                    <Bar dataKey="candleWick" barSize={1} isAnimationActive={false}>
-                      {enrichedStockHistory.map((entry, index) => (
-                        <Cell key={`wick-${index}`} fill={entry.isUp ? '#ef4444' : '#22c55e'} />
-                      ))}
-                    </Bar>
-                    
-                    {/* Bodies */}
-                    <Bar dataKey="candleBody" barSize={12} isAnimationActive={true}>
-                      {enrichedStockHistory.map((entry, index) => (
-                        <Cell key={`body-${index}`} fill={entry.isUp ? '#ef4444' : '#22c55e'} />
-                      ))}
-                    </Bar>
+                  )}
 
-                    {/* Avg Cost Line */}
-                    <Line 
-                      type="stepAfter" 
-                      dataKey="avgCost" 
-                      stroke="rgba(255,255,255,0.7)" 
-                      strokeWidth={1.5} 
-                      strokeDasharray="4 4" 
-                      dot={false}
-                      isAnimationActive={false}
-                      connectNulls
-                    />
+                  {/* Scrubbing Indicators */}
+                  {isScrubbing && activeIdx !== null && enrichedStockHistory[activeIdx] && (
+                    <g>
+                      <line 
+                        x1={`${(activeIdx / (enrichedStockHistory.length - 1)) * 100}%`} 
+                        y1="0" 
+                        x2={`${(activeIdx / (enrichedStockHistory.length - 1)) * 100}%`} 
+                        y2="100%" 
+                        stroke="var(--accent)" 
+                        strokeWidth="1" 
+                        strokeDasharray="4 2" 
+                      />
+                      <circle 
+                        cx={`${(activeIdx / (enrichedStockHistory.length - 1)) * 100}%`} 
+                        cy={yScale(enrichedStockHistory[activeIdx].close)} 
+                        r="4" 
+                        fill="var(--accent)" 
+                        stroke="#fff" 
+                        strokeWidth="2" 
+                      />
+                    </g>
+                  )}
+                </svg>
+              </div>
 
-                    {/* Buy Points */}
-                    <Line 
-                      type="monotone" 
-                      dataKey="txPrice" 
-                      stroke="none" 
-                      dot={(props: any) => {
-                        const { cx, cy, payload } = props
-                        if (payload.isBuy) {
-                          return (
-                            <circle key={`buy-${payload.date}`} cx={cx} cy={cy} r={4} fill="#e05050" stroke="#fff" strokeWidth={2} />
-                          )
-                        }
-                        return <></>
-                      }}
-                    />
-                  </ComposedChart>
-                ) : (
-                  <LineChart onMouseMove={handleMouseMove} data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                    <CartesianGrid vertical={true} horizontal={true} stroke="rgba(255,255,255,0.1)" strokeWidth={0.5} />
-                    <XAxis 
-                      dataKey="timestamp" 
-                      type="number"
-                      domain={['auto', 'auto']}
-                      ticks={customTicks}
-                      tickFormatter={formatTick}
-                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      minTickGap={30}
-                    />
-                    <YAxis 
-                      orientation="right"
-                      type="number"
-                      domain={yDomain}
-                      allowDataOverflow={true}
-                      tick={{ fontSize: 10, fontWeight: 900, fill: 'var(--t3)' }}
-                      axisLine={false}
-                      tickLine={false}
-                      width={40}
-                      tickFormatter={(v) => v.toFixed(1)}
-                    />
-                    <Tooltip 
-                      active={isScrubbing}
-                      content={({ active, payload }) => {
-                        if (isScrubbing && active && payload && payload.length) {
-                          const data = payload[0].payload
-                          return (
-                            <div className="glass p-4 border-white/10 shadow-2xl backdrop-blur-3xl rounded-2xl border">
-                              <div className="text-[10px] text-[var(--t3)] font-black mb-2 uppercase tracking-widest">{data.date}</div>
-                              <div className="space-y-2">
-                                <div className="flex justify-between gap-8">
-                                  <span className="text-[11px] text-[var(--t2)] font-black">當前股價</span>
-                                  <span className="text-[13px] font-mono font-black text-accent">{fmtMoney(data.price)}</span>
-                                </div>
-                                {data.avgCost !== null && (
-                                  <div className="flex justify-between gap-8">
-                                    <span className="text-[11px] text-[var(--t2)] opacity-60 font-black">庫存均價</span>
-                                    <span className="text-[13px] font-mono font-black text-[var(--t3)]">{fmtMoney(data.avgCost)}</span>
-                                  </div>
-                                )}
-                                {data.pnlDiff !== 0 && (
-                                  <div className="pt-2 border-t border-white/5 flex justify-between gap-8">
-                                    <span className="text-[10px] text-[var(--t2)] font-black">累積損益</span>
-                                    <span className={`text-[12px] font-mono font-black ${data.pnlDiff >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                      {data.pnlDiff >= 0 ? '+' : ''}{fmtMoney(data.pnlDiff)} ({data.pnlPct >= 0 ? '+' : ''}{data.pnlPct.toFixed(2)}%)
-                                    </span>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )
-                        }
-                        return null
-                      }}
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="price" 
-                      stroke="var(--accent)" 
-                      strokeWidth={3} 
-                      dot={false}
-                      isAnimationActive={true}
-                    />
-                    <Line 
-                      type="stepAfter" 
-                      dataKey="avgCost" 
-                      stroke="rgba(255,255,255,0.7)" 
-                      strokeWidth={1.5} 
-                      strokeDasharray="4 4" 
-                      dot={false}
-                      isAnimationActive={false}
-                      connectNulls
-                    />
-                    <Line 
-                      type="monotone" 
-                      dataKey="txPrice" 
-                      stroke="none" 
-                      dot={(props: any) => {
-                        const { cx, cy, payload } = props
-                        if (payload.isBuy) {
-                          return (
-                            <circle key={`buy-${payload.date}`} cx={cx} cy={cy} r={4} fill="#e05050" stroke="#fff" strokeWidth={2} />
-                          )
-                        }
-                        return <></>
-                      }}
-                    />
-                  </LineChart>
-                )}
-              </ResponsiveContainer>
+              {/* X-Axis Ticks (Outside SVG to scroll with it) */}
+              <div className="relative h-6 mt-2 pb-2" style={{ width: chartWidthPercent }}>
+                {customTicks.map(t => {
+                  const idx = enrichedStockHistory.findIndex(d => d.timestamp === t)
+                  if (idx === -1) return null
+                  const x = `${(idx / (enrichedStockHistory.length - 1)) * 100}%`
+                  return (
+                    <div key={t} className="absolute top-0 -translate-x-1/2 text-[10px] font-black text-[var(--t3)]" style={{ left: x }}>
+                      {formatTick(t)}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 2. Sticky Y-Axis Area */}
+            <div className="w-12 bg-black/30 backdrop-blur-md border-l border-[var(--border-bright)] flex flex-col justify-between py-4 pr-1 z-20 sticky right-0" style={{ height: `${chartHeight}px` }}>
+              {[1, 0.75, 0.5, 0.25, 0].map(p => {
+                const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
+                return (
+                  <div key={p} className="text-[10px] font-black text-[var(--t3)] text-right pr-1 tabular-nums">
+                    {val.toFixed(1)}
+                  </div>
+                )
+              })}
             </div>
           </div>
-
-          {/* 右側固定 Y 軸價格標籤 - 查價模式 */}
-          {isScrubbing && activePoint && (
-            <div 
-              className="absolute right-0 pointer-events-none z-50 flex items-center transition-transform duration-75"
-              style={{ 
-                top: 0,
-                transform: `translateY(${activePoint.y + 16}px)` 
-              }}
-            >
-              <div className="bg-[#e05050] text-white text-[10px] font-black px-2 py-1 rounded-l shadow-xl border-y border-l border-white/20 whitespace-nowrap">
-                {activePoint.price.toFixed(2)}
-              </div>
-              <div className="w-0 h-0 border-t-[4px] border-t-transparent border-b-[4px] border-b-transparent border-l-[4px] border-l-[#e05050]" />
+          
+          {/* Scrubbing Tooltip Overlay */}
+          {isScrubbing && activeIdx !== null && enrichedStockHistory[activeIdx] && (
+            <div className="absolute top-6 left-6 z-30 p-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200">
+               <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
+               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                 <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{enrichedStockHistory[activeIdx].open.toFixed(1)}</div>
+                 <div className="text-[10px] text-white/40">最高</div><div className="text-[11px] font-black text-[#ef4444]">{enrichedStockHistory[activeIdx].high.toFixed(1)}</div>
+                 <div className="text-[10px] text-white/40">最低</div><div className="text-[11px] font-black text-[#22c55e]">{enrichedStockHistory[activeIdx].low.toFixed(1)}</div>
+                 <div className="text-[10px] text-white/40">收盤</div><div className="text-[11px] font-black text-white">{enrichedStockHistory[activeIdx].close.toFixed(1)}</div>
+               </div>
             </div>
           )}
-
         </div>
 
         {selectedHolding && (
