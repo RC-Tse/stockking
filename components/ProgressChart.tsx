@@ -61,7 +61,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
     const finalMax = Math.ceil(bufferMax / snapUnit) * snapUnit
     const finalMin = Math.floor(bufferMin / snapUnit) * snapUnit
     
-    const ticks = []
+    const ticks: number[] = []
     for (let v = finalMin; v <= finalMax; v += snapUnit) {
       if (!ticks.includes(v)) ticks.push(v)
     }
