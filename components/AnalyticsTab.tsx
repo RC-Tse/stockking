@@ -603,16 +603,16 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         )}
 
         <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex h-[320px]">
+          <div className="flex h-[352px]">
             {/* 1. Plot Area (Scrollable) */}
             <div 
               {...bind()}
               ref={scrollerRef}
               onScroll={handleScroll}
-              className={`flex-1 relative ${isScrubbingMode ? 'overflow-x-hidden' : 'overflow-x-auto'} overflow-y-hidden scrollbar-hide py-4 pl-4`}
+              className={`flex-1 relative ${isScrubbingMode ? 'overflow-x-hidden' : 'overflow-x-auto'} overflow-y-hidden scrollbar-hide pl-4`}
               style={{ WebkitOverflowScrolling: 'touch', touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
             >
-              <div style={{ width: `${totalWidth}px`, height: `${chartHeight}px`, position: 'relative' }}>
+              <div style={{ width: `${totalWidth}px`, height: `${chartHeight}px`, position: 'relative', marginTop: '16px' }}>
                 <svg 
                     width={enrichedStockHistory.length * pointWidth} 
                     height="100%" 
@@ -766,24 +766,26 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             </div>
 
             {/* 2. Sticky Y-Axis Zone (Right Aligned, Fixed) */}
-            <div className="w-14 bg-black/40 backdrop-blur-md border-l border-white/5 relative z-30 sticky right-0" style={{ height: '320px' }}>
-              {[0, 1, 2, 3, 4].map(i => {
-                const p = 1 - (i * 0.25)
-                const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
-                const y = 320 * (i * 0.25)
-                return (
-                  <div 
-                    key={p} 
-                    className="absolute w-full flex items-center pr-2"
-                    style={{ top: y, transform: 'translateY(-50%)' }}
-                  >
-                    <div className="w-2 h-[1px] bg-white/20 mr-1.5" />
-                    <div className="text-[10px] font-black text-white/60 tabular-nums">
-                      {Math.round(val ?? 0).toLocaleString()}
+            <div className="w-14 bg-black/40 backdrop-blur-md border-l border-white/5 relative z-30 sticky right-0 h-full">
+              <div className="relative w-full" style={{ height: '320px', marginTop: '16px' }}>
+                {[0, 1, 2, 3, 4].map(i => {
+                  const p = 1 - (i * 0.25)
+                  const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
+                  const y = 320 * (i * 0.25)
+                  return (
+                    <div 
+                      key={p} 
+                      className="absolute w-full flex items-center pr-2"
+                      style={{ top: y, transform: 'translateY(-50%)' }}
+                    >
+                      <div className="w-2 h-[1px] bg-white/20 mr-1.5" />
+                      <div className="text-[10px] font-black text-white/60 tabular-nums">
+                        {Math.round(val ?? 0).toLocaleString()}
+                      </div>
                     </div>
-                  </div>
-                )
-              })}
+                  )
+                })}
+              </div>
             </div>
           </div>
           
