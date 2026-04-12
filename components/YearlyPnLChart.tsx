@@ -5,7 +5,7 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
-import { Transaction, UserSettings, fmtMoney, calcFee, calcTax, calcRawFee, calcRawTax } from '@/types'
+import { Transaction, UserSettings, fmtMoney, calcFee, calcTax, calcRawFee, calcRawTax, calculateTxParts } from '@/types'
 import ErrorBoundary from './ErrorBoundary'
 
 interface Props {
@@ -69,28 +69,18 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
       const t = sortedTxs[txIdx]
       if (!inventory[t.symbol]) inventory[t.symbol] = []
       if (t.action !== 'SELL') {
-        const p = Math.round(t.amount)
-        const rf = calcRawFee(t.shares, t.price, settings, false, t.action === 'DCA' || t.trade_type === 'DCA')
-        const total = Math.round(p + rf)
-        inventory[t.symbol].push({ shares: t.shares, price: t.price, principal: p, rawFee: rf, cost: total })
+        const { absNet } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
+        inventory[t.symbol].push({ shares: t.shares, cost: absNet })
       } else {
+        const { absNet: net_sell } = calculateTxParts(t.shares, t.price, 'SELL', t.symbol, settings)
         let rem = t.shares
         while (rem > 0 && inventory[t.symbol].length > 0) {
           const lot = inventory[t.symbol][0]
-          if (!lot) break
           const take = Math.min(lot.shares, rem)
-          const lotCost = lot.cost
-          const lotShares = lot.shares
-          if (lotShares > 0) {
-            const ratio = take / lotShares
-            const matchedPrincipal = (lot.principal || lot.cost) * ratio
-            const matchedRawFee = (lot.rawFee || 0) * ratio
-            
-            lot.principal = (lot.principal || lot.cost) - matchedPrincipal
-            lot.rawFee = (lot.rawFee || 0) - matchedRawFee
-            lot.cost = Math.round(lot.principal + lot.rawFee)
-            lot.shares -= take
-          }
+          const mBuyCost = take === lot.shares ? lot.cost : Math.floor(lot.cost * (take / lot.shares))
+          
+          lot.cost -= mBuyCost
+          lot.shares -= take
           rem -= take
           if (lot.shares <= 0) inventory[t.symbol].shift()
         }
@@ -124,33 +114,22 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           const t = sortedTxs[txIdx]
           if (!inventory[t.symbol]) inventory[t.symbol] = []
           if (t.action !== 'SELL') {
-            const p = Math.round(t.amount)
-            const rf = calcRawFee(t.shares, t.price, settings, false, t.action === 'DCA' || t.trade_type === 'DCA')
-            const total = Math.round(p + rf)
-            inventory[t.symbol].push({ shares: t.shares, price: t.price, principal: p, rawFee: rf, cost: total })
+            const { absNet } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
+            inventory[t.symbol].push({ shares: t.shares, cost: absNet })
           } else {
-            const rf_sell = calcRawFee(t.shares, t.price, settings, true)
-            const rt_sell = calcRawTax(t.shares, t.price, t.symbol, settings)
+            const { absNet: net_sell } = calculateTxParts(t.shares, t.price, 'SELL', t.symbol, settings)
             let rem = t.shares
             while (rem > 0 && inventory[t.symbol].length > 0) {
               const lot = inventory[t.symbol][0]
-              if (!lot) break
               const take = Math.min(lot.shares, rem)
               
-              const ratio = take / lot.shares
-              const matchedPrincipal = lot.principal * ratio
-              const matchedRawFee = (lot.rawFee || 0) * ratio
-              const matchedBuyCostInt = Math.round(matchedPrincipal + matchedRawFee)
-              
-              const ratioSell = take / t.shares
-              const sellProceedsPart = Math.round((t.amount * ratioSell) - (rf_sell * ratioSell) - (rt_sell * ratioSell))
+              const mBuyCost = take === lot.shares ? lot.cost : Math.floor(lot.cost * (take / lot.shares))
+              const mSellNet = take === t.shares ? net_sell : Math.floor(net_sell * (take / t.shares))
 
-              cumulativeRealizedThisYear += (sellProceedsPart - matchedBuyCostInt)
+              cumulativeRealizedThisYear += (mSellNet - mBuyCost)
               
               lot.shares -= take
-              lot.principal -= matchedPrincipal
-              lot.rawFee -= matchedRawFee
-              lot.cost = Math.round(lot.principal + lot.rawFee) // Update integer cost for next loop if partial
+              lot.cost -= mBuyCost
               rem -= take
               if (lot.shares <= 0) inventory[t.symbol].shift()
             }
@@ -180,11 +159,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         }
         
         lots.forEach(l => {
-          const mv = q * l.shares
-          const rf_s = calcRawFee(l.shares, q, settings, true)
-          const rt_s = calcRawTax(l.shares, q, sym, settings)
-          const netMv = Math.round(mv - rf_s - rt_s)
-          unrealizedThisYear += (netMv - l.cost)
+          const { absNet } = calculateTxParts(l.shares, q, 'SELL', sym, settings)
+          unrealizedThisYear += (absNet - l.cost)
         })
       })
 

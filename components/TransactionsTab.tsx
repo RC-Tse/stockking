@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax } from '@/types'
+import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax, calculateTxParts } from '@/types'
 import { usePortfolio } from './providers/PortfolioContext'
 import { 
   Download, 
@@ -255,8 +255,8 @@ function EditForm({ tx, onCancel, onSaved }: any) {
   const isBuy = tx.action === 'BUY' || tx.action === 'DCA'
   const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = Number(price) || 0
-  const amount = finalShares * safePrice
-  const net = isBuy ? -amount : amount // Simplified display in edit
+  const actionToSave = isBuy ? (tx.action === 'DCA' ? 'DCA' : 'BUY') : 'SELL'
+  const { net, fee, tax } = calculateTxParts(finalShares, safePrice, actionToSave, tx.symbol, settings)
 
   const handleSave = async () => {
     await fetch('/api/transactions', { method: 'PUT', body: JSON.stringify({ id: tx.id, trade_date: date, shares: finalShares, price: safePrice, note }) })
@@ -275,6 +275,10 @@ function EditForm({ tx, onCancel, onSaved }: any) {
       </div>
       <div className="space-y-1.5"><Label>交易日期</Label><DatePicker value={date} onChange={setDate} /></div>
       <div className="space-y-1.5"><Label>備註</Label><input value={note} onChange={e=>setNote(e.target.value)} className="input-base text-sm py-3" placeholder="選填..." /></div>
+      <div className="bg-black/20 p-4 rounded-xl space-y-1.5 text-[11px] font-bold">
+        <div className="flex justify-between opacity-30"><span>手續費 + 稅</span><span>{fmtMoney(Math.round(fee + tax))}</span></div>
+        <div className="flex justify-between items-center pt-1.5 border-t border-white/5 font-black uppercase tracking-widest"><span className="text-[var(--t2)] opacity-40">預估淨收支</span><span className={`${net>=0?'text-red-400':'text-green-400'}`}>{net>=0?'+':''}{fmtMoney(net)}</span></div>
+      </div>
       <div className="flex gap-3 pt-1"><button onClick={handleSave} className="flex-[3] btn-primary py-3.5">確認修改</button><button onClick={onCancel} className="flex-1 btn-secondary py-3.5">取消</button></div>
     </div>
   )

@@ -169,6 +169,26 @@ export function calcTax(shares: number, price: number, symbol: string, s: UserSe
   return Math.floor(calcRawTax(shares, price, symbol, s))
 }
 
+/**
+ * Standardized Brokerage Transaction Breakdown
+ * Rule: Multiplication first, then Floor, then Addition/Subtraction.
+ * No floating point addition in the process.
+ */
+export function calculateTxParts(shares: number, price: number, action: 'BUY' | 'SELL' | 'DCA', symbol: string, settings: UserSettings) {
+  const isDca = action === 'DCA'
+  const isSell = action === 'SELL'
+  
+  const gross = Math.floor(shares * price)
+  const fee = calcFee(shares, price, settings, isSell, isDca)
+  const tax = isSell ? calcTax(shares, price, symbol, settings) : 0
+  
+  // BUY: Gross + Fee
+  // SELL: Gross - Fee - Tax
+  const net = isSell ? (gross - fee - tax) : (gross + fee)
+  
+  return { gross, fee, tax, net: isSell ? net : -net, absNet: net }
+}
+
 
 export function fmtPrice(v: number): string {
   return v.toFixed(2)

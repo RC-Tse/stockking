@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax, getStockName } from '@/types'
+import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax, getStockName, calculateTxParts } from '@/types'
 import { 
   RefreshCw, 
   Target, 
@@ -616,9 +616,7 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   const safePrice = Number(price) || 0
   const amount = finalShares * safePrice
   const actionToSave = isBuy ? (isDcaOpt ? 'DCA' : 'BUY') : 'SELL'
-  const fee = calcFee(finalShares, safePrice, settings, !isBuy, actionToSave === 'DCA')
-  const tax = t.action === 'SELL' ? calcTax(finalShares, safePrice, t.symbol, settings) : 0
-  const net = isBuy ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
+  const { fee, tax, net } = calculateTxParts(finalShares, safePrice, actionToSave, t.symbol, settings)
 
   const isValid = finalShares > 0 && safePrice > 0 && (
     date !== t.trade_date || 

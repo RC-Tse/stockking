@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { UserSettings, calcFee, calcTax, fmtMoney, DCAPlan, getStockName } from '@/types'
+import { UserSettings, calcFee, calcTax, fmtMoney, DCAPlan, getStockName, calculateTxParts } from '@/types'
 import { 
   Plus, 
   Pencil, 
@@ -86,11 +86,7 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
 
   const actualShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = typeof price === 'number' ? price : 0
-  const amount = actualShares * safePrice
-  const fee = safePrice > 0 ? calcFee(actualShares, safePrice, settings, action === 'SELL', isDca) : 0
-  const tax = safePrice > 0 && action === 'SELL' ? calcTax(actualShares, safePrice, symbol, settings) : 0
-
-  const net = action === 'BUY' ? -(Math.floor(amount) + Math.floor(fee)) : (Math.floor(amount) - Math.floor(fee) - Math.floor(tax))
+  const { gross, fee, tax, net } = calculateTxParts(actualShares, safePrice, (isDca && action === 'BUY') ? 'DCA' : action, symbol, settings)
 
   async function submitOrder() {
     if (!symbol.trim() || safePrice <= 0 || actualShares <= 0) return
@@ -187,8 +183,8 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
 
               {safePrice > 0 && actualShares > 0 && (
                 <div className="card-base p-5 space-y-4 bg-black/40 border-accent/20">
-                  <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">成交總額</span><span className="font-mono font-black">{fmtMoney(Math.round(amount))}</span></div>
-                  <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">手續費 + 稅</span><span className="font-mono font-black">{fmtMoney(Math.floor(fee + tax))}</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">成交總額</span><span className="font-mono font-black">{fmtMoney(gross)}</span></div>
+                  <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">手續費 + 稅</span><span className="font-mono font-black">{fmtMoney(fee + tax)}</span></div>
                   <div className="flex justify-between items-center pt-4 border-t border-white/5">
                     <span className="text-base font-black text-[var(--t2)]">評估淨收支</span>
                     <span className={`text-2xl font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>{net >= 0 ? '+' : ''}{fmtMoney(net)}</span>

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { calcFee, calcTax, DEFAULT_SETTINGS, UserSettings } from '@/types'
+import { calcFee, calcTax, DEFAULT_SETTINGS, UserSettings, calculateTxParts } from '@/types'
 
 export async function GET() {
   const supabase = await createClient()
@@ -35,17 +35,9 @@ export async function POST(req: NextRequest) {
   const { data: sr } = await supabase.from('settings').select('*').eq('user_id', user.id).single()
   const s: UserSettings = sr ?? DEFAULT_SETTINGS
   const sym = symbol.trim().toUpperCase()
-  const amount = Number(shares) * Number(price)
-  const fee = calcFee(Number(shares), Number(price), s, action === 'SELL', action === 'DCA')
-  const tax = action === 'SELL' ? calcTax(Number(shares), Number(price), sym, s) : 0
-
-  
-  // 交易原則：Math.floor(成交價 * 股數 +/- 手續費 +/- 交易稅)
-  const net_amount = (action === 'BUY' || action === 'DCA') 
-    ? -Math.floor(amount + fee) 
-    : Math.floor(amount - fee - tax)
+  const { gross, fee, tax, net: net_amount } = calculateTxParts(Number(shares), Number(price), action, sym, s)
   const { data, error } = await supabase.from('transactions')
-    .insert({ user_id: user.id, symbol: sym, action, trade_date, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, trade_type, note })
+    .insert({ user_id: user.id, symbol: sym, action, trade_date, shares: Number(shares), price: Number(price), amount: gross, fee, tax, net_amount, trade_type, note })
     .select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json(data)
@@ -88,18 +80,10 @@ export async function PUT(req: NextRequest) {
   const action = (newAction === 'BUY' || newAction === 'DCA') && (current.action === 'BUY' || current.action === 'DCA') 
     ? newAction 
     : current.action
-  const amount = Number(shares) * Number(price)
-  const fee = calcFee(Number(shares), Number(price), s, action === 'SELL', action === 'DCA')
-  const tax = action === 'SELL' ? calcTax(Number(shares), Number(price), sym, s) : 0
-
-  
-  // 交易原則：Math.floor(成交價 * 股數 +/- 手續費 +/- 交易稅)
-  const net_amount = (action === 'BUY' || action === 'DCA') 
-    ? -Math.floor(amount + fee) 
-    : Math.floor(amount - fee - tax)
+  const { gross, fee, tax, net: net_amount } = calculateTxParts(Number(shares), Number(price), action, sym, s)
 
   const { data, error } = await supabase.from('transactions').update({
-    trade_date, action, shares: Number(shares), price: Number(price), amount, fee, tax, net_amount, note
+    trade_date, action, shares: Number(shares), price: Number(price), amount: gross, fee, tax, net_amount, note
   }).eq('id', id).eq('user_id', user.id).select().single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

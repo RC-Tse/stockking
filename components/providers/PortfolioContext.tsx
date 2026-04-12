@@ -1,7 +1,7 @@
 'use client'
 
 import React, { createContext, useContext, useMemo } from 'react'
-import { Transaction, UserSettings, Holding, Quote, calcFee, calcTax, calcRawFee, calcRawTax } from '@/types'
+import { Transaction, UserSettings, Holding, Quote, calcFee, calcTax, calcRawFee, calcRawTax, calculateTxParts } from '@/types'
 
 interface PortfolioStats {
   holdings: Holding[]
@@ -94,56 +94,50 @@ export function PortfolioProvider({
       const stock = fullHistoryStats[tx.symbol]
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
-        const isDca = tx.action === 'DCA' || tx.trade_type === 'DCA'
-        const rawPrincipal = tx.shares * tx.price
-        const rawFee = calcRawFee(tx.shares, tx.price, settings, false, isDca)
-        
-        // Single-Exit Rounding for initial lot cost
-        const total = Math.round(rawPrincipal + rawFee)
+        const { gross, fee, net } = calculateTxParts(tx.shares, tx.price, tx.action, tx.symbol, settings)
+        const absNet = Math.abs(net)
         
         lots.push({ 
           shares: tx.shares, 
           price: tx.price, 
-          principal: rawPrincipal, 
-          rawFee: rawFee, 
+          principal: gross, 
+          rawFee: fee, 
           origShares: tx.shares, 
           date: tx.trade_date, 
           id: tx.id, 
-          total_cost: total 
+          total_cost: absNet 
         })
 
-        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee: Math.round(rawFee), net: -total })
+        if (!isSnapshotPass) stock.history.push({ ...tx, type: 'BUY', fee, net: -absNet })
 
       } else if (tx.action === 'SELL') {
-        const rf_sell = calcRawFee(tx.shares, tx.price, settings, true)
-        const rt_sell = calcRawTax(tx.shares, tx.price, tx.symbol, settings)
+        const gross_sell = Math.floor(tx.shares * tx.price)
+        const fee_sell = calcFee(tx.shares, tx.price, settings, true)
+        const tax_sell = calcTax(tx.shares, tx.price, tx.symbol, settings)
+        const net_sell = gross_sell - fee_sell - tax_sell
         
         let sellRem = tx.shares
         let matchedBuyCostTotal = 0
-        let matchedBuyFeeTotal = 0
         let matchedSellNetTotal = 0
         const matches = []
 
         while (sellRem > 0 && lots.length > 0) {
           const lot = lots[0]
           const take = Math.min(lot.shares, sellRem)
-          const ratio = take / lot.shares
           
-          const matchedPrincipal = lot.principal * ratio
-          const matchedRawFee = lot.rawFee * ratio
+          // Integer Partitioning for matched buy cost
+          // Rule: matched = floor(total_cost * (take / lot_shares))
+          // Last part takes the remainder to avoid 1-yuan leakage
+          const mBuyCost = take === lot.shares 
+            ? lot.total_cost 
+            : Math.floor(lot.total_cost * (take / lot.shares))
           
-          // Single-Exit Rounding for matched buy cost (Part Part Rounding)
-          const mBuyCost = Math.round(matchedPrincipal + matchedRawFee)
-          
-          // Single-Exit Rounding for matched sell part (Part Part Rounding)
-          const ratioSell = take / tx.shares
-          const rawPartGross = (tx.shares * tx.price) * ratioSell
-          const rawPartFee = rf_sell * ratioSell
-          const rawPartTax = rt_sell * ratioSell
-          const mSellNet = Math.round(rawPartGross - rawPartFee - rawPartTax)
+          // Integer Partitioning for matched sell proceeds
+          const mSellNet = take === tx.shares
+            ? net_sell
+            : Math.floor(net_sell * (take / tx.shares))
 
           matchedBuyCostTotal += mBuyCost
-          matchedBuyFeeTotal += Math.round(matchedRawFee)
           matchedSellNetTotal += mSellNet
 
           matches.push({ 
@@ -157,16 +151,15 @@ export function PortfolioProvider({
           })
 
           lot.shares -= take
-          lot.principal -= matchedPrincipal
-          lot.rawFee -= matchedRawFee
-          // Maintain total_cost integrity if partial remains
-          lot.total_cost = Math.round(lot.principal + lot.rawFee)
+          lot.total_cost -= mBuyCost
+          // Also update raw fields for legacy compatibility if needed
+          lot.principal -= Math.floor(lot.principal * (take / (lot.shares + take)))
+          lot.rawFee -= Math.floor(lot.rawFee * (take / (lot.shares + take)))
           
           sellRem -= take
           if (lot.shares <= 0) lots.shift()
         }
 
-        // Discrete Summation for profit: Sum of rounded parts difference
         const profit = matchedSellNetTotal - matchedBuyCostTotal
 
         if (!isSnapshotPass) {
@@ -181,8 +174,8 @@ export function PortfolioProvider({
 
           stock.buy += matchedBuyCostTotal
           stock.sell += matchedSellNetTotal
-          stock.fee += (matchedBuyFeeTotal + Math.round(rf_sell))
-          stock.tax += Math.round(rt_sell)
+          stock.fee += fee_sell
+          stock.tax += tax_sell
           stock.realized += profit
           stock.count++
           stock.history.push({ 
@@ -192,9 +185,8 @@ export function PortfolioProvider({
             profit, 
             net: matchedSellNetTotal, 
             realizedCost: matchedBuyCostTotal, 
-            fee: Math.round(rf_sell), 
-            tax: Math.round(rt_sell), 
-            matchedBuyFee: matchedBuyFeeTotal 
+            fee: fee_sell, 
+            tax: tax_sell
           })
         }
       }
@@ -212,18 +204,16 @@ export function PortfolioProvider({
         if (!tempInv[t.symbol]) tempInv[t.symbol] = []
         const lots = tempInv[t.symbol]
         if (t.action === 'BUY' || t.action === 'DCA') {
-          const isDca = t.action === 'DCA' || t.trade_type === 'DCA'
-          const rawPrincipal = t.shares * t.price
-          const rawFee = calcRawFee(t.shares, t.price, settings, false, isDca)
-          lots.push({ shares: t.shares, principal: rawPrincipal, rawFee: rawFee })
+          const { gross, fee, net } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
+          lots.push({ shares: t.shares, total_cost: Math.abs(net) })
         } else if (t.action === 'SELL') {
+          const { absNet } = calculateTxParts(t.shares, t.price, 'SELL', t.symbol, settings)
           let rem = t.shares
           while (rem > 0 && lots.length > 0) {
             const take = Math.min(lots[0].shares, rem)
-            const ratio = take / lots[0].shares
+            const mBuyCost = take === lots[0].shares ? lots[0].total_cost : Math.floor(lots[0].total_cost * (take / lots[0].shares))
             lots[0].shares -= take
-            lots[0].principal -= (lots[0].principal * ratio)
-            lots[0].rawFee -= (lots[0].rawFee * ratio)
+            lots[0].total_cost -= mBuyCost
             rem -= take
             if (lots[0].shares <= 0) lots.shift()
           }
@@ -237,15 +227,9 @@ export function PortfolioProvider({
       const cp = q?.price || 0
       if (cp > 0) {
         lots.forEach(l => {
-          const rawBuyCost = l.principal + l.rawFee
-          const buyCostRounded = Math.round(rawBuyCost)
-          
-          const rawMv = cp * l.shares
-          const rawSfee = calcRawFee(l.shares, cp, settings, true)
-          const rawStax = calcRawTax(l.shares, cp, sym, settings)
-          const netMvRounded = Math.round(rawMv - rawSfee - rawStax)
-          
-          yearEndUnrealizedSnapshot += (netMvRounded - buyCostRounded)
+          const lotCostRounded = l.total_cost
+          const { absNet: netMvRounded } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
+          yearEndUnrealizedSnapshot += (netMvRounded - lotCostRounded)
         })
       }
     })
@@ -261,19 +245,17 @@ export function PortfolioProvider({
         
         // Per-lot detail calculation for visual parity (Discrete Summation)
         const lotDetails = lots.map(l => {
-          const rawMv = cp * l.shares
-          const rawSfee = calcRawFee(l.shares, cp, settings, true)
-          const rawStax = calcRawTax(l.shares, cp, sym, settings)
-          
-          const roundedNetMV = Math.round(rawMv - rawSfee - rawStax)
-          const roundedCost = Math.round(l.principal + l.rawFee)
+          const { gross, absNet, fee, tax } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
+          const roundedCost = l.total_cost
           
           return {
             ...l,
-            market_value: Math.round(rawMv),
-            net_market_value: roundedNetMV,
+            market_value: gross,
+            net_market_value: absNet,
             total_cost: roundedCost,
-            unrealized_pnl: roundedNetMV - roundedCost
+            unrealized_pnl: absNet - roundedCost,
+            sell_fee: fee,
+            sell_tax: tax
           }
         })
 
@@ -287,10 +269,10 @@ export function PortfolioProvider({
           avg_cost: summedCost / netShares,
           total_cost: summedCost,
           current_price: cp,
-          market_value: Math.round(cp * netShares),
+          market_value: Math.floor(cp * netShares),
           net_market_value: summedNetMV,
-          sell_fee: lotDetails.reduce((s, ld) => s + Math.round(calcRawFee(ld.shares, cp, settings, true)), 0),
-          sell_tax: lotDetails.reduce((s, ld) => s + Math.round(calcRawTax(ld.shares, cp, sym, settings)), 0),
+          sell_fee: lotDetails.reduce((s, ld) => s + ld.sell_fee, 0),
+          sell_tax: lotDetails.reduce((s, ld) => s + ld.sell_tax, 0),
           unrealized_pnl: upnl,
           pnl_pct: summedCost ? (upnl / summedCost) * 100 : 0,
           lots: lotDetails,
