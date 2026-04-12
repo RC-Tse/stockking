@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from 'react'
 import { 
-  ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, 
+  ComposedChart, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 import { Calendar as CalendarIcon, RefreshCw } from 'lucide-react'
@@ -21,7 +21,8 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
   const [historyData, setHistoryData] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
   
-  const [range, setRange] = useState<TotalRange>('1Y')
+  // Use setting value for initial range
+  const [range, setRange] = useState<TotalRange>(settings.total_chart_default_range || '1Y')
   const [showCustom, setShowCustom] = useState(false)
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split('T')[0]
@@ -47,7 +48,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     async function fetchAllHistory() {
       setLoading(true)
       const results: Record<string, any[]> = {}
-      // Fetch 5 years of data to cover all possible ranges (3Y max + some buffer)
       await Promise.all(relevantSymbols.map(async (sym) => {
         try {
           const res = await fetch(`/api/stocks/info?symbol=${sym}&range=5y`)
@@ -66,7 +66,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
   const chartData = useMemo(() => {
     if (loading) return []
     
-    // Determine the absolute start date for calculations (earliest transaction or goal start)
     const sortedTxs = [...transactions]
       .filter(t => t?.trade_date)
       .sort((a, b) => a.trade_date.localeCompare(b.trade_date))
@@ -93,7 +92,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     for (let d = new Date(startDate); d <= endDate; d.setDate(d.getDate() + 1)) {
       const dStr = d.toISOString().split('T')[0]
       
-      // Process Transactions
       while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date === dStr) {
         const t = sortedTxs[txIdx]
         if (!inventory[t.symbol]) inventory[t.symbol] = []
@@ -122,7 +120,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
         txIdx++
       }
 
-      // Update Prices
       relevantSymbols.forEach(sym => {
         const hist = historyData[sym] || []
         let ptr = stockHistoryPointers[sym]
@@ -133,7 +130,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
         stockHistoryPointers[sym] = ptr
       })
 
-      // Calculate Unrealized
       let unrealized = 0
       Object.entries(inventory).forEach(([sym, lots]) => {
         const netShares = lots.reduce((s, l) => s + l.shares, 0)
@@ -149,13 +145,7 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
       })
 
       const actualPnL = cumulativeRealized + unrealized
-      
-      rawDays.push({
-        date: dStr,
-        actual: actualPnL,
-        pnlAreaPos: actualPnL > 0 ? [0, actualPnL] : null,
-        pnlAreaNeg: actualPnL < 0 ? [actualPnL, 0] : null
-      })
+      rawDays.push({ date: dStr, actual: actualPnL })
     }
     return rawDays
   }, [transactions, historyData, loading, settings, todayStr, relevantSymbols, goalStartDate])
@@ -183,42 +173,33 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
       const dGoalStart = new Date(goalStartDate)
       const dToday = new Date(todayStr)
       
-      // Calculate how many months have passed since goal start
       const monthsSinceStart = (dToday.getFullYear() - dGoalStart.getFullYear()) * 12 + (dToday.getMonth() - dGoalStart.getMonth())
       
       if (monthsSinceStart > duration) {
-        // CASE: Goal started a long time ago (e.g. 2023)
-        // Show last X months from today
-        const dS = dToday
-        const dSEnd = new Date(dS)
-        dSEnd.setMonth(dSEnd.getMonth() - duration)
-        startDate = dSEnd.toISOString().split('T')[0]
+        const dS = new Date(dToday)
+        dS.setMonth(dS.getMonth() - duration)
+        startDate = dS.toISOString().split('T')[0]
         endDate = todayStr
       } else {
-        // CASE: Goal is recent OR future
-        // If 1Y: start_date to start_date + 1Y
-        // If 6M: start_date to start_date - 6M (per user's specific backward example)
+        // User's specific backward example for 6M
         if (range === '6M') {
           const dS = new Date(dGoalStart)
           const dE = new Date(dGoalStart)
           dE.setMonth(dE.getMonth() - 6)
-          // Sort to ensure chronological order
           const dates = [dS.toISOString().split('T')[0], dE.toISOString().split('T')[0]].sort()
           startDate = dates[0]
           endDate = dates[1]
         } else {
-            // Forward from start date
-            startDate = goalStartDate
-            const dE = new Date(dGoalStart)
-            dE.setMonth(dE.getMonth() + duration)
-            endDate = dE.toISOString().split('T')[0]
+          // Forward logic
+          startDate = goalStartDate
+          const dE = new Date(dGoalStart)
+          dE.setMonth(dE.getMonth() + duration)
+          endDate = dE.toISOString().split('T')[0]
         }
       }
     }
 
     const filtered = chartData.filter(d => d.date >= startDate && d.date <= endDate)
-    
-    // Ticks
     const ticks: string[] = []
     if (filtered.length > 0) {
       ticks.push(filtered[0].date)
@@ -250,8 +231,8 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     if (vals.length === 0) return { domain: [0, 10000], ticks: [0, 5000, 10000] }
     const min = Math.min(0, ...vals)
     const max = Math.max(1000, ...vals)
-    const pad = (max - min) * 0.1
-    return { domain: [min - pad, max + pad], ticks: undefined }
+    const pad = (max - min) * 0.15
+    return { domain: [min - pad, max + pad] }
   })()
 
   const currentTotal = Math.round(filteredData[filteredData.length - 1]?.actual || 0)
@@ -308,11 +289,19 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
       </div>
 
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
+        
+        {/* Yellow Legend Icon at Center Top */}
+        <div className="absolute top-10 left-0 right-0 flex justify-center z-10 pointer-events-none">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-[2px] bg-accent rounded-full" />
+            <span className="text-[10px] font-black text-accent opacity-80 uppercase tracking-widest">實際進度</span>
+          </div>
+        </div>
+
         <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={filteredData} margin={{ top: 80, right: 0, left: 15, bottom: 20 }}>
               <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
-              
               <XAxis 
                 dataKey="date" 
                 ticks={dynamicTicks}
@@ -337,13 +326,7 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
                 tickLine={false}
                 tickFormatter={(v) => Math.abs(v ?? 0) >= 1000 ? `${((v ?? 0)/1000).toFixed(0)}K` : fmtMoney(v ?? 0)}
               />
-              <YAxis 
-                yAxisId="leftLine"
-                orientation="left"
-                tick={false}
-                axisLine={{ stroke: '#ffffff', strokeWidth: 3 }}
-                width={2} 
-              />
+              <YAxis yAxisId="leftLine" orientation="left" tick={false} axisLine={{ stroke: '#ffffff', strokeWidth: 3 }} width={2} />
 
               <Tooltip 
                 content={({ active, payload }) => {
@@ -368,31 +351,15 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
                 }}
               />
 
-              <Area 
-                yAxisId="right"
-                type="linear" 
-                dataKey="pnlAreaPos" 
-                fill="#ef4444" 
-                fillOpacity={0.15} 
-                stroke="none" 
-              />
-              <Area 
-                yAxisId="right"
-                type="linear" 
-                dataKey="pnlAreaNeg" 
-                fill="#22c55e" 
-                fillOpacity={0.15} 
-                stroke="none" 
-              />
-
               <Line 
                 yAxisId="right"
                 type="linear" 
                 dataKey="actual" 
-                stroke={currentTotal >= 0 ? '#ef4444' : '#22c55e'} 
-                strokeWidth={2.5} 
+                stroke="var(--accent)" 
+                strokeWidth={3} 
                 dot={false}
                 connectNulls
+                isAnimationActive={true}
               />
 
               <ReferenceLine yAxisId="right" y={0} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />

@@ -807,7 +807,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       <section className="space-y-4">
         <div className="flex items-center justify-between px-1">
           <div className="flex items-center gap-2">
-            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">年度進度回顧</span>
+            <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">年度目標進度</span>
             <select 
               value={selectedYear}
               onChange={e => setSelectedYear(e.target.value)}
@@ -851,7 +851,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       {/* ── 00. 總進度圖 (移至最下方) ── */}
       <section className="space-y-4">
         <div className="px-1">
-          <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">總進度回顧</span>
+          <span className="text-[13px] font-black text-[var(--t2)] uppercase tracking-wider">總目標進度</span>
         </div>
         <TotalPnLChart 
           transactions={stats.fullHistoryStats ? Object.values(stats.fullHistoryStats).flatMap((s: any) => s.history) : []} 

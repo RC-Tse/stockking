@@ -202,12 +202,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 ...d,
                 actualAbove: isAbv ? d.actual : null,
                 actualBelow: !isAbv ? d.actual : null,
-                // Differential Area Fill (strictly between lines)
-                rangeAbove: isAbv && d.actual !== null ? [d.ideal, d.actual] : null,
-                rangeBelow: !isAbv && d.actual !== null ? [d.actual, d.ideal] : null,
-                // PnL Area Fill (relative to Y=0)
-                pnlAreaPos: d.actual !== null && d.actual > 0 ? [0, d.actual] : null,
-                pnlAreaNeg: d.actual !== null && d.actual < 0 ? [d.actual, 0] : null
+                // Relationship-based Area Fill (Lead/Lag)
+                // If ahead (isAbv), color everything below Actual as Lead (Red).
+                // If behind (!isAbv), color everything from Actual to Ideal (which includes Actual to 0) as Lag (Green).
+                areaLead: isAbv && d.actual !== null ? [Math.min(0, d.ideal), d.actual] : null,
+                areaLag: !isAbv && d.actual !== null ? [d.actual, Math.max(0, d.ideal)] : null
             }
         }
         
@@ -560,11 +559,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 isAnimationActive={true}
               />
               
-              {/* PnL AREAS (Relative to Y=0) */}
+              {/* LEAD/LAG AREAS (Relationship based) */}
               <Area 
                 yAxisId="right"
                 type="linear" 
-                dataKey="pnlAreaPos" 
+                dataKey="areaLead" 
                 fill="#ef4444" 
                 fillOpacity={0.15} 
                 stroke="none" 
@@ -573,27 +572,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               <Area 
                 yAxisId="right"
                 type="linear" 
-                dataKey="pnlAreaNeg" 
-                fill="#22c55e" 
-                fillOpacity={0.15} 
-                stroke="none" 
-                isAnimationActive={true}
-              />
-
-              {/* DIFFERENTIAL AREAS (Between lines) - Kept but with reduced opacity */}
-              <Area 
-                yAxisId="right"
-                type="linear" 
-                dataKey="rangeAbove" 
-                fill="#ef4444" 
-                fillOpacity={0.15} 
-                stroke="none" 
-                isAnimationActive={true}
-              />
-              <Area 
-                yAxisId="right"
-                type="linear" 
-                dataKey="rangeBelow" 
+                dataKey="areaLag" 
                 fill="#22c55e" 
                 fillOpacity={0.15} 
                 stroke="none" 

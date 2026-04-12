@@ -16,6 +16,7 @@ const DB_COLUMNS = [
   'theme',
   'year_goal_type',
   'chart_default_range',
+  'total_chart_default_range',
   'stock_chart_default_range',
   'stock_chart_style',
 ] as const

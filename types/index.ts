@@ -95,6 +95,7 @@ export interface CalendarEntry {
 }
 
 export type ChartRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'CUSTOM'
+export type TotalChartRange = '6M' | '1Y' | '1.5Y' | '2Y' | '3Y' | 'CUSTOM'
 
 export interface UserSettings {
   broker_name: string
@@ -115,6 +116,7 @@ export interface UserSettings {
   total_goal_start_date: string
   theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
   chart_default_range: ChartRange
+  total_chart_default_range: TotalChartRange
   stock_chart_default_range: ChartRange
   stock_chart_style: 'simple' | 'detailed'
 }
@@ -138,6 +140,7 @@ export const DEFAULT_SETTINGS: UserSettings = {
   total_goal_start_date: new Date().toISOString().split('T')[0],
   theme: 'dark',
   chart_default_range: '1M',
+  total_chart_default_range: '1Y',
   stock_chart_default_range: '1M',
   stock_chart_style: 'simple'
 }
