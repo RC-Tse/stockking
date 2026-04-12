@@ -176,9 +176,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       if (diffMonths >= 11) effectiveRange = '1Y'
     }
 
-    if (effectiveRange === 'ALL') {
-      return `${d.getMonth() + 1}`
-    }
     if (effectiveRange === '1Y') {
       return `${d.getMonth() + 1}月`
     }
@@ -205,7 +202,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     let targetDays = [1]
     if (effectiveRange === '1M') targetDays = [1, 10, 20]
     else if (effectiveRange === '3M') targetDays = [1, 15]
-    else targetDays = [1] // 6M, 1Y, ALL
+    else targetDays = [1] // 6M, 1Y
 
     // 取得所有出現過的月份
     const months = Array.from(new Set(data.map(d => d.date.substring(0, 7))))
