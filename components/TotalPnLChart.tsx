@@ -221,6 +221,20 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     return { filteredData: filtered, dynamicTicks: Array.from(new Set(ticks)).sort() }
   }, [chartData, range, customStart, customEnd, goalStartDate, todayStr])
 
+  const yDomain = useMemo(() => {
+    const vals = filteredData.map(d => d.actual || 0)
+    const goal = settings.total_goal || 0
+    const maxVal = Math.max(...vals, goal)
+    const safeMax = isFinite(maxVal) && maxVal > 0 ? maxVal : 10000
+
+    let step = Math.ceil(safeMax / 5 / 100) * 100
+    if (step <= 0) step = 2000
+    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
+
+    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
+    return { domain: [-step, step * 5] as [number, number], ticks }
+  }, [filteredData, settings.total_goal])
+
   if (loading) return (
     <div className="h-[400px] flex items-center justify-center bg-[var(--bg-card)] rounded-[48px] border border-[var(--border-bright)]">
        <div className="flex flex-col items-center gap-2">
@@ -229,22 +243,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
        </div>
     </div>
   )
-
-  const yDomain = useMemo(() => {
-    const vals = filteredData.map(d => d.actual || 0)
-    const goal = settings.total_goal || 0
-    const maxVal = Math.max(...vals, goal)
-    const safeMax = isFinite(maxVal) && maxVal > 0 ? maxVal : 10000
-
-    // Positive: 5 equal segments
-    let step = Math.ceil(safeMax / 5 / 100) * 100
-    if (step <= 0) step = 2000
-    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
-
-    // Negative: 1 segment
-    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
-    return { domain: [-step, step * 5] as [number, number], ticks }
-  }, [filteredData, settings.total_goal])
 
   const currentTotal = Math.round(filteredData[filteredData.length - 1]?.actual || 0)
 

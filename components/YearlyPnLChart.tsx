@@ -340,6 +340,20 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     return { filteredData: enhanced, dynamicTicks: Array.from(new Set(ticks)).sort() }
   }, [chartData, range, customStart, customEnd, chartYear, todayStr, yearStartStr, settings.chart_default_range])
 
+  const yDomain = useMemo(() => {
+    const goal = settings?.year_goal || 0
+    const vals = filteredData.filter(d => d.actual !== null && !d.isIntersection).flatMap(d => [d.actual, d.ideal])
+    const dataMax = vals.length > 0 ? Math.max(...vals, goal) : goal
+    const safeMax = isFinite(dataMax) && dataMax > 0 ? dataMax : 10000
+
+    let step = Math.ceil(safeMax / 5 / 100) * 100
+    if (step <= 0) step = 2000
+    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
+
+    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
+    return { domain: [-step, step * 5] as [number, number], ticks }
+  }, [filteredData, settings?.year_goal])
+
   if (loading) return (
     <div className="h-[400px] flex items-center justify-center bg-[var(--bg-card)] rounded-[48px] border border-[var(--border-bright)]">
        <div className="flex flex-col items-center gap-2">
@@ -348,23 +362,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
        </div>
     </div>
   )
-
-  const yDomain = useMemo(() => {
-    const goal = settings?.year_goal || 0
-    const vals = filteredData.filter(d => d.actual !== null && !d.isIntersection).flatMap(d => [d.actual, d.ideal])
-    const dataMax = vals.length > 0 ? Math.max(...vals, goal) : goal
-    const safeMax = isFinite(dataMax) && dataMax > 0 ? dataMax : 10000
-
-    // Positive: 5 equal segments. Find a clean step that covers safeMax in 5 steps.
-    let step = Math.ceil(safeMax / 5 / 100) * 100
-    if (step <= 0) step = 2000
-    // Make sure 5 steps actually cover safeMax
-    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
-
-    // Negative: 1 segment = same step below 0
-    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
-    return { domain: [-step, step * 5] as [number, number], ticks }
-  }, [filteredData, settings?.year_goal])
 
   const latestValid = [...filteredData].reverse().find(d => d.actual !== null)
   const currentActual = Math.round(latestValid?.actual || 0)
