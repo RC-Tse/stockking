@@ -242,6 +242,8 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
                 設定總損益目標的計算起點。
               </p>
+            </div>
+
             <div className="space-y-3 pt-4 border-t border-white/5">
               <Label>圖表預設時間軸</Label>
               <select 
