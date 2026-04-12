@@ -248,42 +248,61 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     if (!chartData.length) return { filteredData: [], dynamicTicks: [] }
 
     let startDate: string
+    let endDate: string
     const baseline = todayStr < `${chartYear}-12-31` ? todayStr : `${chartYear}-12-31`
     const dEnd = new Date(baseline)
 
     if (range === 'ALL' || range === '1Y') {
       startDate = `${chartYear}-01-01`
+      endDate = `${chartYear}-12-31`
+    } else if (range === '9M') {
+      startDate = `${chartYear}-01-01`
+      endDate = `${chartYear}-09-30`
+    } else if (range === '6M') {
+      startDate = `${chartYear}-01-01`
+      endDate = `${chartYear}-06-30`
     } else if (range === 'CUSTOM') {
       startDate = customStart
+      endDate = customEnd
     } else {
+      // 3M, 1M are dynamic from today
       const numMonths = parseInt(range)
-      const dStart = new Date(dEnd)
-      dStart.setMonth(dStart.getMonth() - numMonths)
-      startDate = dStart.toISOString().split('T')[0]
+      const dS = new Date(dEnd)
+      dS.setMonth(dS.getMonth() - numMonths)
+      startDate = dS.toISOString().split('T')[0]
       if (startDate < yearStartStr) startDate = yearStartStr
+      endDate = baseline
     }
-
-    const endDate = range === 'CUSTOM' ? customEnd : baseline
 
     const filtered = chartData.filter(d => d.date >= startDate && d.date <= endDate)
     
     // Dynamic Ticks: Start, End, and 1st of each month in between
     const ticks: string[] = []
     if (filtered.length > 0) {
-      ticks.push(filtered[0].date)
-      const last = filtered[filtered.length - 1].date
+      ticks.push(startDate)
       
       // Monthly 1st points
-      filtered.forEach(d => {
-        if (d.date.endsWith('-01') && d.date !== ticks[0] && d.date !== last) {
-          ticks.push(d.date)
+      // Generate all 1st days between start and end
+      const dS = new Date(startDate)
+      const dE = new Date(endDate)
+      for (let d = new Date(dS); d <= dE; d.setDate(d.getDate() + 1)) {
+        if (d.getDate() === 1) {
+          const s = d.toISOString().split('T')[0]
+          if (s > startDate && s < endDate) ticks.push(s)
         }
-      })
+      }
       
-      if (last !== ticks[0]) ticks.push(last)
+      if (endDate !== startDate) ticks.push(endDate)
     }
 
-    return { filteredData: filtered, dynamicTicks: Array.from(new Set(ticks)).sort() }
+    // Split area logic for baseValue=0
+    const enhanced = filtered.map(d => ({
+      ...d,
+      actualPos: d.actual !== null && d.actual >= 0 ? d.actual : 0,
+      actualNeg: d.actual !== null && d.actual < 0 ? d.actual : 0
+    }))
+
+    return { filteredData: enhanced, dynamicTicks: Array.from(new Set(ticks)).sort() }
   }, [chartData, range, customStart, customEnd, chartYear, todayStr, yearStartStr])
 
   if (loading) return (
@@ -334,48 +353,44 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           <div className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1">當前累計總損益</div>
           <div className={`text-2xl font-black font-mono ${currentActual >= 0 ? 'text-red-400' : 'text-green-400'}`}>
             {fmtMoney(currentActual)}
-          </div>
+        {/* Range Selector Integration - Moved outside the card */}
+      <div className="px-4 flex flex-col gap-4 relative z-20">
+        <div className="flex w-full gap-2 overflow-x-auto scrollbar-hide">
+          {(['1M', '3M', '6M', '9M', '1Y', 'ALL'] as ChartRange[]).map(r => (
+            <button 
+              key={r} 
+              onClick={() => { setRange(r); setShowCustom(false); }}
+              className={`flex-1 py-2 rounded-xl text-[11px] font-black transition-all border ${range === r && !showCustom ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)] whitespace-nowrap'}`}
+            >
+              {r === 'ALL' ? '全部' : r}
+            </button>
+          ))}
+          <button 
+            onClick={() => { setRange('CUSTOM'); setShowCustom(!showCustom); }}
+            className={`px-4 py-2 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${range === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)]'}`}
+          >
+            <CalendarIcon size={14} />
+          </button>
         </div>
+
+        {showCustom && range === 'CUSTOM' && (
+          <div className="flex items-center justify-end gap-3 px-4 py-2 animate-slide-up bg-[var(--bg-card)] rounded-2xl border border-[var(--border-bright)] shadow-xl">
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
+              <DatePicker value={customStart} onChange={(v: string) => setCustomStart(v)} />
+            </div>
+            <div className="flex items-center gap-2 pr-2">
+              <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
+              <DatePicker value={customEnd} onChange={(v: string) => setCustomEnd(v)} />
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
-        {/* Range Selector Integration */}
-        <div className="px-8 pt-8 pb-4 flex flex-col gap-4 relative z-20">
-          <div className="flex w-full gap-2 overflow-x-auto scrollbar-hide">
-            {(['1M', '3M', '6M', '9M', '1Y', 'ALL'] as ChartRange[]).map(r => (
-              <button 
-                key={r} 
-                onClick={() => { setRange(r); setShowCustom(false); }}
-                className={`flex-1 py-2 rounded-xl text-[11px] font-black transition-all border ${range === r && !showCustom ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-black/20 text-[var(--t2)] opacity-60 border-white/5 whitespace-nowrap'}`}
-              >
-                {r === 'ALL' ? '全部' : r}
-              </button>
-            ))}
-            <button 
-              onClick={() => { setRange('CUSTOM'); setShowCustom(!showCustom); }}
-              className={`px-4 py-2 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${range === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-black/20 text-[var(--t2)] opacity-60 border-white/5'}`}
-            >
-              <CalendarIcon size={14} />
-            </button>
-          </div>
-
-          {showCustom && range === 'CUSTOM' && (
-            <div className="flex items-center justify-end gap-3 px-4 py-2 animate-slide-up bg-black/20 rounded-2xl border border-white/5 shadow-inner">
-              <div className="flex items-center gap-2">
-                <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
-                <DatePicker value={customStart} onChange={(v: string) => setCustomStart(v)} />
-              </div>
-              <div className="flex items-center gap-2 pr-2">
-                <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
-                <DatePicker value={customEnd} onChange={(v: string) => setCustomEnd(v)} />
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Custom Legend - Moved down slightly to accommodate header */}
-        <div className="absolute top-[140px] left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
+        {/* Custom Legend - Floating */}
+        <div className="absolute top-10 left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
           <div className="flex items-center gap-2">
             <div className="w-6 h-0 border-t-2 border-[#fbbf24] border-dashed" />
             <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">理想進度</span>
@@ -391,19 +406,19 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
         <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={filteredData} margin={{ top: 100, right: 15, left: 10, bottom: 20 }}>
+            <ComposedChart data={filteredData} margin={{ top: 80, right: 15, left: 10, bottom: 20 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
                   <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
                 </linearGradient>
-                <linearGradient id="areaGreen" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="areaGreen" x1="0" y1="1" x2="0" y2="0">
                   <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4}/>
                   <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
                 </linearGradient>
               </defs>
 
-              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={false} />
+              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
               
               <XAxis 
                 dataKey="date" 
@@ -495,24 +510,36 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 opacity={0.8}
               />
 
-              {/* ACTUAL LINE - Differential Coloring */}
-              <Line 
+              {/* ACTUAL AREAS FILL TO Y=0 */}
+              <Area 
                 type="monotone" 
-                dataKey="actualAbove" 
-                stroke="#ef4444" 
-                strokeWidth={2.5} 
-                dot={false}
-                connectNulls
+                dataKey="actualPos" 
+                fill="url(#areaRed)"
+                stroke="none"
+                baseValue={0}
                 isAnimationActive={true}
+                connectNulls
               />
+              <Area 
+                type="monotone" 
+                dataKey="actualNeg" 
+                fill="url(#areaGreen)"
+                stroke="none"
+                baseValue={0}
+                isAnimationActive={true}
+                connectNulls
+              />
+
+              {/* ACTUAL LINE - restored and styled */}
               <Line 
                 type="monotone" 
-                dataKey="actualBelow" 
-                stroke="#22c55e" 
+                dataKey="actual" 
+                stroke="#666" // Neutral base, or use dynamic logic below
                 strokeWidth={2.5} 
                 dot={false}
                 connectNulls
                 isAnimationActive={true}
+                strokeLinecap="round"
               />
 
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
