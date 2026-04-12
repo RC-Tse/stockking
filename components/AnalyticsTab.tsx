@@ -57,7 +57,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       setLoading(true)
       // 為了支援左右平移，我們統一抓取較長的範圍，或者根據所選範圍抓取
       const rangeMap: Record<StockRange, string> = { 
-        '1M': '1y', '3M': '1y', '6M': '1y', '9M': '2y', '1Y': '2y', 'ALL': '5y', 'CUSTOM': '5y' 
+        '1M': '1y', '3M': '1y', '6M': '1y', '9M': '2y', '1Y': '2y', 'CUSTOM': '5y' 
       }
       try {
         const res = await fetch(`/api/stocks/info?symbol=${selSym}&range=${rangeMap[stockRange]}`)
