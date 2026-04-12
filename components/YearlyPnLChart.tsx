@@ -338,7 +338,16 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     const finalMax = Math.ceil(bufferMax / snapUnit) * snapUnit
     const finalMin = dataMin < 0 ? Math.floor(bufferMin / snapUnit) * snapUnit : 0
     
-    return [finalMin, finalMax]
+    // Explicit ticks including 0
+    const ticks = []
+    for (let v = finalMin; v <= finalMax; v += snapUnit) {
+      ticks.push(v)
+    }
+    if (finalMin <= 0 && finalMax >= 0 && !ticks.includes(0)) {
+      ticks.push(0)
+    }
+
+    return { domain: [finalMin, finalMax], ticks: Array.from(new Set(ticks)).sort((a,b) => a-b) }
   })()
 
   const currentActual = Math.round(filteredData.findLast(d => d.actual !== null)?.actual || 0)
@@ -416,17 +425,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={filteredData} margin={{ top: 80, right: 15, left: 10, bottom: 20 }}>
-              <defs>
-                <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#ef4444" stopOpacity={0}/>
-                </linearGradient>
-                <linearGradient id="areaGreen" x1="0" y1="1" x2="0" y2="0">
-                  <stop offset="5%" stopColor="#22c55e" stopOpacity={0.4}/>
-                  <stop offset="95%" stopColor="#22c55e" stopOpacity={0}/>
-                </linearGradient>
-              </defs>
-
               <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
               
               <XAxis 
@@ -446,7 +444,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               <YAxis 
                 width={60}
                 orientation="right"
-                domain={yDomain}
+                ticks={yDomain.ticks}
+                domain={yDomain.domain}
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
@@ -519,11 +518,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 opacity={0.8}
               />
 
-              {/* ACTUAL AREAS FILL TO Y=0 based on state */}
               <Area 
                 type="monotone" 
                 dataKey="fillRed" 
-                fill="url(#areaRed)"
+                fill="#ef4444"
+                fillOpacity={0.2}
                 stroke="none"
                 baseValue={0}
                 isAnimationActive={true}
@@ -532,7 +531,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               <Area 
                 type="monotone" 
                 dataKey="fillGreen" 
-                fill="url(#areaGreen)"
+                fill="#22c55e"
+                fillOpacity={0.2}
                 stroke="none"
                 baseValue={0}
                 isAnimationActive={true}
