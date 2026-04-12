@@ -5,7 +5,9 @@ import {
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
-import { Transaction, UserSettings, fmtMoney, calcFee, calcTax, calcRawFee, calcRawTax, calculateTxParts } from '@/types'
+import { Calendar as CalendarIcon } from 'lucide-react'
+import DatePicker from './DatePicker'
+import { Transaction, UserSettings, fmtMoney, calculateTxParts } from '@/types'
 import ErrorBoundary from './ErrorBoundary'
 
 interface Props {
@@ -17,6 +19,14 @@ interface Props {
 function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const [historyData, setHistoryData] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
+  
+  type ChartRange = '1M' | '3M' | '6M' | '9M' | '1Y' | 'ALL' | 'CUSTOM'
+  const [range, setRange] = useState<ChartRange>('ALL')
+  const [showCustom, setShowCustom] = useState(false)
+  const [customStart, setCustomStart] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
+  })
+  const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
 
   const chartYear = year || new Date().getFullYear()
   const yearStartStr = `${chartYear}-01-01`
@@ -234,14 +244,47 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     return finalData
   }, [transactions, historyData, loading, settings, chartYear, todayStr, relevantSymbols, yearStartStr])
 
-  const ticks = useMemo(() => {
-    const t: string[] = []
-    for (let m = 0; m < 12; m++) {
-      t.push(`${chartYear}-${String(m + 1).padStart(2, '0')}-01`)
+  const { filteredData, dynamicTicks } = useMemo(() => {
+    if (!chartData.length) return { filteredData: [], dynamicTicks: [] }
+
+    let startDate: string
+    const baseline = todayStr < `${chartYear}-12-31` ? todayStr : `${chartYear}-12-31`
+    const dEnd = new Date(baseline)
+
+    if (range === 'ALL' || range === '1Y') {
+      startDate = `${chartYear}-01-01`
+    } else if (range === 'CUSTOM') {
+      startDate = customStart
+    } else {
+      const numMonths = parseInt(range)
+      const dStart = new Date(dEnd)
+      dStart.setMonth(dStart.getMonth() - numMonths)
+      startDate = dStart.toISOString().split('T')[0]
+      if (startDate < yearStartStr) startDate = yearStartStr
     }
-    t.push(`${chartYear}-12-31`)
-    return t
-  }, [chartYear])
+
+    const endDate = range === 'CUSTOM' ? customEnd : baseline
+
+    const filtered = chartData.filter(d => d.date >= startDate && d.date <= endDate)
+    
+    // Dynamic Ticks: Start, End, and 1st of each month in between
+    const ticks: string[] = []
+    if (filtered.length > 0) {
+      ticks.push(filtered[0].date)
+      const last = filtered[filtered.length - 1].date
+      
+      // Monthly 1st points
+      filtered.forEach(d => {
+        if (d.date.endsWith('-01') && d.date !== ticks[0] && d.date !== last) {
+          ticks.push(d.date)
+        }
+      })
+      
+      if (last !== ticks[0]) ticks.push(last)
+    }
+
+    return { filteredData: filtered, dynamicTicks: Array.from(new Set(ticks)).sort() }
+  }, [chartData, range, customStart, customEnd, chartYear, todayStr, yearStartStr])
 
   if (loading) return (
     <div className="h-[400px] flex items-center justify-center bg-[var(--bg-card)] rounded-[48px] border border-[var(--border-bright)]">
@@ -254,19 +297,19 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
   const yDomain = (() => {
     const goal = settings?.year_goal || 0
-    const vals = chartData.filter(d => d.actual !== null && !d.isIntersection).flatMap(d => [d.actual, d.ideal])
+    const vals = filteredData.filter(d => d.actual !== null && !d.isIntersection).flatMap(d => [d.actual, d.ideal])
     if (vals.length === 0) return [0, goal * 1.05]
 
     const dataMin = Math.min(0, ...vals)
-    const dataMax = Math.max(goal, ...vals)
+    const dataMax = Math.max(...vals)
     
-    // 5% Visual Buffer
+    // Y-axis max: max(actual, ideal) + 5% buffer as requested
     const bufferMax = dataMax * 1.05
     const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
     
     // Dynamic Snapping logic
-    const range = bufferMax - bufferMin
-    const snapUnit = range > 10000 ? 1000 : 500
+    const rangeVal = bufferMax - bufferMin
+    const snapUnit = rangeVal > 10000 ? 1000 : 500
     
     const finalMax = Math.ceil(bufferMax / snapUnit) * snapUnit
     const finalMin = dataMin < 0 ? Math.floor(bufferMin / snapUnit) * snapUnit : 0
@@ -274,7 +317,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     return [finalMin, finalMax]
   })()
 
-  const currentActual = Math.round(chartData.findLast(d => d.actual !== null)?.actual || 0)
+  const currentActual = Math.round(filteredData.findLast(d => d.actual !== null)?.actual || 0)
 
   return (
     <div className="space-y-4 animate-slide-up w-full">
@@ -297,10 +340,44 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
-        {/* Custom Legend - Floating */}
-        <div className="absolute top-10 left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
+        {/* Range Selector Integration */}
+        <div className="px-8 pt-8 pb-4 flex flex-col gap-4 relative z-20">
+          <div className="flex w-full gap-2 overflow-x-auto scrollbar-hide">
+            {(['1M', '3M', '6M', '9M', '1Y', 'ALL'] as ChartRange[]).map(r => (
+              <button 
+                key={r} 
+                onClick={() => { setRange(r); setShowCustom(false); }}
+                className={`flex-1 py-2 rounded-xl text-[11px] font-black transition-all border ${range === r && !showCustom ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-black/20 text-[var(--t2)] opacity-60 border-white/5 whitespace-nowrap'}`}
+              >
+                {r === 'ALL' ? '全部' : r}
+              </button>
+            ))}
+            <button 
+              onClick={() => { setRange('CUSTOM'); setShowCustom(!showCustom); }}
+              className={`px-4 py-2 flex items-center justify-center gap-1.5 rounded-xl text-[11px] font-black transition-all border ${range === 'CUSTOM' ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-black/20 text-[var(--t2)] opacity-60 border-white/5'}`}
+            >
+              <CalendarIcon size={14} />
+            </button>
+          </div>
+
+          {showCustom && range === 'CUSTOM' && (
+            <div className="flex items-center justify-end gap-3 px-4 py-2 animate-slide-up bg-black/20 rounded-2xl border border-white/5 shadow-inner">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
+                <DatePicker value={customStart} onChange={(v: string) => setCustomStart(v)} />
+              </div>
+              <div className="flex items-center gap-2 pr-2">
+                <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
+                <DatePicker value={customEnd} onChange={(v: string) => setCustomEnd(v)} />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Custom Legend - Moved down slightly to accommodate header */}
+        <div className="absolute top-[140px] left-0 right-0 flex justify-center gap-10 z-10 pointer-events-none">
           <div className="flex items-center gap-2">
-            <div className="w-6 h-0.5 bg-[#fbbf24] rounded-full border-t border-dashed" />
+            <div className="w-6 h-0 border-t-2 border-[#fbbf24] border-dashed" />
             <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">理想進度</span>
           </div>
           <div className="flex items-center gap-2">
@@ -312,9 +389,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           </div>
         </div>
 
-        <div className="h-[420px] w-full">
+        <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={chartData} margin={{ top: 80, right: 15, left: 10, bottom: 5 }}>
+            <ComposedChart data={filteredData} margin={{ top: 100, right: 15, left: 10, bottom: 20 }}>
               <defs>
                 <linearGradient id="areaRed" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="#ef4444" stopOpacity={0.4}/>
@@ -326,16 +403,15 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 </linearGradient>
               </defs>
 
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.02)" vertical={false} />
+              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={false} />
               
               <XAxis 
                 dataKey="date" 
-                ticks={ticks}
+                ticks={dynamicTicks}
                 tickFormatter={(v) => {
                   if (!v || typeof v !== 'string') return ''
                   const d = new Date(v)
-                  if (v.endsWith('-12-31')) return '12/31'
-                  return `${d.getMonth() + 1}/1`
+                  return `${d.getMonth() + 1}/${d.getDate()}`
                 }}
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
@@ -416,7 +492,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 strokeDasharray="5 5"
                 dot={false} 
                 isAnimationActive={false}
-                opacity={0.3}
+                opacity={0.8}
               />
 
               {/* ACTUAL LINE - Differential Coloring */}
@@ -440,7 +516,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               />
 
               <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeWidth={1} />
-              {chartYear === new Date().getFullYear() && (
+              {chartYear === new Date().getFullYear() && filteredData.some(d => d.date === todayStr) && (
                 <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
               )}
             </ComposedChart>
