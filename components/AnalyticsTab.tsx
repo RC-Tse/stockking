@@ -16,6 +16,8 @@ interface Props {
 }
 
 export default function AnalyticsTab({ onRefresh }: Props) {
+  const { stats, quotes, settings, updateSettings } = usePortfolio()
+
   const sortedHoldings = useMemo(() => {
     return [...(stats.holdings || [])].sort((a, b) => (b.total_amount ?? 0) - (a.total_amount ?? 0))
   }, [stats.holdings])
