@@ -384,7 +384,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     return { domain: [finalMin, finalMax], ticks: Array.from(new Set(ticks)).sort((a,b) => a-b) }
   })()
 
-  const currentActual = Math.round(filteredData.findLast(d => d.actual !== null)?.actual || 0)
+  const latestValid = [...filteredData].reverse().find(d => d.actual !== null)
+  const currentActual = Math.round(latestValid?.actual || 0)
 
   const [isScrubbingMode, setIsScrubbingMode] = useState(false)
   const isScrubModeRef = useRef(false)
@@ -499,7 +500,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               data={filteredData} 
               margin={{ top: 80, right: 0, left: 10, bottom: 20 }}
               onMouseMove={(state: any) => {
-                if (isScrubModeRef.current && state && state.activePayload && state.activeCoordinate) {
+                if (isScrubModeRef.current && state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
                   setScrubState({
                     x: state.activeCoordinate.x,
                     y: state.activeCoordinate.y,
