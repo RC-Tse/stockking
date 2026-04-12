@@ -9,7 +9,8 @@ import {
   ChevronRight, 
   ChevronLeft,
   ChevronDown,
-  LogOut
+  LogOut,
+  TrendingUp
 } from 'lucide-react'
 
 import DatePicker from './DatePicker'
@@ -20,7 +21,7 @@ interface Props {
   onSave: (s: UserSettings) => Promise<void>
 }
 
-type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL'
+type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL' | 'ANALYTICS'
 
 const THEMES = [
   { id: 'dark',   name: '深色主題', colors: ['#0A0C10', '#232429', '#D4AF37'] },
@@ -137,13 +138,27 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
 
             <button 
               onClick={() => setView('CALC')}
-              className="w-full flex items-center justify-between group p-6 active:bg-white/5 transition-colors"
+              className="w-full flex items-center justify-between group p-6 border-b border-white/5 active:bg-white/5 transition-colors"
             >
               <div className="flex items-center gap-4">
                 <Layout size={20} className="text-accent" />
                 <div className="text-left">
                   <div className="text-[15px] font-black text-[var(--t1)]">手續費設定</div>
                   <div className="text-[12px] text-[var(--t2)] opacity-60 mt-1 uppercase tracking-wide">調整手續費與稅率</div>
+                </div>
+              </div>
+              <ChevronRight size={18} className="text-[var(--t2)] opacity-30 group-active:text-accent transition-colors" />
+            </button>
+
+            <button 
+              onClick={() => setView('ANALYTICS')}
+              className="w-full flex items-center justify-between group p-6 active:bg-white/5 transition-colors"
+            >
+              <div className="flex items-center gap-4">
+                <TrendingUp size={20} className="text-accent" />
+                <div className="text-left">
+                  <div className="text-[15px] font-black text-[var(--t1)]">個股分析設定</div>
+                  <div className="text-[12px] text-[var(--t2)] opacity-60 mt-1 uppercase tracking-wide">設定圖表預設細節</div>
                 </div>
               </div>
               <ChevronRight size={18} className="text-[var(--t2)] opacity-30 group-active:text-accent transition-colors" />
@@ -244,7 +259,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
               </p>
             </div>
 
-            <div className="space-y-6 pt-6 border-t border-white/5">
+            <div className="pt-6 border-t border-white/5">
               <div className="space-y-3">
                 <Label>年度進度圖表預設時間軸</Label>
                 <select 
@@ -258,22 +273,6 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
                 </select>
                 <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
                   Dashboard 年度獲利目標進度圖預設顯示的時間長度。
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                <Label>單一個股走勢預設時間軸</Label>
-                <select 
-                  value={localSettings.stock_chart_default_range || '1M'} 
-                  onChange={e => handleSave({ stock_chart_default_range: e.target.value as any })}
-                  className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[15px] font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
-                >
-                  {['1M', '3M', '6M', '9M', '1Y'].map(r => (
-                    <option key={r} value={r}>{r}</option>
-                  ))}
-                </select>
-                <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
-                  單一個股走勢分析圖表預設顯示的時間長度。
                 </p>
               </div>
             </div>
@@ -365,6 +364,36 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
             </div>
           </div>
 
+          {renderSaveButton()}
+        </div>
+      )}
+
+      {view === 'ANALYTICS' && (
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300">
+          <div className="flex items-center gap-4 px-1">
+            <button onClick={() => setView('MAIN')} className="w-10 h-10 flex items-center justify-center rounded-full bg-white/5 text-accent active:bg-white/10 transition-colors">
+              <ChevronLeft size={20} />
+            </button>
+            <h3 className="text-[13px] font-black text-[var(--t2)] uppercase tracking-[0.2em]">個股分析設定</h3>
+          </div>
+
+          <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-6 space-y-8 shadow-2xl">
+            <div className="space-y-3">
+              <Label>單一個股走勢預設時間軸</Label>
+              <select 
+                value={localSettings.stock_chart_default_range || '1M'} 
+                onChange={e => handleSave({ stock_chart_default_range: e.target.value as any })}
+                className="w-full bg-black/20 border border-white/10 rounded-xl px-4 py-4 text-[15px] font-black text-[var(--t1)] outline-none focus:border-accent transition-all appearance-none cursor-pointer"
+              >
+                {['1M', '3M', '6M', '9M', '1Y'].map(r => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </select>
+              <p className="text-[12px] text-[#EAD8B1] opacity-50 font-medium leading-relaxed">
+                每次進入單一個股分析頁面時圖表預設顯示的時間長度。
+              </p>
+            </div>
+          </div>
           {renderSaveButton()}
         </div>
       )}
