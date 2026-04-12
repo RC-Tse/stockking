@@ -483,7 +483,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
-                tickFormatter={(v) => Math.abs(v) >= 1000 ? `${(v/1000).toFixed(0)}K` : fmtMoney(v)}
+                tickFormatter={(v) => Math.abs(v ?? 0) >= 1000 ? `${((v ?? 0)/1000).toFixed(0)}K` : fmtMoney(v ?? 0)}
               />
 
               <Tooltip 

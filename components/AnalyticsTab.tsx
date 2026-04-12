@@ -297,13 +297,13 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           <div className="text-[11px] text-[var(--t3)] mb-2 uppercase tracking-widest">{data.date}</div>
           <div className="flex justify-between gap-4 mb-1">
             <span className="text-[12px] text-[var(--t2)] flex-1">收盤價</span>
-            <span className="font-mono text-accent">{data.price.toFixed(2)}</span>
+            <span className="font-mono text-accent">{(data.price ?? 0).toFixed(2)}</span>
           </div>
           {data.avgCost !== null && (
             <>
               <div className="flex justify-between gap-4 mb-1">
                 <span className="text-[12px] text-[var(--t2)] flex-1">對應均價</span>
-                <span className="font-mono text-[rgba(255,255,255,0.8)]">{data.avgCost.toFixed(2)}</span>
+                <span className="font-mono text-[rgba(255,255,255,0.8)]">{(data.avgCost ?? 0).toFixed(2)}</span>
               </div>
             </>
           )}
@@ -312,15 +312,15 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               <div className="text-[11px] font-black text-[#e05050] mb-0.5">買入紀錄</div>
               <div className="flex justify-between gap-4">
                 <span className="text-[11px] text-[#e05050]/70">價格:</span>
-                <span className="text-[11px] text-[#e05050]">{data.txPrice.toFixed(2)} 元</span>
+                <span className="text-[11px] text-[#e05050]">{(data.txPrice ?? 0).toFixed(2)} 元</span>
               </div>
               <div className="flex justify-between gap-4">
                 <span className="text-[11px] text-[#e05050]/70">數量:</span>
-                <span className="text-[11px] text-[#e05050]">{data.txShares.toLocaleString()} 股</span>
+                <span className="text-[11px] text-[#e05050]">{(data.txShares ?? 0).toLocaleString()} 股</span>
               </div>
               <div className="flex justify-between gap-4 mt-1 border-t border-[#e05050]/20 pt-1">
                 <span className="text-[11px] text-[#e05050]/70">買入後新均價:</span>
-                <span className="text-[11px] font-black text-[#e05050]">{data.avgCost.toFixed(2)}</span>
+                <span className="text-[11px] font-black text-[#e05050]">{(data.avgCost ?? 0).toFixed(2)}</span>
               </div>
             </div>
           )}
@@ -364,16 +364,34 @@ const chartWidthPercent = useMemo(() => {
     }
   }, [yearMetrics, isManualY])
 
+  // Step 2: 初始視野校正 - 自動滾動至最右端 (最新的數據點)
+  useEffect(() => {
+    if (enrichedStockHistory.length > 0 && scrollerRef.current) {
+      const scroller = scrollerRef.current
+      // 延遲執行以確保寬度已計算完成
+      const timer = setTimeout(() => {
+        scroller.scrollLeft = scroller.scrollWidth
+      }, 100)
+      return () => clearTimeout(timer)
+    }
+  }, [enrichedStockHistory.length, selSym])
+
   // 手勢控制：雙指縮放與垂直平移
   const bind = useGesture(
     {
-      onPinch: ({ offset: [d], first, last }) => {
+      onPinch: ({ offset: [d], first }) => {
         if (first) setIsManualY(true)
-        const zoom = Math.pow(1.01, -d) // 縮放係數
+        const zoom = Math.pow(1.01, -d) 
         const range = yDomain[1] - yDomain[0]
-        const mid = (yDomain[1] + yDomain[0]) / 2
         const newRange = range * zoom
-        setYDomain([mid - newRange / 2, mid + newRange / 2])
+
+        // Step 3: 手勢優化 - 以「最新收盤價」為縮放錨點
+        const lastPrice = enrichedStockHistory[enrichedStockHistory.length - 1]?.close || 0
+        const weight = (lastPrice - yDomain[0]) / range
+        
+        const newMin = lastPrice - weight * newRange
+        const newMax = newMin + newRange
+        setYDomain([newMin, newMax])
       },
       onDrag: ({ delta: [, dy], first }) => {
         if (first) setIsManualY(true)
@@ -581,7 +599,7 @@ const chartWidthPercent = useMemo(() => {
                         fontWeight="900" 
                         opacity="0.4"
                       >
-                        成本 {selectedHolding.avg_cost.toFixed(1)}
+                        成本 {(selectedHolding.avg_cost ?? 0).toFixed(1)}
                       </text>
                     </g>
                   )}
@@ -671,7 +689,7 @@ const chartWidthPercent = useMemo(() => {
                 const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
                 return (
                   <div key={p} className="text-[10px] font-black text-[var(--t3)] text-right pr-1 tabular-nums">
-                    {val.toFixed(1)}
+                    {(val ?? 0).toFixed(1)}
                   </div>
                 )
               })}
@@ -683,10 +701,10 @@ const chartWidthPercent = useMemo(() => {
             <div className="absolute top-6 left-6 z-30 p-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200">
                <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                 <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{enrichedStockHistory[activeIdx].open.toFixed(1)}</div>
-                 <div className="text-[10px] text-white/40">最高</div><div className="text-[11px] font-black text-[#ef4444]">{enrichedStockHistory[activeIdx].high.toFixed(1)}</div>
-                 <div className="text-[10px] text-white/40">最低</div><div className="text-[11px] font-black text-[#22c55e]">{enrichedStockHistory[activeIdx].low.toFixed(1)}</div>
-                 <div className="text-[10px] text-white/40">收盤</div><div className="text-[11px] font-black text-white">{enrichedStockHistory[activeIdx].close.toFixed(1)}</div>
+                 <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{(enrichedStockHistory[activeIdx].open ?? 0).toFixed(1)}</div>
+                 <div className="text-[10px] text-white/40">最高</div><div className="text-[11px] font-black text-[#ef4444]">{(enrichedStockHistory[activeIdx].high ?? 0).toFixed(1)}</div>
+                 <div className="text-[10px] text-white/40">最低</div><div className="text-[11px] font-black text-[#22c55e]">{(enrichedStockHistory[activeIdx].low ?? 0).toFixed(1)}</div>
+                 <div className="text-[10px] text-white/40">收盤</div><div className="text-[11px] font-black text-white">{(enrichedStockHistory[activeIdx].close ?? 0).toFixed(1)}</div>
                </div>
             </div>
           )}
@@ -696,12 +714,12 @@ const chartWidthPercent = useMemo(() => {
           <div className="grid grid-cols-2 gap-3">
             <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-4 shadow-xl">
               <div className="text-[11px] font-black text-[var(--t2)] opacity-70 uppercase mb-1">現時平均成本</div>
-              <div className="text-[18px] font-black text-[var(--t1)] font-mono">{selectedHolding.avg_cost.toFixed(2)}</div>
+              <div className="text-[18px] font-black text-[var(--t1)] font-mono">{(selectedHolding.avg_cost ?? 0).toFixed(2)}</div>
             </div>
             <div className="bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl p-4 shadow-xl">
               <div className="text-[11px] font-black text-[var(--t2)] opacity-70 uppercase mb-1">現時股價 vs 成本</div>
-              <div className={`text-[18px] font-black font-mono ${selectedHolding.pnl_pct >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-                {selectedHolding.pnl_pct >= 0 ? '+' : ''}{selectedHolding.pnl_pct.toFixed(2)}%
+              <div className={`text-[18px] font-black font-mono ${(selectedHolding.pnl_pct ?? 0) >= 0 ? 'text-red-400' : 'text-green-400'}`}>
+                {(selectedHolding.pnl_pct ?? 0) >= 0 ? '+' : ''}{(selectedHolding.pnl_pct ?? 0).toFixed(2)}%
               </div>
             </div>
           </div>

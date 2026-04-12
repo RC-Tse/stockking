@@ -199,7 +199,7 @@ export function calculateTxParts(shares: number, price: number, action: 'BUY' | 
 
 
 export function fmtPrice(v: number): string {
-  return v.toFixed(2)
+  return (v ?? 0).toFixed(2)
 }
 
 export function fmtMoney(v: number): string {
