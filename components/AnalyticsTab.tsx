@@ -351,27 +351,30 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const pinchStartDist = useRef<number | null>(null)
   const lastYZoomFactor = useRef<number>(1.0)
 
+  const yearMetrics = useMemo(() => {
+    if (!enrichedStockHistory.length) return null
+    // 取得所有資料中的極值 (通常 API 回傳 1-2 年)
+    const vals = enrichedStockHistory.flatMap(d => [d.open, d.high, d.low, d.close].filter(v => v !== null)) as number[]
+    return {
+      min: Math.min(...vals),
+      max: Math.max(...vals)
+    }
+  }, [enrichedStockHistory])
+
   // 監聽捲動與縮放
   useEffect(() => {
     const scroller = scrollerRef.current
-    if (!scroller || !enrichedStockHistory.length) return
+    if (!scroller || !enrichedStockHistory.length || !yearMetrics) return
 
     const updateYAxis = () => {
-      const { scrollLeft, scrollWidth, clientWidth } = scroller
-      const totalPoints = enrichedStockHistory.length
-      const pointsInView = (clientWidth / scrollWidth) * totalPoints
-      const startIndex = Math.floor((scrollLeft / scrollWidth) * totalPoints)
-      const visibleData = enrichedStockHistory.slice(startIndex, startIndex + Math.ceil(pointsInView) + 1)
+      // 基準範圍鎖定在一年極值，並加上 5% 緩衝
+      const range = yearMetrics.max - yearMetrics.min
+      const baseMin = yearMetrics.min - range * 0.05
+      const baseMax = yearMetrics.max + range * 0.05
       
-      if (visibleData.length > 0) {
-        const vals = visibleData.flatMap(d => [d.open, d.close, d.high, d.low, d.avgCost].filter(v => v !== null)) as number[]
-        const min = Math.min(...vals)
-        const max = Math.max(...vals)
-        
-        const mid = (max + min) / 2
-        const halfRange = ((max - min) / 2 + 1) * yZoomFactor // +1 避免完全重疊
-        setYDomain([mid - halfRange, mid + halfRange])
-      }
+      const mid = (baseMax + baseMin) / 2
+      const span = (baseMax - baseMin) * yZoomFactor
+      setYDomain([mid - span / 2, mid + span / 2])
     }
 
     const handleTouchStart = (e: TouchEvent) => {
@@ -561,8 +564,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerUp}
             onPointerLeave={handlePointerUp}
-            className={`bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide touch-pan-x shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
-            style={{ WebkitOverflowScrolling: 'touch', height: '320px' }}
+            className={`bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl pt-4 pb-4 pl-4 pr-0 relative overflow-x-auto overflow-y-hidden scrollbar-hide shadow-2xl ${isScrubbing ? 'overflow-x-hidden' : ''}`}
+            style={{ WebkitOverflowScrolling: 'touch', height: '320px', touchAction: 'pan-x pinch-zoom' }}
           >
 {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm rounded-2xl"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
             
@@ -570,7 +573,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               <ResponsiveContainer width="100%" height="100%">
                 {settings.stock_chart_style === 'detailed' ? (
                   <ComposedChart onMouseMove={handleMouseMove} data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }} barGap="-100%">
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <CartesianGrid vertical={true} horizontal={true} stroke="rgba(255,255,255,0.1)" strokeWidth={0.5} />
                     <XAxis 
                       dataKey="timestamp" 
                       type="number"
@@ -676,7 +679,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                   </ComposedChart>
                 ) : (
                   <LineChart onMouseMove={handleMouseMove} data={enrichedStockHistory} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+                    <CartesianGrid vertical={true} horizontal={true} stroke="rgba(255,255,255,0.1)" strokeWidth={0.5} />
                     <XAxis 
                       dataKey="timestamp" 
                       type="number"
