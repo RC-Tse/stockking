@@ -476,6 +476,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             <div className="flex items-center gap-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">起</span>
               <DatePicker value={customStockStart} onChange={(v: string) => setCustomStockStart(v)} fixedYear={Number(selectedYear)} />
+            </div>
             <div className="flex items-center gap-2 pr-2">
               <span className="text-[10px] font-black text-[var(--t2)] opacity-60">迄</span>
               <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} fixedYear={Number(selectedYear)} />
