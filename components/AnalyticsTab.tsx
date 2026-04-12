@@ -441,8 +441,34 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   }, [enrichedStockHistory.length, selSym, stockRange])
 
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
+  const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const [isScrubbingMode, setIsScrubbingMode] = useState(false)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    // 啟動長按計時器
+    scrubTimerRef.current = setTimeout(() => {
+      setIsScrubbingMode(true)
+      if (window.navigator.vibrate) window.navigator.vibrate(10)
+    }, 500)
+  }
+
+  const handleTouchEnd = () => {
+    if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current)
+    setIsScrubbingMode(false)
+    setActiveIdx(null)
+  }
+
   const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
-    if (!isScrubbing || !enrichedStockHistory.length) return
+    if (e.type === 'touchmove' && !isScrubbingMode) {
+      // 如果不是查價模式，讓瀏覽器處理原生捲動
+      return
+    }
+
+    if (e.type === 'touchmove' && isScrubbingMode) {
+      e.preventDefault() // 禁用捲動
+    }
+
+    if (!scrollerRef.current || enrichedStockHistory.length === 0) return
     const scroller = scrollerRef.current
     if (!scroller) return
     const rect = scroller.getBoundingClientRect()
@@ -452,22 +478,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     if (idx >= 0 && idx < enrichedStockHistory.length) {
       setActiveIdx(idx)
     }
-  }
-
-  const onPointerDown = (e: React.PointerEvent) => {
-    if (scrubTimer.current) clearTimeout(scrubTimer.current)
-    scrubTimer.current = setTimeout(() => {
-      setIsScrubbing(true)
-    }, 150)
-  }
-
-  const onPointerUp = () => {
-    if (scrubTimer.current) {
-      clearTimeout(scrubTimer.current)
-      scrubTimer.current = null
-    }
-    setIsScrubbing(false)
-    setActiveIdx(null)
   }
 
   return (
@@ -581,25 +591,46 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               {...bind()}
               ref={scrollerRef}
               onScroll={handleScroll}
-              onMouseMove={handleChartMove}
-              onTouchMove={handleChartMove}
-              onPointerDown={onPointerDown}
-              onPointerUp={onPointerUp}
-              onPointerCancel={onPointerUp}
-              onPointerLeave={onPointerUp}
-              className={`flex-1 relative overflow-x-auto overflow-y-hidden scrollbar-hide py-4 pl-4 ${isScrubbing ? 'overflow-x-hidden' : ''}`}
-              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'none' }}
+              className="flex-1 relative overflow-x-auto overflow-y-hidden scrollbar-hide py-4 pl-4"
+              style={{ WebkitOverflowScrolling: 'touch', touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
             >
               <div style={{ width: `${totalWidth}px`, height: `${chartHeight}px`, position: 'relative' }}>
-                <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
-                  {/* Grid Lines (Horizontal) - 5 Equidistant Integer Ticks */}
-                  {[0, 0.25, 0.5, 0.75, 1].map(p => {
-                    const price = yDomain[0] + (yDomain[1] - yDomain[0]) * p
-                    const y = yScale(price)
-                    return (
-                      <line key={p} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="0.5" />
-                    )
-                  })}
+                <svg 
+                    width={enrichedStockHistory.length * pointWidth} 
+                    height="100%" 
+                    className="overflow-visible"
+                    style={{ touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
+                    onMouseMove={handleChartMove}
+                    onMouseLeave={() => setActiveIdx(null)}
+                    onTouchStart={handleTouchStart}
+                    onTouchMove={handleChartMove}
+                    onTouchEnd={handleTouchEnd}
+                  >
+                    <g>
+                      {/* Horizontal Grid Lines (aligned with price ticks) */}
+                      {[0, 0.25, 0.5, 0.75, 1].map(p => {
+                        const y = chartHeight * p
+                        return (
+                          <line key={p} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                        )
+                      })}
+
+                      {/* Vertical Grid Lines (Month starts & Buy days) */}
+                      {enrichedStockHistory.map((d, i) => {
+                        const isMonthStart = i === 0 || d.date.slice(5, 7) !== enrichedStockHistory[i - 1].date.slice(5, 7)
+                        if (!isMonthStart && !d.isBuy) return null
+
+                        const x = i * pointWidth + pointWidth / 2
+                        return (
+                          <line 
+                            key={`vgrid-${i}`} 
+                            x1={x} y1="0" x2={x} y2={chartHeight} 
+                            stroke="rgba(255,255,255,0.06)" 
+                            strokeWidth="1" 
+                          />
+                        )
+                      })}
+                    </g>
                   
                   {/* Step Cost Line (Piecewise Horizontal Path) */}
                   <path 
@@ -671,16 +702,15 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                   )}
 
                   {/* Scrubbing Indicators */}
-                  {isScrubbing && activeIdx !== null && enrichedStockHistory[activeIdx] && (
+                  {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
                     <g>
                       <line 
                         x1={activeIdx * pointWidth + pointWidth / 2} 
                         y1="0" 
                         x2={activeIdx * pointWidth + pointWidth / 2} 
-                        y2="100%" 
+                        y2={chartHeight} 
                         stroke="var(--accent)" 
-                        strokeWidth="1" 
-                        strokeDasharray="4 2" 
+                        strokeWidth="1.5" 
                       />
                       <circle 
                         cx={activeIdx * pointWidth + pointWidth / 2} 
@@ -697,16 +727,18 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                 {/* X-Axis Dates */}
                 <div className="absolute bottom-0 left-0 right-0 h-4 flex items-center pointer-events-none">
                   {enrichedStockHistory.map((d, i) => {
-                    const showByInterval = i % 5 === 0
-                    if (!showByInterval && !d.isBuy) return null 
+                    const isMonthStart = i === 0 || d.date.slice(5, 7) !== enrichedStockHistory[i - 1].date.slice(5, 7)
+                    if (!isMonthStart && !d.isBuy) return null 
                     
+                    const label = isMonthStart ? `${parseInt(d.date.slice(5, 7))}月` : d.date.slice(5)
+
                     return (
                       <div 
                         key={i} 
-                        className={`absolute text-[9px] font-black whitespace-nowrap -translate-x-1/2 transition-all px-1.5 py-0.5 rounded-sm ${d.isBuy ? 'bg-[#facc15] text-black z-20 shadow-md transform scale-110' : 'text-white/30'}`} 
+                        className={`absolute text-[9px] font-black whitespace-nowrap -translate-x-1/2 transition-all px-1.5 py-0.5 rounded-sm ${d.isBuy ? 'bg-[#facc15] text-black z-20 shadow-md transform scale-110' : 'text-white/20'}`} 
                         style={{ left: i * pointWidth + pointWidth / 2, bottom: d.isBuy ? '2px' : '0px' }}
                       >
-                        {d.date.slice(5)}
+                        {label}
                       </div>
                     )
                   })}
@@ -719,8 +751,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               {[1, 0.75, 0.5, 0.25, 0].map(p => {
                 const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
                 return (
-                  <div key={p} className="px-2">
-                    <div className="text-[10px] font-black text-white/60 text-right tabular-nums">
+                  <div key={p} className="pl-3 pr-2">
+                    <div className="text-[10px] font-black text-white/60 tabular-nums">
                       {Math.round(val ?? 0).toLocaleString()}
                     </div>
                   </div>
