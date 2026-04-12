@@ -362,8 +362,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     // 4th tick from top corresponds to Min + 0.25*(Max-Min)
     if (!isManualY && latestClose) {
       const targetRange = Math.max(range * 1.2, latestClose * 0.05) // 確保有足夠範圍
-      rawMin = latestClose - 0.25 * targetRange
-      rawMax = latestClose + 0.75 * targetRange
+      rawMin = latestClose - 0.5 * targetRange
+      rawMax = latestClose + 0.5 * targetRange
     }
 
     let newMin = Math.floor(rawMin)
@@ -462,17 +462,28 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const [isScrubbingMode, setIsScrubbingMode] = useState(false)
 
   const handleTouchStart = (e: React.TouchEvent) => {
-    // 啟動長按計時器
+    if (isScrubbingMode) return // 如果已經在查價模式，不需要重複觸發計時器
+    // 啟動長按計時器 (延長至 1000ms)
     scrubTimerRef.current = setTimeout(() => {
       setIsScrubbingMode(true)
       if (window.navigator.vibrate) window.navigator.vibrate(10)
-    }, 500)
+    }, 1000)
   }
 
   const handleTouchEnd = () => {
-    if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current)
-    setIsScrubbingMode(false)
-    setActiveIdx(null)
+    if (scrubTimerRef.current) {
+      clearTimeout(scrubTimerRef.current)
+      scrubTimerRef.current = null
+    }
+    // 注意：不再這裡 setIsScrubbingMode(false)，實現黏性保留
+  }
+
+  // 單點螢幕退出查價模式
+  const handleChartClick = () => {
+    if (isScrubbingMode) {
+      setIsScrubbingMode(false)
+      setActiveIdx(null)
+    }
   }
 
   const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
@@ -617,18 +628,19 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     height="100%" 
                     className="overflow-visible"
                     style={{ touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
+                    onClick={handleChartClick}
                     onMouseMove={handleChartMove}
-                    onMouseLeave={() => setActiveIdx(null)}
+                    onMouseLeave={() => { if (!isScrubbingMode) setActiveIdx(null) }}
                     onTouchStart={handleTouchStart}
                     onTouchMove={handleChartMove}
                     onTouchEnd={handleTouchEnd}
                   >
                     <g>
                       {/* Horizontal Grid Lines (aligned with price ticks) */}
-                      {[0, 0.25, 0.5, 0.75, 1].map(p => {
-                        const y = chartHeight * p
+                      {[0, 1, 2, 3, 4].map(i => {
+                        const y = chartHeight * (i * 0.25)
                         return (
-                          <line key={p} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                          <line key={i} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
                         )
                       })}
 
@@ -649,35 +661,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                       })}
                     </g>
                   
-                  {/* Step Cost Line (Piecewise Horizontal Path) */}
-                  <path 
-                    d={(() => {
-                      let pathStr = ''
-                      let isDrawing = false
-                      enrichedStockHistory.forEach((d, i) => {
-                        const x = i * pointWidth + pointWidth / 2
-                        const nextX = (i + 1) * pointWidth + pointWidth / 2
-                        if (d.avgCost !== null) {
-                          const y = yScale(d.avgCost)
-                          if (!isDrawing) {
-                            pathStr += `M ${x} ${y} L ${nextX} ${y} `
-                            isDrawing = true
-                          } else {
-                            pathStr += `L ${x} ${y} L ${nextX} ${y} `
-                          }
-                        } else {
-                          isDrawing = false
-                        }
-                      })
-                      return pathStr
-                    })()}
-                    fill="none"
-                    stroke="#ffffff"
-                    strokeWidth="1.5"
-                    strokeDasharray="4 4"
-                    opacity="0.4"
-                  />
-
                   {settings.stock_chart_style === 'detailed' ? (
                     <g>
                       {enrichedStockHistory.map((d, i) => {
@@ -717,6 +700,35 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                       strokeWidth="3"
                     />
                   )}
+
+                  {/* Step Cost Line (Piecewise Horizontal Path) - Moved AFTER candles to be on top */}
+                  <path 
+                    d={(() => {
+                      let pathStr = ''
+                      let isDrawing = false
+                      enrichedStockHistory.forEach((d, i) => {
+                        const x = i * pointWidth + pointWidth / 2
+                        const nextX = (i + 1) * pointWidth + pointWidth / 2
+                        if (d.avgCost !== null) {
+                          const y = yScale(d.avgCost)
+                          if (!isDrawing) {
+                            pathStr += `M ${x} ${y} L ${nextX} ${y} `
+                            isDrawing = true
+                          } else {
+                            pathStr += `L ${x} ${y} L ${nextX} ${y} `
+                          }
+                        } else {
+                          isDrawing = false
+                        }
+                      })
+                      return pathStr
+                    })()}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                    opacity="0.6"
+                  />
 
                   {/* Scrubbing Indicators */}
                   {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
