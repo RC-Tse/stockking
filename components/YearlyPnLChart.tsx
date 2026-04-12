@@ -30,6 +30,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const [isScrubbingMode, setIsScrubbingMode] = useState(false)
   const isScrubModeRef = useRef(false)
   const [scrubState, setScrubState] = useState<{ x: number, y: number, payload: any } | null>(null)
+  const lastHoverRef = useRef<{ x: number, y: number, payload: any } | null>(null)
   const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
 
   const handleTouchStart = () => {
@@ -37,6 +38,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     scrubTimerRef.current = setTimeout(() => {
       setIsScrubbingMode(true)
       isScrubModeRef.current = true
+      if (lastHoverRef.current) {
+        setScrubState(lastHoverRef.current)
+      }
       if (window.navigator?.vibrate) window.navigator.vibrate(10)
     }, 1000)
   }
@@ -501,12 +505,16 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               data={filteredData} 
               margin={{ top: 80, right: 0, left: 10, bottom: 20 }}
               onMouseMove={(state: any) => {
-                if (isScrubModeRef.current && state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
-                  setScrubState({
+                if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
+                  const payloadData = {
                     x: state.activeCoordinate.x,
                     y: state.activeCoordinate.y,
                     payload: state.activePayload[0].payload
-                  })
+                  }
+                  lastHoverRef.current = payloadData
+                  if (isScrubModeRef.current) {
+                    setScrubState(payloadData)
+                  }
                 }
               }}
             >
@@ -620,23 +628,23 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           </ResponsiveContainer>
 
           {isScrubbingMode && scrubState && scrubState.payload && !scrubState.payload.isFuture && (
-            <div className="absolute top-4 left-4 z-40 p-5 bg-black/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl pointer-events-none animate-in fade-in duration-200 min-w-[220px]">
-              <div className="text-[10px] text-accent font-black mb-4 uppercase tracking-widest">{scrubState.payload.date}</div>
+            <div className={`absolute top-4 z-40 p-5 bg-black/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl pointer-events-none animate-in fade-in duration-200 min-w-[220px] ${scrubState.x > 180 ? 'left-4' : 'right-4'}`}>
+              <div className="text-[12px] text-white font-black mb-4 uppercase tracking-widest">{scrubState.payload.date}</div>
               <div className="space-y-3">
                 <div className="flex justify-between gap-12">
-                  <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
-                  <span className={`text-[14px] font-mono font-black ${(scrubState.payload.actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                    {fmtMoney(scrubState.payload.actual || 0)}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-12">
-                  <span className="text-[12px] text-[var(--t2)] font-black">理想目標</span>
+                  <span className="text-[12px] text-[var(--t2)] font-black whitespace-nowrap">理想進度金額</span>
                   <span className="text-[14px] font-mono font-black text-[#fbbf24]">
                     {fmtMoney(scrubState.payload.ideal || 0)}
                   </span>
                 </div>
+                <div className="flex justify-between gap-12">
+                  <span className="text-[12px] text-[var(--t2)] font-black whitespace-nowrap">實際進度金額</span>
+                  <span className={`text-[14px] font-mono font-black ${(scrubState.payload.actual || 0) >= (scrubState.payload.ideal || 0) ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                    {fmtMoney(scrubState.payload.actual || 0)}
+                  </span>
+                </div>
                 <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
-                  <span className="text-[11px] text-[var(--t2)] font-black">跟隨差距</span>
+                  <span className="text-[11px] text-[var(--t2)] font-black whitespace-nowrap">相差金額</span>
                   <span className={`text-[14px] font-mono font-black ${(scrubState.payload.actual || 0) - (scrubState.payload.ideal || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
                     {fmtMoney((scrubState.payload.actual || 0) - (scrubState.payload.ideal || 0))}
                   </span>
