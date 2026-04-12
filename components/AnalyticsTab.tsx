@@ -73,39 +73,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const enrichedStockHistory = useMemo(() => {
     if (!stockHistory.length) return []
     
-    // 1. Create a full sequence of calendar days within the fetched range
+    // 1. 直接使用原始交易數據，不進行日期補點 (無開盤即不顯示)
     const sortedRaw = [...stockHistory].sort((a,b) => a.date.localeCompare(b.date))
     const firstDate = sortedRaw[0].date
-    const lastDate = sortedRaw[sortedRaw.length - 1].date
     
-    const allDays: string[] = []
-    let curr = new Date(firstDate)
-    const end = new Date(lastDate)
-    while (curr <= end) {
-      allDays.push(curr.toISOString().split('T')[0])
-      curr.setDate(curr.getDate() + 1)
-    }
-
-    const historyMap = new Map(sortedRaw.map(h => [h.date, h]))
-    let lastKnownPrice = sortedRaw[0].price
-
-    // 2. Padding logic (If holiday, use previous close)
-    const padded = allDays.map(date => {
-      const existing = historyMap.get(date)
-      if (existing) {
-        lastKnownPrice = existing.price
-        return { ...existing }
-      }
-      return { date, price: lastKnownPrice, isPadded: true }
-    })
-
     const txs = [...transactions].filter(t => t.symbol === selSym).sort((a, b) => a.trade_date.localeCompare(b.trade_date))
     
     let txIdx = 0
     let inventory: { shares: number, cost: number }[] = []
     let currentAvgCost: number | null = null
 
-    // Pre-start inventory
+    // 處理圖表開始日期之前的交易
     while (txIdx < txs.length && txs[txIdx].trade_date < firstDate) {
       const tx = txs[txIdx]
       if (tx.action !== 'SELL') {
@@ -120,7 +98,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       txIdx++
     }
 
-    const processed = padded.map((h) => {
+    const processed = sortedRaw.map((h) => {
       let isBuy = false
       let txPrice = 0
       let txShares = 0
@@ -146,7 +124,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       const totalCost = inventory.reduce((s, lot) => s + lot.cost, 0)
       currentAvgCost = totalShares > 0 ? totalCost / totalShares : null
       
-      
       const open = h.open ?? h.price
       const close = h.price
       const high = h.high ?? h.price
@@ -154,25 +131,22 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
       return {
         ...h,
-        open, high, low,
+        open, high, low, close,
         isBuy,
         txPrice,
         txShares,
         avgCost: currentAvgCost,
-        pnlDiff: currentAvgCost !== null ? (h.price - currentAvgCost) * totalShares : 0,
-        pnlPct: currentAvgCost !== null && currentAvgCost !== 0 ? ((h.price - currentAvgCost) / currentAvgCost) * 100 : 0,
-        // For Candlestick
+        isUp: close >= open,
         candleBody: [Math.min(open, close), Math.max(open, close)],
         candleWick: [low, high],
-        isUp: close >= open
+        timestamp: new Date(h.date).getTime()
       }
     })
 
-    let finalData = processed
     if (stockRange === 'CUSTOM') {
-      finalData = processed.filter(d => d.date >= customStockStart && d.date <= customStockEnd)
+      return processed.filter(d => d.date >= customStockStart && d.date <= customStockEnd)
     }
-    return finalData.map(d => ({...d, timestamp: new Date(d.date).getTime()}))
+    return processed
   }, [stockHistory, transactions, selSym, stockRange, customStockStart, customStockEnd])
 
   const formatTick = (ts: number) => {
@@ -334,74 +308,91 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const [isScrubbing, setIsScrubbing] = useState(false)
   const scrubTimer = useRef<any>(null)
 
-  // 計算圖表寬度比例
-  // 1M 約 22 個交易日, 3M 約 66, 6M 約 132...
-  const [pointsPerWindow] = useState(25)
+  // ── Step 2-3: 雙軸縮放與佈局狀態 ──
+  const [pointWidth, setPointWidth] = useState(16) // 每根 K 線佔用的寬度
   const [yDomain, setYDomain] = useState<[number, number]>([0, 100])
+  const [visibleIdxRange, setVisibleIdxRange] = useState<[number, number]>([0, 30])
   const [isManualY, setIsManualY] = useState(false)
-  const pointers = useRef<Map<number, {x: number, y: number}>>(new Map())
+  
   const chartHeight = 280
-  const yPadding = 0.05 // 5% padding
-const chartWidthPercent = useMemo(() => {
-    if (!enrichedStockHistory.length) return '100%'
-    const ratio = enrichedStockHistory.length / pointsPerWindow
-    return `${Math.max(100, ratio * 100)}%`
-  }, [enrichedStockHistory.length, pointsPerWindow])
+  const candleGap = 4
+  const candleWidth = useMemo(() => {
+    // K 線主體寬度約為單個點寬度的 90%，實現「緊貼」感
+    return Math.max(2, pointWidth * 0.9)
+  }, [pointWidth])
 
-  const yearMetrics = useMemo(() => {
-    if (!enrichedStockHistory.length) return null
-    const vals = enrichedStockHistory.flatMap(d => [d.open, d.high, d.low, d.close]
-      .filter(v => typeof v === 'number' && v > 0)) as number[]
-    if (vals.length === 0) return null
-    return { min: Math.min(...vals), max: Math.max(...vals) }
-  }, [enrichedStockHistory])
+  const totalPoints = enrichedStockHistory.length
+  const totalWidth = totalPoints * pointWidth
 
-  // 初始化 Y 軸對齊
+  // Step 4: 自動適配 (Auto-scale) 邏輯
   useEffect(() => {
-    if (yearMetrics && !isManualY) {
-      const range = yearMetrics.max - yearMetrics.min
-      setYDomain([yearMetrics.min - range * yPadding, yearMetrics.max + range * yPadding])
-    }
-  }, [yearMetrics, isManualY])
+    if (isManualY || !enrichedStockHistory.length) return
+    const [start, end] = visibleIdxRange
+    const visibleData = enrichedStockHistory.slice(start, end + 1)
+    if (!visibleData.length) return
 
-  // Step 2: 初始視野校正 - 自動滾動至最右端 (最新的數據點)
-  useEffect(() => {
-    if (enrichedStockHistory.length > 0 && scrollerRef.current) {
-      const scroller = scrollerRef.current
-      // 延遲執行以確保寬度已計算完成
-      const timer = setTimeout(() => {
-        scroller.scrollLeft = scroller.scrollWidth
-      }, 100)
-      return () => clearTimeout(timer)
-    }
-  }, [enrichedStockHistory.length, selSym])
+    const vals = visibleData.flatMap(d => [d.high, d.low, d.open, d.close])
+      .filter(v => typeof v === 'number' && v > 0)
+    if (vals.length === 0) return
 
-  // 手勢控制：雙指縮放與垂直平移
+    const min = Math.min(...vals)
+    const max = Math.max(...vals)
+    const range = max - min
+    
+    // 尋找能被 4 整除的範圍以確保 5 個整數標籤等距
+    const pad = range * 0.05
+    let newMin = Math.floor(min - pad)
+    let newMax = Math.ceil(max + pad)
+    let newRange = newMax - newMin
+    while (newRange % 4 !== 0) {
+      newMax++
+      newRange = newMax - newMin
+    }
+    
+    setYDomain([newMin, newMax])
+  }, [visibleIdxRange, enrichedStockHistory, isManualY])
+
+  // 監聽滾動以決定可見區間
+  const handleScroll = () => {
+    const scroller = scrollerRef.current
+    if (!scroller) return
+    const scrollLeft = scroller.scrollLeft
+    const viewportWidth = scroller.clientWidth
+    
+    const startIdx = Math.floor(scrollLeft / pointWidth)
+    const endIdx = Math.ceil((scrollLeft + viewportWidth) / pointWidth)
+    
+    setVisibleIdxRange([Math.max(0, startIdx), Math.min(totalPoints - 1, endIdx)])
+  }
+
+  // 手勢控制：雙指縮放 (X 軸數據密度 + Y 軸區間)
   const bind = useGesture(
     {
-      onPinch: ({ offset: [d], first }) => {
-        if (first) setIsManualY(true)
-        const zoom = Math.pow(1.01, -d) 
-        const range = yDomain[1] - yDomain[0]
-        const newRange = range * zoom
+      onPinch: ({ offset: [d], delta: [scale] }) => {
+        setIsManualY(true)
+        // 1. Y 軸價格縮放 (上下縮放)
+        const zoomY = Math.pow(1.01, -d)
+        const rangeY = yDomain[1] - yDomain[0]
+        const midY = (yDomain[1] + yDomain[0]) / 2
+        const newRangeY = rangeY * zoomY
+        setYDomain([midY - newRangeY / 2, midY + newRangeY / 2])
 
-        // Step 3: 手勢優化 - 以「最新收盤價」為縮放錨點
-        const lastPrice = enrichedStockHistory[enrichedStockHistory.length - 1]?.close || 0
-        const weight = (lastPrice - yDomain[0]) / range
-        
-        const newMin = lastPrice - weight * newRange
-        const newMax = newMin + newRange
-        setYDomain([newMin, newMax])
+        // 2. X 軸 K 線寬度縮放 (左右縮放)
+        // 根據縮放手勢調整 pointWidth
+        setPointWidth(prev => {
+          const next = prev * (1 + scale * 0.05)
+          return Math.min(100, Math.max(4, next)) // 限制寬度在 4px 到 100px 之間
+        })
       },
       onDrag: ({ delta: [, dy], first }) => {
         if (first) setIsManualY(true)
-        const range = yDomain[1] - yDomain[0]
-        const pricePerPixel = range / chartHeight
-        const shift = dy * pricePerPixel
-        setYDomain([yDomain[0] + shift, yDomain[1] + shift])
+        const rangeY = yDomain[1] - yDomain[0]
+        const pricePerPixel = rangeY / chartHeight
+        const shiftY = dy * pricePerPixel
+        setYDomain([yDomain[0] + shiftY, yDomain[1] + shiftY])
       }
     },
-    { drag: { filterTaps: true, threshold: 5 } }
+    { drag: { filterTaps: true, threshold: 5 }, pinch: { axis: 'y' } }
   )
 
   const yScale = (price: number) => {
@@ -410,7 +401,18 @@ const chartWidthPercent = useMemo(() => {
     return chartHeight - ((price - min) / (max - min)) * chartHeight
   }
 
-  // 查價位置管理
+  // 初始視野校正：右對齊
+  useEffect(() => {
+    if (enrichedStockHistory.length > 0 && scrollerRef.current) {
+      setTimeout(() => {
+        if (scrollerRef.current) {
+          scrollerRef.current.scrollLeft = scrollerRef.current.scrollWidth
+          handleScroll()
+        }
+      }, 100)
+    }
+  }, [enrichedStockHistory.length, selSym])
+
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
   const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (!isScrubbing || !enrichedStockHistory.length) return
@@ -419,31 +421,26 @@ const chartWidthPercent = useMemo(() => {
     const rect = scroller.getBoundingClientRect()
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const scrollX = clientX - rect.left + scroller.scrollLeft
-    const totalWidth = scroller.scrollWidth
-    const idx = Math.floor((scrollX / totalWidth) * enrichedStockHistory.length)
+    const idx = Math.floor(scrollX / pointWidth)
     if (idx >= 0 && idx < enrichedStockHistory.length) {
       setActiveIdx(idx)
     }
   }
 
   const onPointerDown = (e: React.PointerEvent) => {
-    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY })
     if (scrubTimer.current) clearTimeout(scrubTimer.current)
     scrubTimer.current = setTimeout(() => {
       setIsScrubbing(true)
     }, 150)
   }
 
-  const onPointerUp = (e: React.PointerEvent) => {
-    pointers.current.delete(e.pointerId)
-    if (pointers.current.size === 0) {
-      if (scrubTimer.current) {
-        clearTimeout(scrubTimer.current)
-        scrubTimer.current = null
-      }
-      setIsScrubbing(false)
-      setActiveIdx(null)
+  const onPointerUp = () => {
+    if (scrubTimer.current) {
+      clearTimeout(scrubTimer.current)
+      scrubTimer.current = null
     }
+    setIsScrubbing(false)
+    setActiveIdx(null)
   }
 
   return (
@@ -543,19 +540,13 @@ const chartWidthPercent = useMemo(() => {
               <DatePicker value={customStockEnd} onChange={(v: string) => setCustomStockEnd(v)} fixedYear={Number(selectedYear)} />
             </div>
           </div>
-        )}
-
-        <div className="flex justify-center items-center gap-6 mb-2 text-[11px] font-black text-[var(--t2)] opacity-80 animate-slide-up">
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: settings.stock_chart_style === 'detailed' ? '#ef4444' : 'var(--accent)' }} /> {settings.stock_chart_style === 'detailed' ? '陽線 (漲)' : '股價線'}</div>
-          <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: settings.stock_chart_style === 'detailed' ? '#22c55e' : 'rgba(255,255,255,0.7)' }} /> {settings.stock_chart_style === 'detailed' ? '陰線 (跌)' : '買入均價'}</div>
-        </div>
-
-        <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex">
+        )        <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
+          <div className="flex h-[320px]">
             {/* 1. Plot Area (Scrollable) */}
             <div 
               {...bind()}
               ref={scrollerRef}
+              onScroll={handleScroll}
               onMouseMove={handleChartMove}
               onTouchMove={handleChartMove}
               onPointerDown={onPointerDown}
@@ -563,13 +554,11 @@ const chartWidthPercent = useMemo(() => {
               onPointerCancel={onPointerUp}
               onPointerLeave={onPointerUp}
               className={`flex-1 relative overflow-x-auto overflow-y-hidden scrollbar-hide py-4 pl-4 ${isScrubbing ? 'overflow-x-hidden' : ''}`}
-              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'pan-x' }}
+              style={{ WebkitOverflowScrolling: 'touch', touchAction: 'none' }}
             >
-              {loadingStock && <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
-              
-              <div style={{ width: chartWidthPercent, height: `${chartHeight}px`, minWidth: '100%' }}>
+              <div style={{ width: `${totalWidth}px`, height: `${chartHeight}px`, position: 'relative' }}>
                 <svg width="100%" height="100%" style={{ overflow: 'visible' }}>
-                  {/* Grid Lines (Horizontal) */}
+                  {/* Grid Lines (Horizontal) - 5 Equidistant Integer Ticks */}
                   {[0, 0.25, 0.5, 0.75, 1].map(p => {
                     const price = yDomain[0] + (yDomain[1] - yDomain[0]) * p
                     const y = yScale(price)
@@ -578,7 +567,7 @@ const chartWidthPercent = useMemo(() => {
                     )
                   })}
                   
-                  {/* Cost Line */}
+                  {/* Cost Line (White Dashed) */}
                   {selectedHolding && selectedHolding.avg_cost > 0 && (
                     <g>
                       <line 
@@ -591,23 +580,13 @@ const chartWidthPercent = useMemo(() => {
                         strokeDasharray="4 4" 
                         opacity="0.4"
                       />
-                      <text 
-                        x="4" 
-                        y={yScale(selectedHolding.avg_cost) - 4} 
-                        fill="#ffffff" 
-                        fontSize="10" 
-                        fontWeight="900" 
-                        opacity="0.4"
-                      >
-                        成本 {(selectedHolding.avg_cost ?? 0).toFixed(1)}
-                      </text>
                     </g>
                   )}
 
                   {settings.stock_chart_style === 'detailed' ? (
                     <g>
                       {enrichedStockHistory.map((d, i) => {
-                        const x = `${(i / (enrichedStockHistory.length - 1)) * 100}%`
+                        const midX = i * pointWidth + pointWidth / 2
                         const yHigh = yScale(d.high)
                         const yLow = yScale(d.low)
                         const yOpen = yScale(d.open)
@@ -618,15 +597,24 @@ const chartWidthPercent = useMemo(() => {
                         
                         return (
                           <g key={i}>
-                            <line x1={x} y1={yHigh} x2={x} y2={yLow} stroke={color} strokeWidth="1.2" />
+                            {/* Vertical Align: K-line center at midX */}
+                            <line x1={midX} y1={yHigh} x2={midX} y2={yLow} stroke={color} strokeWidth="1.5" />
                             <rect 
-                              x={i === 0 ? 0 : `calc(${x} - 6px)`} 
+                              x={midX - candleWidth / 2} 
                               y={bodyTop} 
-                              width="12" 
+                              width={candleWidth} 
                               height={bodyHeight} 
                               fill={color} 
                               rx="1"
                             />
+                            
+                            {/* Step 5: Buy Point Marker (White Box with Red Dot) */}
+                            {d.isBuy && (
+                              <g transform={`translate(${midX}, ${yScale(d.txPrice)})`}>
+                                <rect x="-6" y="-6" width="12" height="12" fill="white" rx="2" stroke="white" strokeWidth="1" />
+                                <circle cx="0" cy="0" r="3" fill="#ef4444" />
+                              </g>
+                            )}
                           </g>
                         )
                       })}
@@ -634,7 +622,7 @@ const chartWidthPercent = useMemo(() => {
                   ) : (
                     <path 
                       d={enrichedStockHistory.map((d, i) => {
-                        const x = `${(i / (enrichedStockHistory.length - 1)) * 100}%`
+                        const x = i * pointWidth + pointWidth / 2
                         return `${i === 0 ? 'M' : 'L'} ${x} ${yScale(d.close)}`
                       }).join(' ')}
                       fill="none"
@@ -647,16 +635,16 @@ const chartWidthPercent = useMemo(() => {
                   {isScrubbing && activeIdx !== null && enrichedStockHistory[activeIdx] && (
                     <g>
                       <line 
-                        x1={`${(activeIdx / (enrichedStockHistory.length - 1)) * 100}%`} 
+                        x1={activeIdx * pointWidth + pointWidth / 2} 
                         y1="0" 
-                        x2={`${(activeIdx / (enrichedStockHistory.length - 1)) * 100}%`} 
+                        x2={activeIdx * pointWidth + pointWidth / 2} 
                         y2="100%" 
                         stroke="var(--accent)" 
                         strokeWidth="1" 
                         strokeDasharray="4 2" 
                       />
                       <circle 
-                        cx={`${(activeIdx / (enrichedStockHistory.length - 1)) * 100}%`} 
+                        cx={activeIdx * pointWidth + pointWidth / 2} 
                         cy={yScale(enrichedStockHistory[activeIdx].close)} 
                         r="4" 
                         fill="var(--accent)" 
@@ -666,39 +654,50 @@ const chartWidthPercent = useMemo(() => {
                     </g>
                   )}
                 </svg>
-              </div>
-
-              {/* X-Axis Ticks (Outside SVG to scroll with it) */}
-              <div className="relative h-6 mt-2 pb-2" style={{ width: chartWidthPercent }}>
-                {customTicks.map(t => {
-                  const idx = enrichedStockHistory.findIndex(d => d.timestamp === t)
-                  if (idx === -1) return null
-                  const x = `${(idx / (enrichedStockHistory.length - 1)) * 100}%`
-                  return (
-                    <div key={t} className="absolute top-0 -translate-x-1/2 text-[10px] font-black text-[var(--t3)]" style={{ left: x }}>
-                      {formatTick(t)}
-                    </div>
-                  )
-                })}
+                
+                {/* X-Axis Dates */}
+                <div className="absolute bottom-0 left-0 right-0 h-4 flex items-center pointer-events-none">
+                  {enrichedStockHistory.map((d, i) => {
+                    if (i % 5 !== 0) return null // 每 5 天顯示一次日期以補空間
+                    return (
+                      <div key={i} className="absolute text-[9px] font-black text-white/30 whitespace-nowrap -translate-x-1/2" style={{ left: i * pointWidth + pointWidth / 2 }}>
+                        {d.date.slice(5)}
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             </div>
 
-            {/* 2. Sticky Y-Axis Area */}
-            <div className="w-12 bg-black/30 backdrop-blur-md border-l border-[var(--border-bright)] flex flex-col justify-between py-4 pr-1 z-20 sticky right-0" style={{ height: `${chartHeight}px` }}>
+            {/* 2. Sticky Y-Axis Zone (Right Aligned, Fixed) */}
+            <div className="w-14 bg-black/40 backdrop-blur-md border-l border-white/5 flex flex-col justify-between py-6 z-30 sticky right-0" style={{ height: '320px' }}>
               {[1, 0.75, 0.5, 0.25, 0].map(p => {
                 const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
                 return (
-                  <div key={p} className="text-[10px] font-black text-[var(--t3)] text-right pr-1 tabular-nums">
-                    {(val ?? 0).toFixed(1)}
+                  <div key={p} className="px-2">
+                    <div className="text-[10px] font-black text-white/60 text-right tabular-nums">
+                      {Math.round(val ?? 0).toLocaleString()}
+                    </div>
                   </div>
                 )
               })}
+              
+              {/* Sync Cost Label on Y-Axis */}
+              {selectedHolding && selectedHolding.avg_cost > 0 && (
+                <div 
+                  className="absolute right-0 bg-white text-black text-[9px] font-black px-1 rounded-l-sm transition-all shadow-lg"
+                  style={{ top: yScale(selectedHolding.avg_cost) + 16 }} // +16 for padding/center
+                >
+                  COST
+                </div>
+              )}
             </div>
           </div>
           
-          {/* Scrubbing Tooltip Overlay */}
+          {loadingStock && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
+
           {isScrubbing && activeIdx !== null && enrichedStockHistory[activeIdx] && (
-            <div className="absolute top-6 left-6 z-30 p-3 bg-black/80 backdrop-blur-md border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200">
+            <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200">
                <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
                  <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{(enrichedStockHistory[activeIdx].open ?? 0).toFixed(1)}</div>
