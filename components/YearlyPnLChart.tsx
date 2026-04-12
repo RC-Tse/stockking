@@ -353,7 +353,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           <div className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1">當前累計總損益</div>
           <div className={`text-2xl font-black font-mono ${currentActual >= 0 ? 'text-red-400' : 'text-green-400'}`}>
             {fmtMoney(currentActual)}
-        {/* Range Selector Integration - Moved outside the card */}
+          </div>
+        </div>
+      </div>
+
+      {/* Range Selector Integration - Moved outside the card */}
       <div className="px-4 flex flex-col gap-4 relative z-20">
         <div className="flex w-full gap-2 overflow-x-auto scrollbar-hide">
           {(['1M', '3M', '6M', '9M', '1Y', 'ALL'] as ChartRange[]).map(r => (
