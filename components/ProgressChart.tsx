@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useState, useMemo, useRef } from 'react'
 import { fmtMoney } from '@/types'
 
 interface DataPoint {
@@ -25,22 +25,9 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
   const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
   const [isScrubbingMode, setIsScrubbingMode] = useState(false)
-  const [containerWidth, setContainerWidth] = useState(0)
   
+  const viewBoxWidth = 1000
   const chartHeight = 320
-  const paddingS = 16 // Side padding for labels
-
-  // Update width on resize
-  useEffect(() => {
-    const updateWidth = () => {
-      if (containerRef.current) {
-        setContainerWidth(containerRef.current.clientWidth)
-      }
-    }
-    updateWidth()
-    window.addEventListener('resize', updateWidth)
-    return () => window.removeEventListener('resize', updateWidth)
-  }, [])
 
   // Calculate Y Domain
   const yAxis = useMemo(() => {
@@ -76,7 +63,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
 
   const getX = (i: number) => {
     if (data.length <= 1) return 0
-    return (i / (data.length - 1)) * containerWidth
+    return (i / (data.length - 1)) * viewBoxWidth
   }
 
   // Handlers for Sticky Scrubbing
@@ -97,11 +84,11 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
 
   const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
     if (e.type === 'touchmove' && isScrubbingMode) e.preventDefault()
-    if (!containerRef.current || data.length === 0 || containerWidth === 0) return
+    if (!containerRef.current || data.length === 0) return
     const rect = containerRef.current.getBoundingClientRect()
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const scrollX = clientX - rect.left
-    const idx = Math.round((scrollX / containerWidth) * (data.length - 1))
+    const idx = Math.round((scrollX / rect.width) * (data.length - 1))
     if (idx >= 0 && idx < data.length) {
       setActiveIdx(idx)
     }
@@ -167,7 +154,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
           className="h-[420px] w-full pt-24 pb-12 px-0 select-none touch-none"
         >
           <div 
-            style={{ width: '100%', height: `${chartHeight}px`, position: 'relative' }}
+            style={{ width: '100%', height: '100%', position: 'relative' }}
             onClick={handleChartClick}
             onTouchStart={handleTouchStart}
             onTouchMove={handleChartMove}
@@ -175,13 +162,13 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
             onMouseMove={handleChartMove}
             onMouseLeave={() => { if (!isScrubbingMode) setActiveIdx(null) }}
           >
-            <svg width="100%" height={chartHeight} className="overflow-visible">
+            <svg viewBox={`0 0 ${viewBoxWidth} ${chartHeight}`} className="w-full h-full overflow-visible">
               <g>
                 {/* Y-Axis Grid */}
                 {yAxis.ticks.map(t => (
                   <g key={t}>
                     <line x1="0" y1={yScale(t)} x2="100%" y2={yScale(t)} stroke="rgba(255,255,255,0.04)" strokeWidth="1" />
-                    <text x={containerWidth - 4} y={yScale(t) - 6} fill="white" fillOpacity="0.2" fontSize="9" fontWeight="900" textAnchor="end">
+                    <text x={viewBoxWidth - 4} y={yScale(t) - 6} fill="white" fillOpacity="0.2" fontSize="9" fontWeight="900" textAnchor="end">
                       {Math.abs(t) >= 1000 ? `${(t/1000).toFixed(0)}K` : t.toLocaleString()}
                     </text>
                   </g>
@@ -270,7 +257,7 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
                 })()}
 
                 {/* X-Axis Month markers */}
-                {containerWidth > 0 && data.map((d, i) => {
+                {data.map((d, i) => {
                   const day = d.date.slice(8)
                   if (day !== '01') return null
                   const month = parseInt(d.date.slice(5, 7))
@@ -310,7 +297,8 @@ export default function ProgressChart({ title, subtitle, data, goal, currentValu
               <div 
                 className="absolute top-0 pointer-events-none transition-all duration-75"
                 style={{ 
-                   left: `${Math.min(containerWidth - 170, Math.max(10, getX(activeIdx) - 85))}px`,
+                   left: `${Math.min(90, Math.max(10, (getX(activeIdx) / viewBoxWidth) * 100))}%`,
+                   transform: 'translateX(-50%)',
                    top: '10%'
                 }}
               >
