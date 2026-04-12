@@ -230,14 +230,21 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     </div>
   )
 
-  const yDomain = (() => {
-    const vals = filteredData.map(d => d.actual).filter(v => v !== null)
-    if (vals.length === 0) return { domain: [0, 10000], ticks: [0, 5000, 10000] }
-    const min = Math.min(0, ...vals)
-    const max = Math.max(1000, ...vals)
-    const pad = (max - min) * 0.15
-    return { domain: [min - pad, max + pad] }
-  })()
+  const yDomain = useMemo(() => {
+    const vals = filteredData.map(d => d.actual || 0)
+    const goal = settings.total_goal || 0
+    const maxVal = Math.max(...vals, goal)
+    const safeMax = isFinite(maxVal) && maxVal > 0 ? maxVal : 10000
+
+    // Positive: 5 equal segments
+    let step = Math.ceil(safeMax / 5 / 100) * 100
+    if (step <= 0) step = 2000
+    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
+
+    // Negative: 1 segment
+    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
+    return { domain: [-step, step * 5] as [number, number], ticks }
+  }, [filteredData, settings.total_goal])
 
   const currentTotal = Math.round(filteredData[filteredData.length - 1]?.actual || 0)
 
@@ -247,14 +254,15 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
         <div className="space-y-1">
           <h3 className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em]">總目標進度</h3>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-[var(--t1)] font-mono">{fmtMoney(settings.total_goal || 0)}</span>
-            <span className="text-[11px] font-bold text-accent opacity-60 uppercase tracking-widest">Total Goal</span>
+            <span className="text-3xl font-black text-[var(--t1)] font-mono">
+              {`$${(settings.total_goal||0) >= 1000000 ? ((settings.total_goal||0)/1000000).toFixed(1)+'M' : (settings.total_goal||0) >= 1000 ? Math.round((settings.total_goal||0)/1000)+'K' : (settings.total_goal||0)}`}
+            </span>
           </div>
         </div>
         <div className="text-right">
           <div className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1">當前累計總損益</div>
           <div className={`text-2xl font-black font-mono ${currentTotal >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-            {fmtMoney(currentTotal)}
+            {`$${Math.abs(currentTotal) >= 1000000 ? (currentTotal/1000000).toFixed(1)+'M' : Math.abs(currentTotal) >= 1000 ? Math.round(currentTotal/1000)+'K' : currentTotal}`}
           </div>
         </div>
       </div>
@@ -305,7 +313,7 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
         <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={filteredData} margin={{ top: 80, right: 0, left: 15, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
+              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.08)" vertical={false} horizontal={true} />
               <XAxis 
                 dataKey="date" 
                 ticks={dynamicTicks}
@@ -325,10 +333,16 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
                 width={40}
                 orientation="right"
                 domain={yDomain.domain}
+                ticks={yDomain.ticks}
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => Math.abs(v ?? 0) >= 1000 ? `${((v ?? 0)/1000).toFixed(0)}K` : fmtMoney(v ?? 0)}
+                tickLine={{ stroke: '#888', strokeWidth: 1 }}
+                tickFormatter={(v) => {
+                  const a = Math.abs(v ?? 0)
+                  if (a >= 1000000) return `${((v??0)/1000000).toFixed(1)}M`
+                  if (a >= 1000) return `${Math.round((v??0)/1000)}K`
+                  return String(v ?? 0)
+                }}
               />
               <YAxis yAxisId="leftLine" orientation="left" tick={false} axisLine={{ stroke: '#ffffff', strokeWidth: 3 }} width={2} />
 

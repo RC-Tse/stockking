@@ -226,18 +226,14 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                     const t = (curr.ideal - curr.actual) / denom
                     const intersectVal = curr.actual + t * (next.actual - curr.actual)
                     
-                    // Synthetic point (shared logic)
-                    const synthetic = {
-                        date: curr.date, // Same day visual overlap
+                    // Synthetic point: use augment() so both areaLead and areaLag are defined at the crossing point
+                    const basePoint = {
+                        date: curr.date,
                         actual: intersectVal,
                         ideal: intersectVal,
-                        actualAbove: intersectVal,
-                        actualBelow: intersectVal,
-                        rangeAbove: [intersectVal, intersectVal],
-                        rangeBelow: [intersectVal, intersectVal],
                         isIntersection: true
                     }
-                    finalData.push(synthetic)
+                    finalData.push(augment(basePoint))
                 }
             }
         }
@@ -353,48 +349,22 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     </div>
   )
 
-  const yDomain = (() => {
+  const yDomain = useMemo(() => {
     const goal = settings?.year_goal || 0
     const vals = filteredData.filter(d => d.actual !== null && !d.isIntersection).flatMap(d => [d.actual, d.ideal])
-    if (vals.length === 0) {
-      const g = goal * 1.05
-      return { domain: [0, g], ticks: [0, g] }
-    }
+    const dataMax = vals.length > 0 ? Math.max(...vals, goal) : goal
+    const safeMax = isFinite(dataMax) && dataMax > 0 ? dataMax : 10000
 
-    const dataMin = Math.min(0, ...vals)
-    const dataMax = Math.max(...vals)
-    
-    // Y-Axis Positive: Max of Actual or Last Day's Ideal, rounded up to 8 nice segments
-    const lastDayIdeal = filteredData[filteredData.length - 1]?.ideal || 0
-    const targetMax = Math.max(lastDayIdeal, dataMax)
+    // Positive: 5 equal segments. Find a clean step that covers safeMax in 5 steps.
+    let step = Math.ceil(safeMax / 5 / 100) * 100
+    if (step <= 0) step = 2000
+    // Make sure 5 steps actually cover safeMax
+    if (step * 5 < safeMax) step = Math.ceil(safeMax / 5)
 
-    let step = Math.ceil(targetMax / 80) * 10
-    if (step <= 0) step = 100
-    const finalMax = step * 8
-    
-    const positiveTicks = []
-    for (let i = 0; i <= 8; i++) {
-      positiveTicks.push(i * step)
-    }
-
-    // Y-Axis Negative: Maintain existing 500 snap logic
-    const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
-    const snapUnit = 500
-    const finalMin = dataMin < 0 ? Math.floor(bufferMin / snapUnit) * snapUnit : 0
-    
-    const negativeTicks = []
-    if (finalMin < 0) {
-      for (let v = finalMin; v < 0; v += snapUnit) {
-        negativeTicks.push(v)
-      }
-    }
-
-    const rawTicks = [...negativeTicks, ...positiveTicks]
-    if (finalMin <= 0 && finalMax >= 0 && !rawTicks.includes(0)) rawTicks.push(0)
-
-    const ticks = Array.from(new Set(rawTicks)).sort((a,b) => a-b)
-    return { domain: [finalMin, finalMax], ticks }
-  })()
+    // Negative: 1 segment = same step below 0
+    const ticks = [-step, 0, step, step * 2, step * 3, step * 4, step * 5]
+    return { domain: [-step, step * 5] as [number, number], ticks }
+  }, [filteredData, settings?.year_goal])
 
   const latestValid = [...filteredData].reverse().find(d => d.actual !== null)
   const currentActual = Math.round(latestValid?.actual || 0)
@@ -406,14 +376,15 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         <div className="space-y-1">
           <h3 className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em]">年度目標進度</h3>
           <div className="flex items-baseline gap-2">
-            <span className="text-3xl font-black text-[var(--t1)] font-mono">{fmtMoney(settings.year_goal)}</span>
-            <span className="text-[11px] font-bold text-accent opacity-60 uppercase tracking-widest">Target Goal</span>
+            <span className="text-3xl font-black text-[var(--t1)] font-mono">
+              {`$${settings.year_goal >= 1000000 ? (settings.year_goal/1000000).toFixed(1)+'M' : settings.year_goal >= 1000 ? Math.round(settings.year_goal/1000)+'K' : settings.year_goal}`}
+            </span>
           </div>
         </div>
         <div className="text-right">
           <div className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em] mb-1">當前累計總損益</div>
           <div className={`text-2xl font-black font-mono ${currentActual >= 0 ? 'text-red-400' : 'text-green-400'}`}>
-            {fmtMoney(currentActual)}
+            {`$${Math.abs(currentActual) >= 1000000 ? (currentActual/1000000).toFixed(1)+'M' : Math.abs(currentActual) >= 1000 ? Math.round(currentActual/1000)+'K' : currentActual}`}
           </div>
         </div>
       </div>
@@ -472,7 +443,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={filteredData} margin={{ top: 80, right: 0, left: 15, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
+              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.08)" vertical={false} horizontal={true} />
               
               <XAxis 
                 dataKey="date" 
@@ -485,8 +456,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
-                padding={{ left: 0, right: 20 }}
-                interval={0}
+                padding={{ left: 0, right: 0 }}
+                interval="preserveStart"
               />
               <YAxis 
                 yAxisId="right"
@@ -496,8 +467,13 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 domain={yDomain.domain}
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => Math.abs(v ?? 0) >= 1000 ? `${((v ?? 0)/1000).toFixed(0)}K` : fmtMoney(v ?? 0)}
+                tickLine={{ stroke: '#888', strokeWidth: 1 }}
+                tickFormatter={(v) => {
+                  const a = Math.abs(v ?? 0)
+                  if (a >= 1000000) return `${((v??0)/1000000).toFixed(1)}M`
+                  if (a >= 1000) return `${Math.round((v??0)/1000)}K`
+                  return String(v ?? 0)
+                }}
               />
               {/* 這個 YAxis 專門用來在畫面最左側(即資料的起始日)畫出一道又直又粗的正版白線 */}
               <YAxis 
