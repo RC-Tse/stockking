@@ -487,6 +487,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 interval={0}
               />
               <YAxis 
+                yAxisId="right"
                 width={40}
                 orientation="right"
                 ticks={yDomain.ticks}
@@ -495,6 +496,14 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => Math.abs(v ?? 0) >= 1000 ? `${((v ?? 0)/1000).toFixed(0)}K` : fmtMoney(v ?? 0)}
+              />
+              {/* 這個 YAxis 專門用來在畫面最左側(即資料的起始日)畫出一道又直又粗的正版白線 */}
+              <YAxis 
+                yAxisId="leftLine"
+                orientation="left"
+                tick={false}
+                axisLine={{ stroke: '#ffffff', strokeWidth: 3 }}
+                width={2} 
               />
 
               <Tooltip 
@@ -538,55 +547,39 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
               {/* IDEAL LINE (YELLOW DASHED) */}
               <Line 
+                yAxisId="right"
                 type="linear" 
                 dataKey="ideal" 
                 stroke="#fbbf24" 
                 strokeWidth={2} 
                 strokeDasharray="5 5"
                 dot={false} 
-                isAnimationActive={false}
-                opacity={0.8}
-              />
-
-              {/* RED AREA: Ahead of target (actual >= ideal) -> Fill 0 to Actual */}
-              <Area 
-                type="linear" 
-                dataKey="fillRed" 
-                fill="#ef4444"
-                fillOpacity={0.2}
-                stroke="none"
-                baseValue={0}
                 isAnimationActive={true}
-                connectNulls
-                activeDot={false}
               />
-
-              {/* GREEN AREA: Combined Fill from min(actual,0) to Ideal */}
+              
+              {/* DIFFERENTIAL AREAS */}
               <Area 
+                yAxisId="right"
                 type="linear" 
-                dataKey="fillGreenPos" 
-                stroke="none"
-                fill="#22c55e"
-                fillOpacity={0.2}
-                baseValue={0}
+                dataKey="rangeAbove" 
+                fill="#ef4444" 
+                fillOpacity={0.25} 
+                stroke="none" 
                 isAnimationActive={true}
-                connectNulls
-                activeDot={false}
               />
               <Area 
+                yAxisId="right"
                 type="linear" 
-                dataKey="fillGreenNeg" 
-                stroke="none"
-                fill="#22c55e"
-                fillOpacity={0.2}
-                baseValue={0}
+                dataKey="rangeBelow" 
+                fill="#22c55e" 
+                fillOpacity={0.25} 
+                stroke="none" 
                 isAnimationActive={true}
-                connectNulls
-                activeDot={false}
               />
 
-              {/* ACTUAL LINE - restored and styled with differential coloring and continuity fixes */}
+              {/* ACTUAL LINE (RED/GREEN DYNAMIC) */}
               <Line 
+                yAxisId="right"
                 type="linear" 
                 dataKey="actualLineAbove" 
                 stroke="#ef4444" 
@@ -597,6 +590,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 strokeLinecap="round"
               />
               <Line 
+                yAxisId="right"
                 type="linear" 
                 dataKey="actualLineBelow" 
                 stroke="#22c55e" 
@@ -607,14 +601,14 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 strokeLinecap="round"
               />
 
-              <ReferenceLine y={0} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
+              <ReferenceLine yAxisId="right" y={0} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
               
               {filteredData.length > 0 && (
-                <ReferenceLine x={filteredData[0].date} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
+                <ReferenceLine yAxisId="right" x={filteredData[0].date} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
               )}
 
               {chartYear === new Date().getFullYear() && filteredData.some(d => d.date === todayStr) && (
-                <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
+                <ReferenceLine yAxisId="right" x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
               )}
             </ComposedChart>
           </ResponsiveContainer>

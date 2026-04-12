@@ -558,7 +558,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         )}
 
         <div className="relative group bg-[var(--bg-card)] border-[0.5px] border-[var(--border-bright)] rounded-2xl shadow-2xl overflow-hidden">
-          <div className="flex h-[352px]">
+          <div className="flex h-[320px]">
             {/* 1. Plot Area (Scrollable) */}
             <div 
               {...bind()}
@@ -722,11 +722,11 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
             {/* 2. Sticky Y-Axis Zone (Right Aligned, Fixed) */}
             <div className="w-14 bg-black/40 backdrop-blur-md border-l border-white/5 relative z-30 sticky right-0 h-full">
-              <div className="relative w-full" style={{ height: '320px', marginTop: '16px' }}>
+              <div className="relative w-full" style={{ height: `${chartHeight}px`, marginTop: '16px' }}>
                 {[0, 1, 2, 3, 4].map(i => {
                   const p = 1 - (i * 0.25)
                   const val = yDomain[0] + (yDomain[1] - yDomain[0]) * p
-                  const y = 320 * (i * 0.25)
+                  const y = chartHeight * (i * 0.25)
                   return (
                     <div 
                       key={p} 
