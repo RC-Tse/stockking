@@ -24,7 +24,7 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
   const [range, setRange] = useState<TotalRange>('1Y')
   const [showCustom, setShowCustom] = useState(false)
   const [customStart, setCustomStart] = useState(() => {
-    const d = new Date(); d.setYear(d.getFullYear() - 1); return d.toISOString().split('T')[0]
+    const d = new Date(); d.setFullYear(d.getFullYear() - 1); return d.toISOString().split('T')[0]
   })
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
 
