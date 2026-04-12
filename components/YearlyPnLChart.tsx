@@ -27,6 +27,45 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   })
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
 
+  const [isScrubbingMode, setIsScrubbingMode] = useState(false)
+  const isScrubModeRef = useRef(false)
+  const [scrubState, setScrubState] = useState<{ x: number, y: number, payload: any } | null>(null)
+  const lastHoverRef = useRef<{ x: number, y: number, payload: any } | null>(null)
+  const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
+
+  const handleTouchStart = () => {
+    if (isScrubModeRef.current) return
+    if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current)
+    scrubTimerRef.current = setTimeout(() => {
+      setIsScrubbingMode(true)
+      isScrubModeRef.current = true
+      if (lastHoverRef.current) setScrubState(lastHoverRef.current)
+      if (window.navigator?.vibrate) window.navigator.vibrate(10)
+    }, 1000)
+  }
+
+  const handleTouchMove = () => {
+    if (!isScrubModeRef.current && scrubTimerRef.current) {
+      clearTimeout(scrubTimerRef.current)
+      scrubTimerRef.current = null
+    }
+  }
+
+  const handleTouchEnd = () => {
+    if (scrubTimerRef.current) {
+      clearTimeout(scrubTimerRef.current)
+      scrubTimerRef.current = null
+    }
+  }
+
+  const handleChartClick = () => {
+    if (isScrubModeRef.current) {
+      setIsScrubbingMode(false)
+      isScrubModeRef.current = false
+      setScrubState(null)
+    }
+  }
+
   const chartYear = year || new Date().getFullYear()
   const yearStartStr = `${chartYear}-01-01`
   const todayStr = new Date().toISOString().split('T')[0]
@@ -361,37 +400,47 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     const dataMin = Math.min(0, ...vals)
     const dataMax = Math.max(...vals)
     
-    // Y-axis max: max(actual, ideal) + 5% buffer as requested
-    const bufferMax = dataMax * 1.05
+    // Y-Axis Positive: Max of Actual or Last Day's Ideal, rounded up to 8 nice segments
+    const lastDayIdeal = filteredData[filteredData.length - 1]?.ideal || 0
+    const targetMax = Math.max(lastDayIdeal, dataMax)
+
+    let step = Math.ceil(targetMax / 80) * 10
+    if (step <= 0) step = 100
+    const finalMax = step * 8
+    
+    const positiveTicks = []
+    for (let i = 0; i <= 8; i++) {
+      positiveTicks.push(i * step)
+    }
+
+    // Y-Axis Negative: Maintain existing 500 snap logic
     const bufferMin = dataMin < 0 ? dataMin * 1.05 : 0
-    
-    // Dynamic Snapping logic
-    const rangeVal = bufferMax - bufferMin
-    const snapUnit = rangeVal > 10000 ? 1000 : 500
-    
-    const finalMax = Math.ceil(bufferMax / snapUnit) * snapUnit
+    const snapUnit = 500
     const finalMin = dataMin < 0 ? Math.floor(bufferMin / snapUnit) * snapUnit : 0
     
-    // Explicit ticks including 0
-    const ticks = []
-    for (let v = finalMin; v <= finalMax; v += snapUnit) {
-      ticks.push(v)
-    }
-    if (finalMin <= 0 && finalMax >= 0 && !ticks.includes(0)) {
-      ticks.push(0)
+    const negativeTicks = []
+    if (finalMin < 0) {
+      for (let v = finalMin; v < 0; v += snapUnit) {
+        negativeTicks.push(v)
+      }
     }
 
-    return { domain: [finalMin, finalMax], ticks: Array.from(new Set(ticks)).sort((a,b) => a-b) }
+    const rawTicks = [...negativeTicks, ...positiveTicks]
+    if (finalMin <= 0 && finalMax >= 0 && !rawTicks.includes(0)) rawTicks.push(0)
+
+    const ticks = Array.from(new Set(rawTicks)).sort((a,b) => a-b)
+    return { domain: [finalMin, finalMax], ticks }
   })()
 
-  const currentActual = Math.round(filteredData.findLast(d => d.actual !== null)?.actual || 0)
+  const latestValid = [...filteredData].reverse().find(d => d.actual !== null)
+  const currentActual = Math.round(latestValid?.actual || 0)
 
   return (
     <div className="space-y-4 animate-slide-up w-full">
       {/* Premium Header: Goal & Progress */}
       <div className="flex items-end justify-between px-4">
         <div className="space-y-1">
-          <h3 className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em]">年度獲利目標進度</h3>
+          <h3 className="text-[11px] font-black text-[var(--t2)] opacity-40 uppercase tracking-[0.2em]">年度目標進度</h3>
           <div className="flex items-baseline gap-2">
             <span className="text-3xl font-black text-[var(--t1)] font-mono">{fmtMoney(settings.year_goal)}</span>
             <span className="text-[11px] font-bold text-accent opacity-60 uppercase tracking-widest">Target Goal</span>
@@ -456,9 +505,34 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           </div>
         </div>
 
-        <div className="h-[460px] w-full">
+        <div 
+          className="h-[460px] w-full relative cursor-crosshair"
+          onTouchStartCapture={handleTouchStart}
+          onTouchMoveCapture={handleTouchMove}
+          onTouchEndCapture={handleTouchEnd}
+          onMouseDownCapture={handleTouchStart}
+          onMouseUpCapture={handleTouchEnd}
+          onClickCapture={handleChartClick}
+          onMouseLeave={handleTouchEnd}
+        >
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={filteredData} margin={{ top: 80, right: 15, left: 10, bottom: 20 }}>
+            <ComposedChart 
+              data={filteredData} 
+              margin={{ top: 80, right: 0, left: 10, bottom: 20 }}
+              onMouseMove={(state: any) => {
+                if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
+                  const payloadData = {
+                    x: state.activeCoordinate.x,
+                    y: state.activeCoordinate.y,
+                    payload: state.activePayload[0].payload
+                  }
+                  lastHoverRef.current = payloadData
+                  if (isScrubModeRef.current) {
+                    setScrubState(payloadData)
+                  }
+                }
+              }}
+            >
               <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
               
               <XAxis 
@@ -476,7 +550,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 interval={0}
               />
               <YAxis 
-                width={60}
+                width={40}
                 orientation="right"
                 ticks={yDomain.ticks}
                 domain={yDomain.domain}
@@ -484,42 +558,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => Math.abs(v ?? 0) >= 1000 ? `${((v ?? 0)/1000).toFixed(0)}K` : fmtMoney(v ?? 0)}
-              />
-
-              <Tooltip 
-                content={({ active, payload }) => {
-                  if (active && payload && payload.length) {
-                    const data = payload[0].payload
-                    if (!data || data.isFuture || data.isIntersection) return null
-                    const diff = (data.actual || 0) - (data.ideal || 0)
-                    return (
-                      <div className="glass p-5 border-white/10 shadow-2xl backdrop-blur-3xl rounded-3xl">
-                        <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-widest">{data.date}</div>
-                        <div className="space-y-3">
-                          <div className="flex justify-between gap-12">
-                            <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
-                            <span className={`text-[14px] font-mono font-black ${(data.actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                              {fmtMoney(data.actual || 0)}
-                            </span>
-                          </div>
-                          <div className="flex justify-between gap-12">
-                            <span className="text-[12px] text-[var(--t2)] font-black">理想目標</span>
-                            <span className="text-[14px] font-mono font-black text-[#fbbf24]">
-                              {fmtMoney(data.ideal || 0)}
-                            </span>
-                          </div>
-                          <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
-                            <span className="text-[11px] text-[var(--t2)] font-black">跟隨差距</span>
-                            <span className={`text-[14px] font-mono font-black ${diff >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                              {fmtMoney(diff)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    )
-                  }
-                  return null
-                }}
               />
 
               {/* IDEAL LINE (YELLOW DASHED) */}
@@ -544,6 +582,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 baseValue={0}
                 isAnimationActive={true}
                 connectNulls
+                activeDot={false}
               />
 
               {/* GREEN AREA: Combined Fill from min(actual,0) to Ideal */}
@@ -556,6 +595,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 baseValue={0}
                 isAnimationActive={true}
                 connectNulls
+                activeDot={false}
               />
               <Area 
                 type="linear" 
@@ -566,6 +606,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 baseValue={0}
                 isAnimationActive={true}
                 connectNulls
+                activeDot={false}
               />
 
               {/* ACTUAL LINE - restored and styled with differential coloring and continuity fixes */}
@@ -590,12 +631,43 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 strokeLinecap="round"
               />
 
-              <ReferenceLine y={0} stroke="#fff" strokeWidth={2} strokeOpacity={0.8} />
+              <ReferenceLine y={0} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
+              
+              {isScrubbingMode && scrubState && !scrubState.payload.isFuture && (
+                <ReferenceLine x={scrubState.payload.date} stroke="var(--accent)" strokeWidth={1} strokeDasharray="4 4" />
+              )}
+
               {chartYear === new Date().getFullYear() && filteredData.some(d => d.date === todayStr) && (
                 <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
               )}
             </ComposedChart>
           </ResponsiveContainer>
+
+          {isScrubbingMode && scrubState && !scrubState.payload.isFuture && (
+            <div className={`absolute top-4 z-40 p-5 bg-black/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl pointer-events-none animate-in fade-in duration-200 min-w-[220px] ${scrubState.x > 180 ? 'left-4' : 'right-4'}`}>
+              <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-widest">{scrubState.payload.date}</div>
+              <div className="space-y-3">
+                <div className="flex justify-between gap-12">
+                  <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
+                  <span className={`text-[14px] font-mono font-black ${(scrubState.payload.actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                    {fmtMoney(scrubState.payload.actual || 0)}
+                  </span>
+                </div>
+                <div className="flex justify-between gap-12">
+                  <span className="text-[12px] text-[var(--t2)] font-black">理想目標</span>
+                  <span className="text-[14px] font-mono font-black text-[#fbbf24]">
+                    {fmtMoney(scrubState.payload.ideal || 0)}
+                  </span>
+                </div>
+                <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
+                  <span className="text-[11px] text-[var(--t2)] font-black">跟隨差距</span>
+                  <span className={`text-[14px] font-mono font-black ${(scrubState.payload.actual || 0) - (scrubState.payload.ideal || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                    {fmtMoney((scrubState.payload.actual || 0) - (scrubState.payload.ideal || 0))}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
