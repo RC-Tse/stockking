@@ -248,7 +248,7 @@ function StatItem({ label, value, sub }: any) { return <div className="flex flex
 function DetailItem({ label, value }: any) { return <div><div className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</div><div className="text-[15px] font-bold text-[var(--t1)] font-mono">{value}</div></div> }
 
 function EditForm({ tx, onCancel, onSaved }: any) {
-  const { stats } = usePortfolio()
+  const { stats, settings } = usePortfolio()
   const [date, setDate] = useState(tx.trade_date), [shares, setShares] = useState<number|''>(tx.shares), [price, setPrice] = useState<number|''>(tx.price), [note, setNote] = useState(tx.note || '')
   const [tradeType, setTradeType] = useState(tx.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
   const [lots, setLots] = useState<number | ''>(Math.floor(tx.shares / 1000) || 1)
