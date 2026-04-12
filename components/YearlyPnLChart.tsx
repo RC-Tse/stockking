@@ -7,7 +7,7 @@ import {
 } from 'recharts'
 import { Calendar as CalendarIcon } from 'lucide-react'
 import DatePicker from './DatePicker'
-import { Transaction, UserSettings, fmtMoney, calculateTxParts } from '@/types'
+import { type ChartRange, Transaction, UserSettings, fmtMoney, calculateTxParts } from '@/types'
 import ErrorBoundary from './ErrorBoundary'
 
 interface Props {
@@ -20,7 +20,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const [historyData, setHistoryData] = useState<Record<string, any[]>>({})
   const [loading, setLoading] = useState(true)
   
-  const [range, setRange] = useState<ChartRange>((settings.chart_default_range as any) || '1M')
+  const [range, setRange] = useState<ChartRange>(settings.chart_default_range || '1M')
   const [showCustom, setShowCustom] = useState(false)
   const [customStart, setCustomStart] = useState(() => {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
@@ -251,7 +251,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     const baseline = todayStr < `${chartYear}-12-31` ? todayStr : `${chartYear}-12-31`
     const dEnd = new Date(baseline)
 
-    if (range === 'ALL' || range === '1Y') {
+    if (range === '1Y') {
       startDate = `${chartYear}-01-01`
       endDate = `${chartYear}-12-31`
     } else if (range === '9M') {
