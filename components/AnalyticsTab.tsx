@@ -433,14 +433,14 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     if (enrichedStockHistory.length > 0 && scrollerRef.current) {
       const chartWidth = scrollerRef.current.clientWidth - 32 // 扣除 padding
       
-      // 根據範圍設定目標顯示的天數
+      // 根據範圍設定目標顯示的天數 (調高以預設顯示更密集的 K 線)
       const targetDaysMap: Record<string, number> = {
-        '1M': 22,
-        '3M': 66,
-        '6M': 132,
-        '9M': 200,
-        '1Y': 250,
-        'CUSTOM': 30
+        '1M': 60,
+        '3M': 120,
+        '6M': 180,
+        '9M': 250,
+        '1Y': 300,
+        'CUSTOM': 120
       }
       const targetDays = targetDaysMap[stockRange] || 30
       
