@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useEffect, useRef } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { 
   ComposedChart, Area, Line, XAxis, YAxis, CartesianGrid, 
   Tooltip, ResponsiveContainer, ReferenceLine
@@ -26,45 +26,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     const d = new Date(); d.setMonth(d.getMonth() - 1); return d.toISOString().split('T')[0]
   })
   const [customEnd, setCustomEnd] = useState(() => new Date().toISOString().split('T')[0])
-
-  const [isScrubbingMode, setIsScrubbingMode] = useState(false)
-  const isScrubModeRef = useRef(false)
-  const [scrubState, setScrubState] = useState<{ x: number, y: number, payload: any } | null>(null)
-  const lastHoverRef = useRef<{ x: number, y: number, payload: any } | null>(null)
-  const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
-
-  const handleTouchStart = () => {
-    if (isScrubModeRef.current) return
-    if (scrubTimerRef.current) clearTimeout(scrubTimerRef.current)
-    scrubTimerRef.current = setTimeout(() => {
-      setIsScrubbingMode(true)
-      isScrubModeRef.current = true
-      if (lastHoverRef.current) setScrubState(lastHoverRef.current)
-      if (window.navigator?.vibrate) window.navigator.vibrate(10)
-    }, 1000)
-  }
-
-  const handleTouchMove = () => {
-    if (!isScrubModeRef.current && scrubTimerRef.current) {
-      clearTimeout(scrubTimerRef.current)
-      scrubTimerRef.current = null
-    }
-  }
-
-  const handleTouchEnd = () => {
-    if (scrubTimerRef.current) {
-      clearTimeout(scrubTimerRef.current)
-      scrubTimerRef.current = null
-    }
-  }
-
-  const handleChartClick = () => {
-    if (isScrubModeRef.current) {
-      setIsScrubbingMode(false)
-      isScrubModeRef.current = false
-      setScrubState(null)
-    }
-  }
 
   const chartYear = year || new Date().getFullYear()
   const yearStartStr = `${chartYear}-01-01`
@@ -505,34 +466,9 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
           </div>
         </div>
 
-        <div 
-          className="h-[460px] w-full relative cursor-crosshair"
-          onTouchStartCapture={handleTouchStart}
-          onTouchMoveCapture={handleTouchMove}
-          onTouchEndCapture={handleTouchEnd}
-          onMouseDownCapture={handleTouchStart}
-          onMouseUpCapture={handleTouchEnd}
-          onClickCapture={handleChartClick}
-          onMouseLeave={handleTouchEnd}
-        >
+        <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart 
-              data={filteredData} 
-              margin={{ top: 80, right: 0, left: 10, bottom: 20 }}
-              onMouseMove={(state: any) => {
-                if (state && state.activePayload && state.activePayload.length > 0 && state.activeCoordinate) {
-                  const payloadData = {
-                    x: state.activeCoordinate.x,
-                    y: state.activeCoordinate.y,
-                    payload: state.activePayload[0].payload
-                  }
-                  lastHoverRef.current = payloadData
-                  if (isScrubModeRef.current) {
-                    setScrubState(payloadData)
-                  }
-                }
-              }}
-            >
+            <ComposedChart data={filteredData} margin={{ top: 80, right: 0, left: 10, bottom: 20 }}>
               <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
               
               <XAxis 
@@ -558,6 +494,45 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(v) => Math.abs(v ?? 0) >= 1000 ? `${((v ?? 0)/1000).toFixed(0)}K` : fmtMoney(v ?? 0)}
+              />
+
+              <Tooltip 
+                content={({ active, payload }) => {
+                  if (active && payload && payload.length) {
+                    const data = payload[0].payload
+                    if (!data || data.isFuture || data.isIntersection) return null
+                    const diff = (data.actual || 0) - (data.ideal || 0)
+                    return (
+                      <div className="glass p-5 border-white/10 shadow-2xl backdrop-blur-3xl rounded-3xl z-50 overflow-hidden relative">
+                        <div className="absolute inset-0 bg-black/60 rounded-3xl" />
+                        <div className="relative z-10">
+                          <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-widest">{data.date}</div>
+                          <div className="space-y-3">
+                            <div className="flex justify-between gap-12">
+                              <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
+                              <span className={`text-[14px] font-mono font-black ${(data.actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                                {fmtMoney(data.actual || 0)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between gap-12">
+                              <span className="text-[12px] text-[var(--t2)] font-black">理想目標</span>
+                              <span className="text-[14px] font-mono font-black text-[#fbbf24]">
+                                {fmtMoney(data.ideal || 0)}
+                              </span>
+                            </div>
+                            <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
+                              <span className="text-[11px] text-[var(--t2)] font-black">跟隨差距</span>
+                              <span className={`text-[14px] font-mono font-black ${diff >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                                {fmtMoney(diff)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  }
+                  return null
+                }}
               />
 
               {/* IDEAL LINE (YELLOW DASHED) */}
@@ -633,41 +608,11 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
               <ReferenceLine y={0} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
               
-              {isScrubbingMode && scrubState && !scrubState.payload.isFuture && (
-                <ReferenceLine x={scrubState.payload.date} stroke="var(--accent)" strokeWidth={1} strokeDasharray="4 4" />
-              )}
-
               {chartYear === new Date().getFullYear() && filteredData.some(d => d.date === todayStr) && (
                 <ReferenceLine x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
               )}
             </ComposedChart>
           </ResponsiveContainer>
-
-          {isScrubbingMode && scrubState && !scrubState.payload.isFuture && (
-            <div className={`absolute top-4 z-40 p-5 bg-black/80 backdrop-blur-xl border border-white/10 shadow-2xl rounded-3xl pointer-events-none animate-in fade-in duration-200 min-w-[220px] ${scrubState.x > 180 ? 'left-4' : 'right-4'}`}>
-              <div className="text-[10px] text-[var(--t3)] font-black mb-4 uppercase tracking-widest">{scrubState.payload.date}</div>
-              <div className="space-y-3">
-                <div className="flex justify-between gap-12">
-                  <span className="text-[12px] text-[var(--t2)] font-black">累計總損益</span>
-                  <span className={`text-[14px] font-mono font-black ${(scrubState.payload.actual || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                    {fmtMoney(scrubState.payload.actual || 0)}
-                  </span>
-                </div>
-                <div className="flex justify-between gap-12">
-                  <span className="text-[12px] text-[var(--t2)] font-black">理想目標</span>
-                  <span className="text-[14px] font-mono font-black text-[#fbbf24]">
-                    {fmtMoney(scrubState.payload.ideal || 0)}
-                  </span>
-                </div>
-                <div className="pt-3 border-t border-white/5 flex justify-between gap-12">
-                  <span className="text-[11px] text-[var(--t2)] font-black">跟隨差距</span>
-                  <span className={`text-[14px] font-mono font-black ${(scrubState.payload.actual || 0) - (scrubState.payload.ideal || 0) >= 0 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-                    {fmtMoney((scrubState.payload.actual || 0) - (scrubState.payload.ideal || 0))}
-                  </span>
-                </div>
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </div>
