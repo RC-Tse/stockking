@@ -469,7 +469,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
 
         <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={filteredData} margin={{ top: 80, right: 0, left: 10, bottom: 20 }}>
+            <ComposedChart data={filteredData} margin={{ top: 80, right: 0, left: 15, bottom: 20 }}>
               <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.05)" vertical={true} horizontal={true} />
               
               <XAxis 
@@ -483,7 +483,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 tick={{fontSize: 10, fontWeight: 900, fill: '#888'}}
                 axisLine={false}
                 tickLine={false}
-                padding={{ left: 20, right: 20 }}
+                padding={{ left: 0, right: 20 }}
                 interval={0}
               />
               <YAxis 
@@ -602,10 +602,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               />
 
               <ReferenceLine yAxisId="right" y={0} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
-              
-              {filteredData.length > 0 && (
-                <ReferenceLine yAxisId="right" x={filteredData[0].date} stroke="#ffffff" strokeWidth={2} strokeOpacity={1} />
-              )}
 
               {chartYear === new Date().getFullYear() && filteredData.some(d => d.date === todayStr) && (
                 <ReferenceLine yAxisId="right" x={todayStr} stroke="rgba(255,255,255,0.15)" strokeDasharray="5 5" />
