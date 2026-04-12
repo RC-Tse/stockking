@@ -41,7 +41,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   // ── Stock Chart States ──
   const [selSym, setSelSym] = useState(holdings[0]?.symbol || '')
-  const { settings } = usePortfolio()
   const [stockRange, setStockRange] = useState<StockRange>(settings.stock_chart_default_range || '1M')
   const [showCustomStock, setShowCustomStock] = useState(false)
   const [customStockStart, setCustomStockStart] = useState(() => {
