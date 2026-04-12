@@ -16,7 +16,7 @@ interface Props {
 }
 
 export default function AnalyticsTab({ onRefresh }: Props) {
-  const { stats, quotes, settings } = usePortfolio()
+  const { stats, quotes, settings, updateSettings } = usePortfolio()
   const { holdings } = stats
   
   const currentYear = new Date().getFullYear().toString()
@@ -79,29 +79,16 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     
     const txs = [...transactions].filter(t => t.symbol === selSym).sort((a, b) => a.trade_date.localeCompare(b.trade_date))
     
-    let txIdx = 0
-    let inventory: { shares: number, cost: number }[] = []
     let currentAvgCost: number | null = null
+    let inventory: { shares: number, cost: number }[] = []
 
-    // 處理圖表開始日期之前的交易
-    while (txIdx < txs.length && txs[txIdx].trade_date < firstDate) {
-      const tx = txs[txIdx]
-      if (tx.action !== 'SELL') {
-        inventory.push({ shares: tx.shares, cost: tx.amount + tx.fee })
-      } else {
-        let rem = tx.shares
-        while (rem > 0 && inventory.length > 0) {
-          if (inventory[0].shares <= rem) { rem -= inventory[0].shares; inventory.shift() }
-          else { inventory[0].shares -= rem; rem = 0 }
-        }
-      }
-      txIdx++
-    }
-
-    const processed = sortedRaw.map((h) => {
+    const processed = sortedRaw.map((h, i) => {
       let isBuy = false
       let txPrice = 0
       let txShares = 0
+
+      // 先記錄當天開始時的持倉成本，作為顯示參考
+      const costAtStartOfDay = currentAvgCost
 
       while (txIdx < txs.length && txs[txIdx].trade_date <= h.date) {
         const tx = txs[txIdx]
@@ -122,8 +109,13 @@ export default function AnalyticsTab({ onRefresh }: Props) {
       
       const totalShares = inventory.reduce((s, lot) => s + lot.shares, 0)
       const totalCost = inventory.reduce((s, lot) => s + lot.cost, 0)
-      currentAvgCost = totalShares > 0 ? totalCost / totalShares : null
+      const newAvgCost = totalShares > 0 ? totalCost / totalShares : null
       
+      // 邏輯優化：均價線繪製用的 avgCost。
+      // 若持股為 0，但當天有交易紀錄（例如賣空日 12/18），需保留前一刻成本以便線條畫到 12/18 結束。
+      const displayAvgCost = (totalShares > 0) ? newAvgCost : (costAtStartOfDay || null);
+      currentAvgCost = newAvgCost // 更新為下一日起始狀態
+
       const open = h.open ?? h.price
       const close = h.price
       const high = h.high ?? h.price
@@ -135,7 +127,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         isBuy,
         txPrice,
         txShares,
-        avgCost: currentAvgCost,
+        avgCost: displayAvgCost,
         isUp: close >= open,
         candleBody: [Math.min(open, close), Math.max(open, close)],
         candleWick: [low, high],
@@ -266,20 +258,37 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const StockTooltip = ({ active, payload }: any) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload
+      const open = data.open ?? 0
+      const close = data.price ?? 0
+      
+      const getValColor = (val: number, ref: number, relation: 'high' | 'low' | 'close' | 'cost') => {
+        if (relation === 'high') return val > ref ? 'text-[#ef4444]' : 'text-white'
+        if (relation === 'low') return val < ref ? 'text-[#22c55e]' : 'text-white'
+        if (relation === 'close') {
+          if (val > ref) return 'text-[#ef4444]'
+          if (val < ref) return 'text-[#22c55e]'
+          return 'text-white'
+        }
+        if (relation === 'cost') {
+          if (val > close) return 'text-[#ef4444]'
+          if (val < close) return 'text-[#22c55e]'
+          return 'text-white'
+        }
+        return 'text-white'
+      }
+
       return (
         <div className="glass p-3 border-white/10 text-sm font-bold shadow-2xl z-50">
           <div className="text-[11px] text-[var(--t3)] mb-2 uppercase tracking-widest">{data.date}</div>
           <div className="flex justify-between gap-4 mb-1">
             <span className="text-[12px] text-[var(--t2)] flex-1">收盤價</span>
-            <span className="font-mono text-accent">{(data.price ?? 0).toFixed(2)}</span>
+            <span className={`font-mono ${getValColor(close, open, 'close')}`}>{close.toFixed(2)}</span>
           </div>
           {data.avgCost !== null && (
-            <>
-              <div className="flex justify-between gap-4 mb-1">
-                <span className="text-[12px] text-[var(--t2)] flex-1">對應均價</span>
-                <span className="font-mono text-[rgba(255,255,255,0.8)]">{(data.avgCost ?? 0).toFixed(2)}</span>
-              </div>
-            </>
+            <div className="flex justify-between gap-4 mb-1">
+              <span className="text-[12px] text-[var(--t2)] flex-1">對應均價</span>
+              <span className={`font-mono ${getValColor(data.avgCost, close, 'cost')}`}>{(data.avgCost ?? 0).toFixed(2)}</span>
+            </div>
           )}
           {data.isBuy && (
             <div className="mt-2 pt-2 border-t border-[#e05050]/20">
@@ -401,9 +410,26 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     return chartHeight - ((price - min) / (max - min)) * chartHeight
   }
 
-  // 初始視野校正：右對齊
+  // 初始視野校正：右對齊 + 根據範圍自動縮放
   useEffect(() => {
     if (enrichedStockHistory.length > 0 && scrollerRef.current) {
+      const chartWidth = scrollerRef.current.clientWidth - 32 // 扣除 padding
+      
+      // 根據範圍設定目標顯示的天數
+      const targetDaysMap: Record<string, number> = {
+        '1M': 22,
+        '3M': 66,
+        '6M': 132,
+        '9M': 200,
+        '1Y': 250,
+        'CUSTOM': 30
+      }
+      const targetDays = targetDaysMap[stockRange] || 30
+      
+      // 計算適合的 pointWidth
+      const idealPointWidth = Math.max(4, Math.min(60, chartWidth / targetDays))
+      setPointWidth(idealPointWidth)
+
       setTimeout(() => {
         if (scrollerRef.current) {
           scrollerRef.current.scrollLeft = scrollerRef.current.scrollWidth
@@ -411,7 +437,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         }
       }, 100)
     }
-  }, [enrichedStockHistory.length, selSym])
+  }, [enrichedStockHistory.length, selSym, stockRange])
 
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
   const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
@@ -513,7 +539,12 @@ export default function AnalyticsTab({ onRefresh }: Props) {
             <div className="flex w-full gap-1.5 scrollbar-hide">
               {(['1M', '3M', '6M', '9M', '1Y'] as StockRange[]).map(r => (
                 <button 
-                  key={r} onClick={() => { setStockRange(r); setShowCustomStock(false); }}
+                  key={r} onClick={() => { 
+                    setStockRange(r); 
+                    setShowCustomStock(false);
+                    // 儲存預設範圍至資料庫
+                    updateSettings({ stock_chart_default_range: r });
+                  }}
                   className={`flex-1 py-2.5 rounded-xl text-[11px] font-black transition-all border ${stockRange === r && !showCustomStock ? 'bg-accent text-bg-base border-accent shadow-lg shadow-accent/20' : 'bg-[var(--bg-card)] text-[var(--t2)] opacity-60 border-[var(--border-bright)] whitespace-nowrap'}`}
                 >
                   {r}
@@ -569,21 +600,34 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                     )
                   })}
                   
-                  {/* Cost Line (White Dashed) */}
-                  {selectedHolding && selectedHolding.avg_cost > 0 && (
-                    <g>
-                      <line 
-                        x1="0" 
-                        y1={yScale(selectedHolding.avg_cost)} 
-                        x2="100%" 
-                        y2={yScale(selectedHolding.avg_cost)} 
-                        stroke="#ffffff" 
-                        strokeWidth="1.5" 
-                        strokeDasharray="4 4" 
-                        opacity="0.4"
-                      />
-                    </g>
-                  )}
+                  {/* Step Cost Line (Piecewise Horizontal Path) */}
+                  <path 
+                    d={(() => {
+                      let pathStr = ''
+                      let isDrawing = false
+                      enrichedStockHistory.forEach((d, i) => {
+                        const x = i * pointWidth + pointWidth / 2
+                        const nextX = (i + 1) * pointWidth + pointWidth / 2
+                        if (d.avgCost !== null) {
+                          const y = yScale(d.avgCost)
+                          if (!isDrawing) {
+                            pathStr += `M ${x} ${y} L ${nextX} ${y} `
+                            isDrawing = true
+                          } else {
+                            pathStr += `L ${x} ${y} L ${nextX} ${y} `
+                          }
+                        } else {
+                          isDrawing = false
+                        }
+                      })
+                      return pathStr
+                    })()}
+                    fill="none"
+                    stroke="#ffffff"
+                    strokeWidth="1.5"
+                    strokeDasharray="4 4"
+                    opacity="0.4"
+                  />
 
                   {settings.stock_chart_style === 'detailed' ? (
                     <g>
@@ -609,14 +653,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                               fill={color} 
                               rx="1"
                             />
-                            
-                            {/* Step 5: Buy Point Marker (White Box with Red Dot) */}
-                            {d.isBuy && (
-                              <g transform={`translate(${midX}, ${yScale(d.txPrice)})`}>
-                                <rect x="-6" y="-6" width="12" height="12" fill="white" rx="2" stroke="white" strokeWidth="1" />
-                                <circle cx="0" cy="0" r="3" fill="#ef4444" />
-                              </g>
-                            )}
                           </g>
                         )
                       })}
@@ -660,9 +696,15 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                 {/* X-Axis Dates */}
                 <div className="absolute bottom-0 left-0 right-0 h-4 flex items-center pointer-events-none">
                   {enrichedStockHistory.map((d, i) => {
-                    if (i % 5 !== 0) return null // 每 5 天顯示一次日期以補空間
+                    const showByInterval = i % 5 === 0
+                    if (!showByInterval && !d.isBuy) return null 
+                    
                     return (
-                      <div key={i} className="absolute text-[9px] font-black text-white/30 whitespace-nowrap -translate-x-1/2" style={{ left: i * pointWidth + pointWidth / 2 }}>
+                      <div 
+                        key={i} 
+                        className={`absolute text-[9px] font-black whitespace-nowrap -translate-x-1/2 transition-all px-1.5 py-0.5 rounded-sm ${d.isBuy ? 'bg-[#facc15] text-black z-20 shadow-md transform scale-110' : 'text-white/30'}`} 
+                        style={{ left: i * pointWidth + pointWidth / 2, bottom: d.isBuy ? '2px' : '0px' }}
+                      >
                         {d.date.slice(5)}
                       </div>
                     )
@@ -683,29 +725,44 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                   </div>
                 )
               })}
-              
-              {/* Sync Cost Label on Y-Axis */}
-              {selectedHolding && selectedHolding.avg_cost > 0 && (
-                <div 
-                  className="absolute right-0 bg-white text-black text-[9px] font-black px-1 rounded-l-sm transition-all shadow-lg"
-                  style={{ top: yScale(selectedHolding.avg_cost) + 16 }} // +16 for padding/center
-                >
-                  COST
-                </div>
-              )}
             </div>
           </div>
           
           {loadingStock && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
 
           {isScrubbing && activeIdx !== null && enrichedStockHistory[activeIdx] && (
-            <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200">
+            <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200 min-w-[120px]">
                <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
                <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                 <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{(enrichedStockHistory[activeIdx].open ?? 0).toFixed(1)}</div>
-                 <div className="text-[10px] text-white/40">最高</div><div className="text-[11px] font-black text-[#ef4444]">{(enrichedStockHistory[activeIdx].high ?? 0).toFixed(1)}</div>
-                 <div className="text-[10px] text-white/40">最低</div><div className="text-[11px] font-black text-[#22c55e]">{(enrichedStockHistory[activeIdx].low ?? 0).toFixed(1)}</div>
-                 <div className="text-[10px] text-white/40">收盤</div><div className="text-[11px] font-black text-white">{(enrichedStockHistory[activeIdx].close ?? 0).toFixed(1)}</div>
+                 {(() => {
+                   const d = enrichedStockHistory[activeIdx]
+                   const open = d.open ?? 0
+                   const close = d.close ?? 0
+                   const high = d.high ?? 0
+                   const low = d.low ?? 0
+                   
+                   const getC = (v: number, ref: number, rel: string) => {
+                     if (rel === 'h') return v > ref ? '#ef4444' : '#fff'
+                     if (rel === 'l') return v < ref ? '#22c55e' : '#fff'
+                     if (v > ref) return '#ef4444'
+                     if (v < ref) return '#22c55e'
+                     return '#fff'
+                   }
+
+                   return (
+                     <>
+                        <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{open.toFixed(1)}</div>
+                        <div className="text-[10px] text-white/40">最高</div><div className="text-[11px] font-black" style={{ color: getC(high, open, 'h') }}>{high.toFixed(1)}</div>
+                        <div className="text-[10px] text-white/40">最低</div><div className="text-[11px] font-black" style={{ color: getC(low, open, 'l') }}>{low.toFixed(1)}</div>
+                        <div className="text-[10px] text-white/40">收盤</div><div className="text-[11px] font-black" style={{ color: getC(close, open, 'c') }}>{close.toFixed(1)}</div>
+                        {d.avgCost && (
+                          <>
+                            <div className="text-[10px] text-white/40">均價</div><div className="text-[11px] font-black" style={{ color: getC(d.avgCost, close, 'avg') }}>{d.avgCost.toFixed(1)}</div>
+                          </>
+                        )}
+                     </>
+                   )
+                 })()}
                </div>
             </div>
           )}
