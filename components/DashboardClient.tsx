@@ -44,9 +44,10 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const router = useRouter()
   const supabase = createClient()
 
-  const handleSaveSettings = async (updates: UserSettings): Promise<void> => {
-    await fetch('/api/settings', { method: 'POST', body: JSON.stringify(updates) })
-    setSettings(updates)
+  const handleSaveSettings = async (updates: Partial<UserSettings>): Promise<void> => {
+    const newSettings = { ...settings, ...updates }
+    await fetch('/api/settings', { method: 'POST', body: JSON.stringify(newSettings) })
+    setSettings(newSettings)
   }
 
   useEffect(() => {
