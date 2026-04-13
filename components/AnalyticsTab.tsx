@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName, codeOnly } from '@/types'
 import { useGesture } from '@use-gesture/react'
 import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion'
-import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info } from 'lucide-react'
+import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info, Newspaper, ExternalLink } from 'lucide-react'
 import DatePicker from './DatePicker'
 import { usePortfolio } from './providers/PortfolioContext'
 import YearlyPnLChart from './YearlyPnLChart'
@@ -499,6 +499,20 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     }
   }
 
+  const handleSearchNews = (date: string) => {
+    const stockName = quotes[selSym]?.name_zh || getStockName(selSym)
+    const stockCode = codeOnly(selSym)
+    const query = `${stockName} ${stockCode}`
+    
+    // Convert YYYY-MM-DD to MM/DD/YYYY for Google Search
+    const [y, m, d] = date.split('-')
+    const formattedDate = `${m}/${d}/${y}`
+    
+    // Build Google News Search URL with date range
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=cdr:1,cd_min:${formattedDate},cd_max:${formattedDate}`
+    window.open(url, '_blank')
+  }
+
   return (
     <div className="p-4 space-y-8 pb-20 animate-slide-up w-full overflow-x-hidden select-none [&_.recharts-wrapper]:outline-none [&_.recharts-surface]:outline-none">
       {/* ── 1. 各股分析 ── */}
@@ -748,39 +762,53 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           {loadingStock && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
 
           {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
-            <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl pointer-events-none animate-in fade-in duration-200 min-w-[120px]">
-               <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
-               <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                 {(() => {
-                   const d = enrichedStockHistory[activeIdx]
-                   const open = d.open ?? 0
-                   const close = d.close ?? 0
-                   const high = d.high ?? 0
-                   const low = d.low ?? 0
-                   
-                   const getC = (v: number, ref: number, rel: string) => {
-                     if (rel === 'h') return v > ref ? '#ef4444' : '#fff'
-                     if (rel === 'l') return v < ref ? '#22c55e' : '#fff'
-                     if (v > ref) return '#ef4444'
-                     if (v < ref) return '#22c55e'
-                     return '#fff'
-                   }
+            <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl animate-in fade-in duration-200 min-w-[140px] flex flex-col gap-3">
+               <div>
+                 <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
+                 <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                   {(() => {
+                     const d = enrichedStockHistory[activeIdx]
+                     const open = d.open ?? 0
+                     const close = d.close ?? 0
+                     const high = d.high ?? 0
+                     const low = d.low ?? 0
+                     
+                     const getC = (v: number, ref: number, rel: string) => {
+                       if (rel === 'h') return v > ref ? '#ef4444' : '#fff'
+                       if (rel === 'l') return v < ref ? '#22c55e' : '#fff'
+                       if (v > ref) return '#ef4444'
+                       if (v < ref) return '#22c55e'
+                       return '#fff'
+                     }
 
-                   return (
-                     <>
-                        <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{open.toFixed(1)}</div>
-                        <div className="text-[10px] text-white/40">最高</div><div className="text-[11px] font-black" style={{ color: getC(high, open, 'h') }}>{high.toFixed(1)}</div>
-                        <div className="text-[10px] text-white/40">最低</div><div className="text-[11px] font-black" style={{ color: getC(low, open, 'l') }}>{low.toFixed(1)}</div>
-                        <div className="text-[10px] text-white/40">收盤</div><div className="text-[11px] font-black" style={{ color: getC(close, open, 'c') }}>{close.toFixed(1)}</div>
-                        {d.avgCost && (
-                          <>
-                            <div className="text-[10px] text-white/40">均價</div><div className="text-[11px] font-black" style={{ color: getC(d.avgCost, close, 'avg') }}>{d.avgCost.toFixed(1)}</div>
-                          </>
-                        )}
-                     </>
-                   )
-                 })()}
+                     return (
+                       <>
+                          <div className="text-[10px] text-white/40">開盤</div><div className="text-[11px] font-black text-white">{open.toFixed(1)}</div>
+                          <div className="text-[10px] text-white/40">最高</div><div className="text-[11px] font-black" style={{ color: getC(high, open, 'h') }}>{high.toFixed(1)}</div>
+                          <div className="text-[10px] text-white/40">最低</div><div className="text-[11px] font-black" style={{ color: getC(low, open, 'l') }}>{low.toFixed(1)}</div>
+                          <div className="text-[10px] text-white/40">收盤</div><div className="text-[11px] font-black" style={{ color: getC(close, open, 'c') }}>{close.toFixed(1)}</div>
+                          {d.avgCost && (
+                            <>
+                              <div className="text-[10px] text-white/40">均價</div><div className="text-[11px] font-black" style={{ color: getC(d.avgCost, close, 'avg') }}>{d.avgCost.toFixed(1)}</div>
+                            </>
+                          )}
+                       </>
+                     )
+                   })()}
+                 </div>
                </div>
+
+               <button 
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSearchNews(enrichedStockHistory[activeIdx].date);
+                }}
+                className="flex items-center justify-center gap-2 py-2 px-3 bg-accent/20 hover:bg-accent/30 border border-accent/30 rounded-xl transition-all group/btn active:scale-95"
+               >
+                 <Newspaper size={12} className="text-accent group-hover/btn:scale-110 transition-transform" />
+                 <span className="text-[11px] font-black text-accent">搜尋當日新聞</span>
+                 <ExternalLink size={10} className="text-accent/50 ml-auto" />
+               </button>
             </div>
           )}
         </div>
