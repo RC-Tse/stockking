@@ -135,10 +135,9 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
         const netShares = lots.reduce((s, l) => s + l.shares, 0)
         if (netShares <= 0) return
         const q = lastPriceMap[sym] || 0
-        if (q <= 0) {
-          lots.forEach(l => { unrealized += (0 - l.cost) })
-          return
-        }
+        // 若完全抓不到股價，則維持該股未實現損益為 0，避免圖表大跌
+        if (q <= 0) return
+        
         const { absNet: totalNetMV } = calculateTxParts(netShares, q, 'SELL', sym, settings)
         const totalCost = lots.reduce((s, l) => s + l.cost, 0)
         unrealized += (totalNetMV - totalCost)

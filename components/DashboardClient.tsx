@@ -38,7 +38,13 @@ export default function DashboardClient({ user }: { user: AppUser }) {
   const [tab, setTab] = useState<Tab>(() => {
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('last_tab')
-      if (saved && TABS.find(t => t.id === saved)) return saved as Tab
+      const savedTime = localStorage.getItem('last_tab_time')
+      const now = Date.now()
+      
+      // 如果存檔時間在 30 秒內，則恢復分頁；否則回持股頁
+      if (saved && savedTime && now - parseInt(savedTime) < 30000) {
+        if (TABS.find(t => t.id === saved)) return saved as Tab
+      }
     }
     return 'holdings'
   })
@@ -112,6 +118,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
       if (e.detail && TABS.find(t => t.id === e.detail)) {
         setTab(e.detail)
         localStorage.setItem('last_tab', e.detail)
+        localStorage.setItem('last_tab_time', Date.now().toString())
       }
     }
     window.addEventListener('changeTab', handleTabChange)
@@ -120,6 +127,7 @@ export default function DashboardClient({ user }: { user: AppUser }) {
 
   useEffect(() => {
     localStorage.setItem('last_tab', tab)
+    localStorage.setItem('last_tab_time', Date.now().toString())
   }, [tab])
 
 
