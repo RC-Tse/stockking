@@ -821,11 +821,11 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                 const localX = rawX - scrollLeft
                 const isLeftHalf = localX < containerWidth / 2
                 
-                // Add some offset (20px) to keep it clear of the vertical line
+                // 增加偏移量 (60px) 以拉開資訊框與垂直線的距離
                 if (isLeftHalf) {
-                  return { left: localX + 20, right: 'auto' }
+                  return { left: localX + 60, right: 'auto' }
                 } else {
-                  return { right: containerWidth - localX + 20, left: 'auto' }
+                  return { right: containerWidth - localX + 60, left: 'auto' }
                 }
               })()}
             >
