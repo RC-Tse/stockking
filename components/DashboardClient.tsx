@@ -107,6 +107,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
         setTab(e.detail)
       }
     }
+    window.addEventListener('changeTab', handleTabChange)
+    return () => window.removeEventListener('changeTab', handleTabChange)
+  }, [])
 
 
   const signOut = async () => {
