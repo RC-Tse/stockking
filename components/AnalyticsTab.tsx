@@ -506,7 +506,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     const scroller = scrollerRef.current
     if (!scroller) return
     const rect = scroller.getBoundingClientRect()
-    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const scrollX = clientX - rect.left + scroller.scrollLeft
     const idx = Math.floor(scrollX / pointWidth)
     if (idx >= 0 && idx < enrichedStockHistory.length) {
