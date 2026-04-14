@@ -609,7 +609,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                       {[0, 1, 2, 3, 4].map(i => {
                         const y = chartHeight * (i * 0.25)
                         return (
-                          <line key={i} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.08)" strokeWidth="1" />
+                          <line key={i} x1="0" y1={y} x2="100%" y2={y} stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
                         )
                       })}
 

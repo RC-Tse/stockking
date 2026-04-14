@@ -319,7 +319,7 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
         <div className="h-[460px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={filteredData} margin={{ top: 80, right: 0, left: 15, bottom: 20 }}>
-              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.08)" vertical={false} horizontal={true} />
+              <CartesianGrid strokeDasharray="0" stroke="rgba(255,255,255,0.15)" vertical={false} horizontal={true} />
               <XAxis 
                 dataKey="date" 
                 ticks={dynamicTicks}
