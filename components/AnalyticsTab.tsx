@@ -521,6 +521,14 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     const scroller = scrollerRef.current
     if (!scroller) return
     const rect = scroller.getBoundingClientRect()
+    const localY = clientY - rect.top
+
+    // 如果進入查價模式且滑鼠位於上方資訊框區域 (Y < 120px)，暫停更新索引以方便點擊新聞按鈕
+    // 僅針對 mousemove，手機端觸控移動仍維持同步
+    if (isScrubbingMode && e.type === 'mousemove' && localY < 120) {
+      return
+    }
+
     const scrollX = clientX - rect.left + scroller.scrollLeft
     const idx = Math.floor(scrollX / pointWidth)
     if (idx >= 0 && idx < enrichedStockHistory.length) {
@@ -804,7 +812,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           {loadingStock && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
 
           {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
-            <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl animate-in fade-in duration-200 min-w-[140px] flex flex-col gap-3">
+            <div className={`absolute top-4 ${activeIdx < (enrichedStockHistory.length / 2) ? 'right-4' : 'left-4'} z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl animate-in fade-in duration-200 min-w-[140px] flex flex-col gap-3 transition-all duration-300`}>
                <div>
                  <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
                  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
