@@ -499,17 +499,26 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     }
   }
 
-  const handleSearchNews = (date: string) => {
+  const handleSearchNews = (index: number) => {
+    if (!enrichedStockHistory[index]) return
     const stockName = quotes[selSym]?.name_zh || getStockName(selSym)
     const stockCode = codeOnly(selSym)
     const query = `${stockName} ${stockCode}`
     
-    // Convert YYYY-MM-DD to MM/DD/YYYY for Google Search
-    const [y, m, d] = date.split('-')
-    const formattedDate = `${m}/${d}/${y}`
+    // 計算搜尋範圍：前一個交易日到下一個交易日 (包含)
+    const startData = index > 0 ? enrichedStockHistory[index - 1] : enrichedStockHistory[index]
+    const endData = index < enrichedStockHistory.length - 1 ? enrichedStockHistory[index + 1] : enrichedStockHistory[index]
+
+    const formatDateForGoogle = (dateStr: string) => {
+      const [y, m, d] = dateStr.split('-')
+      return `${m}/${d}/${y}`
+    }
+
+    const minDate = formatDateForGoogle(startData.date)
+    const maxDate = formatDateForGoogle(endData.date)
     
-    // Build Google News Search URL with date range
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=cdr:1,cd_min:${formattedDate},cd_max:${formattedDate}`
+    // Build Google News Search URL with calculated date range
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=cdr:1,cd_min:${minDate},cd_max:${maxDate}`
     window.open(url, '_blank')
   }
 
@@ -801,7 +810,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                <button 
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleSearchNews(enrichedStockHistory[activeIdx].date);
+                  handleSearchNews(activeIdx);
                 }}
                 className="flex items-center justify-center gap-2 py-2 px-3 bg-accent/20 hover:bg-accent/30 border border-accent/30 rounded-xl transition-all group/btn active:scale-95"
                >
