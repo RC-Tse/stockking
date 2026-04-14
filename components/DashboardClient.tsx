@@ -157,7 +157,7 @@ function DashboardInner({ user, tab, setTab, refresh, refreshQuotesOnly, loading
           </div>
           <div className="flex items-center gap-2">
             <button 
-              onClick={() => window.location.reload()}
+              onClick={refreshQuotesOnly}
               className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-90 active:opacity-70 transition-all"
             >
               <RefreshCw size={14} />

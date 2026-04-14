@@ -44,7 +44,6 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
   const [note, setNote] = useState('')
   const [saving, setSaving] = useState(false)
   const [isDca, setIsDca] = useState(false)
-  const [error, setError] = useState('')
   
   const [currentPrice, setCurrentPrice] = useState<number>(0)
   const [ma60, setMa60] = useState<number>(0)
@@ -67,7 +66,6 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
     if (!sym) return
     if (/^\d+$/.test(sym)) { sym = sym + '.TW'; setSymbol(sym) }
     setFetchingName(true)
-    setError('')
     try {
       const res = await fetch(`/api/stocks/info?symbol=${sym}`)
       if (res.ok) { 
@@ -79,22 +77,11 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
         const res2 = await fetch(`/api/stocks?symbols=${sym}`)
         if (res2.ok) {
           const data2 = await res2.json()
-          if (data2[sym]) {
-            setStockName(data2[sym]?.name_zh || '')
-            setCurrentPrice(data2[sym]?.price || 0)
-          } else {
-            setError('查無此代碼，請確認是否輸入正確')
-            setStockName('')
-          }
-        } else {
-          setError('連線失敗，請檢查網路')
-          setStockName('')
+          setStockName(data2[sym]?.name_zh || '')
+          setCurrentPrice(data2[sym]?.price || 0)
         }
       }
-    } catch (err) { 
-        setError('發生未預期錯誤')
-        setStockName('') 
-    } finally { setFetchingName(false) }
+    } catch (err) { setStockName('') } finally { setFetchingName(false) }
   }
 
   const actualShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
@@ -149,8 +136,7 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
                   <input value={symbol} onChange={e => setSymbol(e.target.value)} onBlur={e => fetchStockInfo(e.target.value)} placeholder="代碼 (如 2330)" className="input-base uppercase font-black font-mono text-xl py-4" />
                   {fetchingName && <RefreshCw size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-accent animate-spin"/>}
                 </div>
-                {stockName && <div className="px-2 text-sm font-black text-accent/80 animate-in fade-in slide-in-from-left-2">{stockName}</div>}
-                {error && <div className="px-2 text-xs font-bold text-red-400 animate-in shake-in duration-300">{error}</div>}
+                {stockName && <div className="px-2 text-sm font-black text-accent/80">{stockName}</div>}
               </div>
 
               <div className="space-y-2">

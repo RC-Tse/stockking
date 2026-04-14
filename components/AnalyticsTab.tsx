@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName, codeOnly } from '@/types'
 import { useGesture } from '@use-gesture/react'
 import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion'
-import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info, Newspaper, ExternalLink, Search, X } from 'lucide-react'
+import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info, Newspaper, ExternalLink } from 'lucide-react'
 import DatePicker from './DatePicker'
 import { usePortfolio } from './providers/PortfolioContext'
 import YearlyPnLChart from './YearlyPnLChart'
@@ -51,9 +51,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const [customStockEnd, setCustomStockEnd] = useState(() => new Date().toISOString().split('T')[0])
   const [stockHistory, setStockHistory] = useState<any[]>([])
   const [loadingStock, setLoading] = useState(false)
-  const [searchSymbol, setSearchSymbol] = useState('')
-  const [isSearching, setIsSearching] = useState(false)
-  const [searchError, setSearchError] = useState('')
 
   // Fetch Stock History
   useEffect(() => {
@@ -69,15 +66,8 @@ export default function AnalyticsTab({ onRefresh }: Props) {
         if (res.ok) {
           const data = await res.json()
           setStockHistory(data.history || [])
-          setSearchError('')
-        } else {
-          setSearchError('抓取股價資料失敗或查無代碼')
-          setStockHistory([])
         }
-      } catch (e) { 
-        console.error(e)
-        setSearchError('網路異常，請稍後再試')
-      } finally { setLoading(false) }
+      } catch (e) { console.error(e) } finally { setLoading(false) }
     }
     fetchHistory()
   }, [selSym, stockRange])
@@ -510,43 +500,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   }
 
   const handleSearchNews = (date: string) => {
-    // 尋找前一個交易日以捕捉過夜消息
-    const idx = enrichedStockHistory.findIndex(d => d.date === date)
-    let minDate = date
-    // 如果是近期日期，Google 搜尋預設會包含當天，我們根據需求往後抓一天捕捉開盤前
-    let maxDate = date
-    
-    if (idx > 0) {
-      // 起點設為前一個交易日，包含從前一收盤後的資訊
-      minDate = enrichedStockHistory[idx-1].date
-    }
-    
-    // 如果點選的是過去的 K 線，終點設為下一個交易日以捕捉「開盤前」的新聞
-    if (idx >= 0 && idx < enrichedStockHistory.length - 1) {
-      maxDate = enrichedStockHistory[idx+1].date
-    }
-
     const stockName = quotes[selSym]?.name_zh || getStockName(selSym)
     const stockCode = codeOnly(selSym)
     const query = `${stockName} ${stockCode}`
     
-    const [yMin, mMin, dMin] = minDate.split('-')
-    const [yMax, mMax, dMax] = maxDate.split('-')
-    const fmtMin = `${mMin}/${dMin}/${yMin}`
-    const fmtMax = `${mMax}/${dMax}/${yMax}`
+    // Convert YYYY-MM-DD to MM/DD/YYYY for Google Search
+    const [y, m, d] = date.split('-')
+    const formattedDate = `${m}/${d}/${y}`
     
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=cdr:1,cd_min:${fmtMin},cd_max:${fmtMax}`
+    // Build Google News Search URL with date range
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=cdr:1,cd_min:${formattedDate},cd_max:${formattedDate}`
     window.open(url, '_blank')
-  }
-
-  const handleGlobalSearch = async (e: React.FormEvent) => {
-    e.preventDefault()
-    let sym = searchSymbol.trim().toUpperCase()
-    if (!sym) return
-    if (/^\d+$/.test(sym)) sym += '.TW'
-    setSelSym(sym)
-    setIsSearching(false)
-    setSearchSymbol('')
   }
 
   return (
@@ -559,44 +523,17 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           </h3>
           
           <div className="flex flex-col gap-3">
-             <div className="flex gap-2">
-              {isSearching ? (
-                <form onSubmit={handleGlobalSearch} className="flex-1 relative animate-in slide-in-from-left-2">
-                  <input 
-                    autoFocus
-                    value={searchSymbol}
-                    onChange={e => setSearchSymbol(e.target.value)}
-                    placeholder="輸入代碼 (如 2330)"
-                    className="w-full bg-[var(--bg-card)] border border-accent rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t2)] outline-none shadow-lg shadow-accent/10"
-                  />
-                  <button type="button" onClick={() => setIsSearching(false)} className="absolute right-3 top-1/2 -translate-y-1/2 p-1 text-[var(--t3)] hover:text-accent">
-                    <X size={18} />
-                  </button>
-                </form>
-              ) : (
-                <select 
-                  value={selSym} 
-                  onChange={e => setSelSym(e.target.value)}
-                  className="flex-1 bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t2)] outline-none focus:border-accent transition-all appearance-none cursor-pointer shadow-lg"
-                >
-                  {sortedHoldings.map(h => (
-                    <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">
-                      {quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})
-                    </option>
-                  ))}
-                  {!sortedHoldings.find(h => h.symbol === selSym) && (
-                    <option value={selSym}>{quotes[selSym]?.name_zh || getStockName(selSym)} ({codeOnly(selSym)})</option>
-                  )}
-                </select>
-              )}
-              
-              <button 
-                onClick={() => setIsSearching(!isSearching)}
-                className={`w-12 h-12 flex items-center justify-center rounded-xl border transition-all ${isSearching ? 'bg-accent text-bg-base border-accent shadow-lg' : 'bg-[var(--bg-card)] text-accent border-[var(--border-bright)]'}`}
-              >
-                <Search size={20} />
-              </button>
-             </div>
+             <select 
+              value={selSym} 
+              onChange={e => setSelSym(e.target.value)}
+              className="w-full bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-xl px-4 py-3 text-[15px] font-black text-[var(--t2)] outline-none focus:border-accent transition-all appearance-none cursor-pointer shadow-lg"
+            >
+              {sortedHoldings.map(h => (
+                <option key={h.symbol} value={h.symbol} className="bg-[var(--bg-card)]">
+                  {quotes[h.symbol]?.name_zh || getStockName(h.symbol)} ({codeOnly(h.symbol)})
+                </option>
+              ))}
+            </select>
 
             <div className="flex w-full gap-1.5 scrollbar-hide">
               {(['1M', '3M', '6M', '9M', '1Y'] as StockRange[]).map(r => (
@@ -823,22 +760,6 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           </div>
           
           {loadingStock && <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"><RefreshCw size={24} className="animate-spin text-accent" /></div>}
-          
-          {searchError && !loadingStock && (
-            <div className="absolute inset-0 z-40 flex flex-col items-center justify-center bg-black/40 backdrop-blur-sm p-6 text-center space-y-3">
-              <Info size={32} className="text-red-400 opacity-60" />
-              <div className="text-[13px] font-black text-white/80">{searchError}</div>
-              <button 
-                onClick={() => {
-                  setSelSym(sortedHoldings[0]?.symbol || '')
-                  setSearchError('')
-                }}
-                className="px-6 py-2 bg-accent/20 border border-accent/40 rounded-full text-xs font-black text-accent"
-              >
-                返回我的持股
-              </button>
-            </div>
-          )}
 
           {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
             <div className="absolute top-4 left-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl animate-in fade-in duration-200 min-w-[140px] flex flex-col gap-3">
