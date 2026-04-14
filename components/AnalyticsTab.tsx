@@ -55,6 +55,13 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const [isSearching, setIsSearching] = useState(false)
   const [searchError, setSearchError] = useState('')
 
+  // 當持股資料載入後，若當前沒選中任何股票，預設選中第一檔
+  useEffect(() => {
+    if (!selSym && sortedHoldings.length > 0) {
+      setSelSym(sortedHoldings[0].symbol)
+    }
+  }, [sortedHoldings, selSym])
+
   // Fetch Stock History
   useEffect(() => {
     if (!selSym) return

@@ -35,7 +35,13 @@ const TABS: { id: Tab; icon: any; label: string }[] = [
 
 
 export default function DashboardClient({ user }: { user: AppUser }) {
-  const [tab, setTab]             = useState<Tab>('holdings')
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('last_tab')
+      if (saved && TABS.find(t => t.id === saved)) return saved as Tab
+    }
+    return 'holdings'
+  })
   const [txs, setTxs]             = useState<Transaction[]>([])
   const [quotes, setQuotes]       = useState<Record<string, Quote>>({})
   const [settings, setSettings]   = useState<UserSettings>(DEFAULT_SETTINGS)
@@ -105,11 +111,17 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     const handleTabChange = (e: any) => {
       if (e.detail && TABS.find(t => t.id === e.detail)) {
         setTab(e.detail)
+        localStorage.setItem('last_tab', e.detail)
       }
     }
     window.addEventListener('changeTab', handleTabChange)
     return () => window.removeEventListener('changeTab', handleTabChange)
   }, [])
+
+  // 當內部狀態 tab 改變時也同步到 localStorage (針對底部分頁點擊)
+  useEffect(() => {
+    localStorage.setItem('last_tab', tab)
+  }, [tab])
 
 
   const signOut = async () => {
@@ -157,7 +169,7 @@ function DashboardInner({ user, tab, setTab, refresh, refreshQuotesOnly, loading
           </div>
           <div className="flex items-center gap-2">
             <button 
-              onClick={refreshQuotesOnly}
+              onClick={() => window.location.reload()}
               className="p-2 rounded-full bg-white/5 text-accent border border-white/10 active:scale-90 active:opacity-70 transition-all"
             >
               <RefreshCw size={14} />
