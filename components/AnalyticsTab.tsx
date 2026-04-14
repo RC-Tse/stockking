@@ -455,6 +455,9 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
   const handleStartTimer = (e: React.TouchEvent | React.MouseEvent) => {
     if (isScrubbingMode) return
+    // Only allow long-press for touch events (mobile)
+    if (e.type !== 'touchstart') return
+
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
     lastPosRef.current = { x: clientX, y: clientY }
@@ -477,6 +480,18 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     if (isScrubbingMode) {
       setIsScrubbingMode(false)
       setActiveIdx(null)
+    }
+  }
+
+  const handleChartDoubleClick = (e: React.MouseEvent) => {
+    if (isScrubbingMode) return
+    setIsScrubbingMode(true)
+    if (!scrollerRef.current || enrichedStockHistory.length === 0) return
+    const rect = scrollerRef.current.getBoundingClientRect()
+    const scrollX = e.clientX - rect.left + scrollerRef.current.scrollLeft
+    const idx = Math.floor(scrollX / pointWidth)
+    if (idx >= 0 && idx < enrichedStockHistory.length) {
+      setActiveIdx(idx)
     }
   }
 
@@ -612,8 +627,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
                         className="overflow-visible"
                         style={{ touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
                         onClick={handleChartClick}
-                        onMouseDown={handleStartTimer}
-                        onMouseUp={handleEndTimer}
+                        onDoubleClick={handleChartDoubleClick}
                         onMouseMove={handleChartMove}
                         onMouseLeave={() => { 
                           handleEndTimer()
