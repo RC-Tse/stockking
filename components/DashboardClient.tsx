@@ -35,13 +35,7 @@ const TABS: { id: Tab; icon: any; label: string }[] = [
 
 
 export default function DashboardClient({ user }: { user: AppUser }) {
-  const [tab, setTab] = useState<Tab>(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('last_tab')
-      if (saved && TABS.find(t => t.id === saved)) return saved as Tab
-    }
-    return 'holdings'
-  })
+  const [tab, setTab]             = useState<Tab>('holdings')
   const [txs, setTxs]             = useState<Transaction[]>([])
   const [quotes, setQuotes]       = useState<Record<string, Quote>>({})
   const [settings, setSettings]   = useState<UserSettings>(DEFAULT_SETTINGS)
@@ -111,17 +105,8 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     const handleTabChange = (e: any) => {
       if (e.detail && TABS.find(t => t.id === e.detail)) {
         setTab(e.detail)
-        localStorage.setItem('last_tab', e.detail)
       }
     }
-    window.addEventListener('changeTab', handleTabChange)
-    return () => window.removeEventListener('changeTab', handleTabChange)
-  }, [])
-
-  // 當內部狀態 tab 改變時也同步到 localStorage (針對底部分頁點擊)
-  useEffect(() => {
-    localStorage.setItem('last_tab', tab)
-  }, [tab])
 
 
   const signOut = async () => {
