@@ -500,33 +500,16 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   }
 
   const handleSearchNews = (date: string) => {
-    // 尋找點選日期在歷史紀錄中的索引
-    const idx = enrichedStockHistory.findIndex(d => d.date === date)
-    let minDate = date
-    let maxDate = date
-    
-    if (idx > 0) {
-      // 設為前一開盤日
-      minDate = enrichedStockHistory[idx - 1].date
-    }
-    
-    if (idx >= 0 && idx < enrichedStockHistory.length - 1) {
-      // 設為後一開盤日
-      maxDate = enrichedStockHistory[idx + 1].date
-    }
-
     const stockName = quotes[selSym]?.name_zh || getStockName(selSym)
     const stockCode = codeOnly(selSym)
     const query = `${stockName} ${stockCode}`
     
     // Convert YYYY-MM-DD to MM/DD/YYYY for Google Search
-    const [yMin, mMin, dMin] = minDate.split('-')
-    const [yMax, mMax, dMax] = maxDate.split('-')
-    const fmtMin = `${mMin}/${dMin}/${yMin}`
-    const fmtMax = `${mMax}/${dMax}/${yMax}`
+    const [y, m, d] = date.split('-')
+    const formattedDate = `${m}/${d}/${y}`
     
-    // Build Google News Search URL with date range (cd_min to cd_max)
-    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=cdr:1,cd_min:${fmtMin},cd_max:${fmtMax}`
+    // Build Google News Search URL with date range
+    const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&tbm=nws&tbs=cdr:1,cd_min:${formattedDate},cd_max:${formattedDate}`
     window.open(url, '_blank')
   }
 

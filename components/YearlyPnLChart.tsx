@@ -165,8 +165,12 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         if (netShares <= 0) return
         
         const q = lastPriceMap[sym] || 0
-        // 若完全抓不到股價，則維持該股未實現損益為 0，避免圖表大跌
-        if (q <= 0) return
+        if (q <= 0) {
+          lots.forEach(l => {
+            unrealizedThisYear += (0 - l.cost)
+          })
+          return
+        }
         
         const { absNet: totalNetMV } = calculateTxParts(netShares, q, 'SELL', sym, settings)
         const totalCost = lots.reduce((s, l) => s + l.cost, 0)
