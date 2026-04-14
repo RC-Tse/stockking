@@ -451,22 +451,25 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   const [activeIdx, setActiveIdx] = useState<number | null>(null)
   const scrubTimerRef = useRef<NodeJS.Timeout | null>(null)
   const [isScrubbingMode, setIsScrubbingMode] = useState(false)
+  const lastPosRef = useRef({ x: 0, y: 0 })
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (isScrubbingMode) return // 如果已經在查價模式，不需要重複觸發計時器
-    // 啟動長按計時器 (延長至 1000ms)
+  const handleStartTimer = (e: React.TouchEvent | React.MouseEvent) => {
+    if (isScrubbingMode) return
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+    lastPosRef.current = { x: clientX, y: clientY }
+
     scrubTimerRef.current = setTimeout(() => {
       setIsScrubbingMode(true)
       if (window.navigator.vibrate) window.navigator.vibrate(10)
     }, 1000)
   }
 
-  const handleTouchEnd = () => {
+  const handleEndTimer = () => {
     if (scrubTimerRef.current) {
       clearTimeout(scrubTimerRef.current)
       scrubTimerRef.current = null
     }
-    // 注意：不再這裡 setIsScrubbingMode(false)，實現黏性保留
   }
 
   // 單點螢幕退出查價模式
@@ -478,6 +481,18 @@ export default function AnalyticsTab({ onRefresh }: Props) {
   }
 
   const handleChartMove = (e: React.MouseEvent | React.TouchEvent) => {
+    const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX
+    const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY
+
+    // 如果正在計時但尚未進入查價模式，檢查位移是否超過門檻 (10px) 以區分拖拽與長按
+    if (scrubTimerRef.current && !isScrubbingMode) {
+      const dx = Math.abs(clientX - lastPosRef.current.x)
+      const dy = Math.abs(clientY - lastPosRef.current.y)
+      if (dx > 10 || dy > 10) {
+        handleEndTimer()
+      }
+    }
+
     if (e.type === 'touchmove' && !isScrubbingMode) {
       // 如果不是查價模式，讓瀏覽器處理原生捲動
       return
@@ -592,18 +607,23 @@ export default function AnalyticsTab({ onRefresh }: Props) {
               style={{ WebkitOverflowScrolling: 'touch', touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
             >
               <div style={{ width: `${totalWidth}px`, height: `${chartHeight}px`, position: 'relative', marginTop: '16px' }}>
-                <svg 
-                    width={enrichedStockHistory.length * pointWidth} 
-                    height="100%" 
-                    className="overflow-visible"
-                    style={{ touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
-                    onClick={handleChartClick}
-                    onMouseMove={handleChartMove}
-                    onMouseLeave={() => { if (!isScrubbingMode) setActiveIdx(null) }}
-                    onTouchStart={handleTouchStart}
-                    onTouchMove={handleChartMove}
-                    onTouchEnd={handleTouchEnd}
-                  >
+                    <svg 
+                        width={enrichedStockHistory.length * pointWidth} 
+                        height="100%" 
+                        className="overflow-visible"
+                        style={{ touchAction: isScrubbingMode ? 'none' : 'pan-x' }}
+                        onClick={handleChartClick}
+                        onMouseDown={handleStartTimer}
+                        onMouseUp={handleEndTimer}
+                        onMouseMove={handleChartMove}
+                        onMouseLeave={() => { 
+                          handleEndTimer()
+                          if (!isScrubbingMode) setActiveIdx(null) 
+                        }}
+                        onTouchStart={handleStartTimer}
+                        onTouchMove={handleChartMove}
+                        onTouchEnd={handleEndTimer}
+                      >
                     <g>
                       {/* Horizontal Grid Lines (aligned with price ticks) */}
                       {[0, 1, 2, 3, 4].map(i => {
