@@ -555,7 +555,6 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 isAnimationActive={true}
               />
               
-              {/* LEAD/LAG AREAS (Relationship based) */}
               <Area 
                 yAxisId="right"
                 type="linear" 
@@ -563,6 +562,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 fill="#ef4444" 
                 fillOpacity={0.15} 
                 stroke="none" 
+                activeDot={false}
                 isAnimationActive={true}
               />
               <Area 
@@ -572,6 +572,7 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
                 fill="#22c55e" 
                 fillOpacity={0.15} 
                 stroke="none" 
+                activeDot={false}
                 isAnimationActive={true}
               />
 

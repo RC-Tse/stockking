@@ -814,10 +814,20 @@ export default function AnalyticsTab({ onRefresh }: Props) {
           {isScrubbingMode && activeIdx !== null && enrichedStockHistory[activeIdx] && (
             <div 
               className="absolute top-4 z-40 p-3 bg-black/80 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl animate-in fade-in duration-200 min-w-[140px] flex flex-col gap-3 transition-all duration-300"
-              style={{
-                left: activeIdx < (enrichedStockHistory.length / 2) ? 'auto' : '1rem',
-                right: activeIdx < (enrichedStockHistory.length / 2) ? '1rem' : 'auto'
-              }}
+              style={(() => {
+                const scrollLeft = scrollerRef.current?.scrollLeft || 0
+                const containerWidth = scrollerRef.current?.clientWidth || 300
+                const rawX = activeIdx * pointWidth + pointWidth / 2
+                const localX = rawX - scrollLeft
+                const isLeftHalf = localX < containerWidth / 2
+                
+                // Add some offset (20px) to keep it clear of the vertical line
+                if (isLeftHalf) {
+                  return { left: localX + 20, right: 'auto' }
+                } else {
+                  return { right: containerWidth - localX + 20, left: 'auto' }
+                }
+              })()}
             >
                <div>
                  <div className="text-[10px] font-black text-accent uppercase mb-1">{enrichedStockHistory[activeIdx].date}</div>
