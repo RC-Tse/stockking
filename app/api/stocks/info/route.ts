@@ -21,10 +21,21 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const userAgents = [
+      'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36',
+      'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36'
+    ]
+    const randomUA = userAgents[Math.floor(Math.random() * userAgents.length)]
+
     const res = await fetch(url, 
-      { cache: 'no-store', headers: { 'User-Agent': 'Mozilla/5.0' } }
+      { cache: 'no-store', headers: { 'User-Agent': randomUA } }
     )
-    if (!res.ok) return NextResponse.json({ error: 'Failed to fetch' }, { status: 500 })
+    if (!res.ok) {
+      if (res.status === 429) {
+        return NextResponse.json({ error: 'Yahoo Finance 請求過頻 (429)' }, { status: 429 })
+      }
+      return NextResponse.json({ error: `Failed to fetch: ${res.status}` }, { status: 500 })
+    }
     
     const data = await res.json()
     const result = data.chart?.result?.[0]
