@@ -130,9 +130,9 @@ export function PortfolioProvider({
 
         let sellRem = tx.shares
         let sellProceedsRemaining = net_sell
-        matchedBuyCostTotal = 0
-        matchedBuyFeeTotal = 0
-        matchedSellNetTotal = 0
+        let matchedBuyCostTotal = 0
+        let matchedBuyFeeTotal = 0
+        let matchedSellNetTotal = 0
         const matches = []
 
         while (sellRem > 0 && lots.length > 0) {
