@@ -81,11 +81,15 @@ export default function AnalyticsTab({ onRefresh }: Props) {
     const sortedRaw = [...stockHistory].sort((a,b) => a.date.localeCompare(b.date))
     const firstDate = sortedRaw[0].date
     
-    const txs = [...transactions].filter(t => t.symbol === selSym).sort((a, b) => a.trade_date.localeCompare(b.trade_date))
+    const txs = [...transactions].filter(t => t.symbol === selSym).sort((a, b) => {
+      if (a.trade_date !== b.trade_date) return a.trade_date.localeCompare(b.trade_date)
+      return a.id - b.id
+    })
     
     let txIdx = 0
     let currentAvgCost: number | null = null
-    let inventory: { shares: number, cost: number }[] = []
+    let totalShares = 0
+    let totalCost = 0
 
     const processed = sortedRaw.map((h, i) => {
       let isBuy = false
@@ -97,27 +101,28 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
       while (txIdx < txs.length && txs[txIdx].trade_date <= h.date) {
         const tx = txs[txIdx]
+        const { absNet } = calculateTxParts(tx.shares, tx.price, tx.action, tx.symbol, settings)
+        
         if (tx.action !== 'SELL') {
-          inventory.push({ shares: tx.shares, cost: tx.amount + tx.fee })
+          totalShares += tx.shares
+          totalCost += absNet
           isBuy = true
           txPrice = tx.price
           txShares += tx.shares
         } else {
-          let rem = tx.shares
-          while (rem > 0 && inventory.length > 0) {
-            if (inventory[0].shares <= rem) { rem -= inventory[0].shares; inventory.shift() }
-            else { inventory[0].shares -= rem; rem = 0 }
-          }
+          // Weighted Average: cost removed is based on the average before the sell
+          const avgBefore = totalShares > 0 ? totalCost / totalShares : 0
+          const mBuyCost = tx.shares === totalShares ? totalCost : Math.floor(tx.shares * avgBefore)
+          
+          totalShares -= tx.shares
+          totalCost -= mBuyCost
         }
         txIdx++
       }
       
-      const totalShares = inventory.reduce((s, lot) => s + lot.shares, 0)
-      const totalCost = inventory.reduce((s, lot) => s + lot.cost, 0)
       const newAvgCost = totalShares > 0 ? totalCost / totalShares : null
       
-      // 邏輯優化：均價線繪製用的 avgCost。
-      // 若持股為 0，但當天有交易紀錄（例如賣空日 12/18），需保留前一刻成本以便線條畫到 12/18 結束。
+      // 均價線繪製邏輯：保持與持股頁面一致的移動加權平均
       const displayAvgCost = (totalShares > 0) ? newAvgCost : (costAtStartOfDay || null);
       currentAvgCost = newAvgCost // 更新為下一日起始狀態
 

@@ -124,27 +124,30 @@ export function PortfolioProvider({
         const tax_sell = calcTax(tx.shares, tx.price, tx.symbol, settings)
         const net_sell = gross_sell - fee_sell - tax_sell
         
+        const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
+        const totalCostBefore = lots.reduce((s, l) => s + l.total_cost, 0)
+        const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
+
         let sellRem = tx.shares
         let sellProceedsRemaining = net_sell
-        let matchedBuyCostTotal = 0
-        let matchedBuyFeeTotal = 0
-        let matchedSellNetTotal = 0
+        matchedBuyCostTotal = 0
+        matchedBuyFeeTotal = 0
+        matchedSellNetTotal = 0
         const matches = []
 
         while (sellRem > 0 && lots.length > 0) {
           const lot = lots[0]
           const take = Math.min(lot.shares, sellRem)
           
-          // Integer Partitioning for matched buy costs and fees
-          const mBuyCost = take === lot.shares 
-            ? lot.total_cost 
-            : Math.floor(lot.total_cost * (take / lot.shares))
+          // Weighted Average: cost basis is (take * avgCostBefore)
+          const mBuyCost = take === sellRem && take === totalSharesBefore 
+            ? totalCostBefore // Clear exactly if selling all
+            : Math.floor(take * avgCostBefore)
             
           const mBuyFee = take === lot.shares
             ? lot.rawFee
             : Math.floor(lot.rawFee * (take / lot.shares))
           
-          // Integer Partitioning for matched sell proceeds
           const mSellNet = take === sellRem
             ? sellProceedsRemaining
             : Math.floor(net_sell * (take / tx.shares))
@@ -166,9 +169,6 @@ export function PortfolioProvider({
 
           lot.shares -= take
           lot.total_cost -= mBuyCost
-          // Also update raw fields for legacy compatibility if needed
-          lot.principal -= Math.floor(lot.principal * (take / (lot.shares + take)))
-          lot.rawFee -= Math.floor(lot.rawFee * (take / (lot.shares + take)))
           
           sellRem -= take
           if (lot.shares <= 0) lots.shift()
@@ -222,11 +222,16 @@ export function PortfolioProvider({
           const { gross, fee, net } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
           lots.push({ shares: t.shares, total_cost: Math.abs(net) })
         } else if (t.action === 'SELL') {
-          const { absNet } = calculateTxParts(t.shares, t.price, 'SELL', t.symbol, settings)
+          const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
+          const totalCostBefore = lots.reduce((s, l) => s + l.total_cost, 0)
+          const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
+
           let rem = t.shares
           while (rem > 0 && lots.length > 0) {
             const take = Math.min(lots[0].shares, rem)
-            const mBuyCost = take === lots[0].shares ? lots[0].total_cost : Math.floor(lots[0].total_cost * (take / lots[0].shares))
+            const mBuyCost = take === rem && take === totalSharesBefore 
+              ? totalCostBefore 
+              : Math.floor(take * avgCostBefore)
             lots[0].shares -= take
             lots[0].total_cost -= mBuyCost
             rem -= take
