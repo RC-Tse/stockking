@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo, useEffect, useRef } from 'react'
-import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName, codeOnly } from '@/types'
+import { Holding, Transaction, UserSettings, Quote, fmtMoney, getStockName, codeOnly, calculateTxParts } from '@/types'
 import { useGesture } from '@use-gesture/react'
 import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion'
 import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info, Newspaper, ExternalLink } from 'lucide-react'
