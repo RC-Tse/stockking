@@ -2,12 +2,13 @@ import { NextRequest, NextResponse } from 'next/server'
 import { getStockName } from '@/types'
 
 export async function GET(req: NextRequest) {
-  const symbol = req.nextUrl.searchParams.get('symbol')?.toUpperCase()
+  const rawSymbol = req.nextUrl.searchParams.get('symbol')?.toUpperCase()
   const range = req.nextUrl.searchParams.get('range')
   const year = req.nextUrl.searchParams.get('year')
 
-  if (!symbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
+  if (!rawSymbol) return NextResponse.json({ error: 'Missing symbol' }, { status: 400 })
 
+  const symbol = (!rawSymbol.includes('.') && /^\d[A-Z0-9]{3,5}$/.test(rawSymbol)) ? rawSymbol + '.TW' : rawSymbol
   let url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d`
   
   if (year) {

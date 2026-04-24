@@ -153,7 +153,8 @@ export const ETF_CODES = new Set([
 
 export function isEtf(symbol: string): boolean {
   const code = symbol.toUpperCase().replace('.TW','').replace('.TWO','')
-  return code.startsWith('00')
+  // Taiwan ETFs start with 00 or 01. Bond ETFs often end with B or have other letters.
+  return code.startsWith('00') || code.startsWith('01')
 }
 
 export function codeOnly(symbol: string): string {
@@ -225,6 +226,8 @@ export const STOCK_NAMES: Record<string, string> = {
   '00918.TW': '凱基優選高股息30', '1301.TW': '台塑', '1303.TW': '南亞', '2002.TW': '中鋼',
   '3324.TW': '雙鴻', '6230.TW': '超眾', '1626.TW': '建準', '2408.TW': '南亞科',
   '2337.TW': '旺宏', '00934.TW': '中信成長高股息', '00936.TW': '台新臺灣IC設計',
+  '00679B.TW': '元大美債20年', '00687B.TW': '國泰美債20年', '00632R.TW': '元大台灣50反1',
+  '00631L.TW': '元大台灣50正2',
 }
 
 export function getStockName(symbol: string, fallback?: string): string {

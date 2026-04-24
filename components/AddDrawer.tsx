@@ -64,7 +64,7 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
   async function fetchStockInfo(s: string) {
     let sym = s.trim().toUpperCase()
     if (!sym) return
-    if (/^\d+$/.test(sym)) { sym = sym + '.TW'; setSymbol(sym) }
+    if (!sym.includes('.') && /^\d[A-Z0-9]{3,5}$/.test(sym)) { sym = sym + '.TW'; setSymbol(sym) }
     setFetchingName(true)
     try {
       const res = await fetch(`/api/stocks/info?symbol=${sym}`)

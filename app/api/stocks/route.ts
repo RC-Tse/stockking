@@ -159,10 +159,12 @@ export async function GET(req: NextRequest) {
   const nameMap = await getOrFetchNames(supabase, syms)
 
   const results = await Promise.all(
-    syms.map(s => date 
-      ? fetchYahooHistoricalQuote(s, date, nameMap[s]) 
-      : fetchYahooQuote(s, nameMap[s])
-    )
+    syms.map(s => {
+      const fetchSym = (!s.includes('.') && /^\d[A-Z0-9]{3,5}$/.test(s)) ? s + '.TW' : s
+      return date 
+        ? fetchYahooHistoricalQuote(fetchSym, date, nameMap[s]) 
+        : fetchYahooQuote(fetchSym, nameMap[s])
+    })
   )
   const data: Record<string, any> = {}
 
