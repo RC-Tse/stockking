@@ -120,11 +120,12 @@ async function getOrFetchNames(supabase: any, syms: string[]) {
       const toInsert: { symbol: string; name_zh: string }[] = []
       
       missing.forEach(s => {
-        const code = s.split('.')[0]
+        const fetchSym = (!s.includes('.') && /^\d[A-Z0-9]{3,5}$/.test(s)) ? s + '.TW' : s
+        const code = fetchSym.split('.')[0]
         let name = ''
-        if (s.endsWith('.TW')) {
+        if (fetchSym.endsWith('.TW')) {
           name = twseList.find((i: any) => i.Code === code)?.Name
-        } else if (s.endsWith('.TWO')) {
+        } else if (fetchSym.endsWith('.TWO')) {
           name = tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)?.CompanyName || tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)?.Name
         }
         
@@ -168,8 +169,8 @@ export async function GET(req: NextRequest) {
   )
   const data: Record<string, any> = {}
 
-  results.forEach(q => {
-    if (q) data[q.symbol] = q
+  results.forEach((q, i) => {
+    if (q) data[syms[i]] = q
   })
 
   return NextResponse.json(data, { 

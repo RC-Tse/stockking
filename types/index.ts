@@ -227,7 +227,7 @@ export const STOCK_NAMES: Record<string, string> = {
   '3324.TW': '雙鴻', '6230.TW': '超眾', '1626.TW': '建準', '2408.TW': '南亞科',
   '2337.TW': '旺宏', '00934.TW': '中信成長高股息', '00936.TW': '台新臺灣IC設計',
   '00679B.TW': '元大美債20年', '00687B.TW': '國泰美債20年', '00632R.TW': '元大台灣50反1',
-  '00631L.TW': '元大台灣50正2',
+  '00631L.TW': '元大台灣50正2', '00981A.TW': '主動統一台股增長',
 }
 
 export function getStockName(symbol: string, fallback?: string): string {
