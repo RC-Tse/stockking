@@ -232,7 +232,8 @@ export const STOCK_NAMES: Record<string, string> = {
 
 export function getStockName(symbol: string, fallback?: string): string {
   const sym = symbol.toUpperCase()
-  return STOCK_NAMES[sym] || fallback || codeOnly(sym)
+  const code = codeOnly(sym)
+  return STOCK_NAMES[sym] || STOCK_NAMES[code + '.TW'] || STOCK_NAMES[code + '.TWO'] || fallback || code
 }
 
 // ── Concept groups ────────────────────────────────────────────────────────────
