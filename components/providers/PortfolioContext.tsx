@@ -303,10 +303,14 @@ export function PortfolioProvider({
         // Aggregate Position Estimation (Source of Truth for Brokerage Parity)
         const { gross: totalGross, absNet: totalNetMV, fee: totalSellFee, tax: totalSellTax } = calculateTxParts(netShares, cp, 'SELL', sym, settings)
         
-        // Per-lot detail calculation (For display, may have 1-2元 rounding drift due to discrete lot estimation)
+        // Per-lot detail calculation
+        // 持有成本依原始買入紀錄比例計算：shares/origShares × (買入金額+手續費)
+        // 等同「直接把手持紀錄加起來」，避免 WAC 跨批次分攤造成的高估
         const lotDetails = lots.map(l => {
           const { gross, absNet, fee, tax } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
-          const roundedCost = l.total_cost
+          const roundedCost = l.origShares > 0
+            ? Math.floor(l.shares / l.origShares * (l.principal + l.rawFee))
+            : l.total_cost
 
           return {
             ...l,
