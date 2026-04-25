@@ -5,8 +5,9 @@ import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import {
   Transaction, UserSettings, Quote,
-  DEFAULT_SETTINGS, fmtMoney,
+  DEFAULT_SETTINGS,
 } from '@/types'
+import { fmtMoney } from '@/utils/formatters'
 import { 
   BarChart2, 
   ClipboardList, 
@@ -15,12 +16,12 @@ import {
   LineChart,
   RefreshCw
 } from 'lucide-react'
-import { PortfolioProvider, usePortfolio } from './providers/PortfolioContext'
-import HoldingsTab      from './HoldingsTab'
-import TransactionsTab  from './TransactionsTab'
-import SettingsTab      from './SettingsTab'
-import AnalyticsTab     from './AnalyticsTab'
-import AddDrawer        from './AddDrawer'
+import { PortfolioProvider, usePortfolio } from '@/components/providers/PortfolioContext'
+import HoldingsTab      from '@/components/portfolio/HoldingsTab'
+import TransactionsTab  from '@/components/portfolio/TransactionsTab'
+import SettingsTab      from '@/components/settings/SettingsTab'
+import AnalyticsTab     from '@/components/analytics/AnalyticsTab'
+import AddDrawer        from '@/components/portfolio/AddDrawer'
 
 export interface AppUser { id: string; email: string; name: string; avatar: string }
 

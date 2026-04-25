@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react'
 import { UserSettings } from '@/types'
 import { 
-  ChevronLeft, ChevronRight, LogOut, Layout, Target, 
-  Palette, Calculator, TrendingUp, ChevronDown, Check,
+  ChevronLeft, ChevronRight, LogOut, Layout, Palette, TrendingUp, ChevronDown, Check,
   Info, X, Settings as SettingsIcon
 } from 'lucide-react'
 
-import DatePicker from './DatePicker'
+import DatePicker from '@/components/ui/DatePicker'
 
 interface Props {
   settings: UserSettings

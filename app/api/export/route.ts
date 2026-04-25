@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import * as XLSX from 'xlsx'
-import { getStockName, calcFee, calcTax } from '@/types'
+import { getStockName } from '@/utils/stock'
+import { calcFee, calcTax } from '@/utils/calculations'
 
 
 export async function GET(req: NextRequest) {

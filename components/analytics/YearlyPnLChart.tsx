@@ -6,9 +6,11 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 import { Calendar as CalendarIcon } from 'lucide-react'
-import DatePicker from './DatePicker'
-import { type ChartRange, Transaction, UserSettings, fmtMoney, calculateTxParts } from '@/types'
-import ErrorBoundary from './ErrorBoundary'
+import DatePicker from '@/components/ui/DatePicker'
+import { type ChartRange, Transaction, UserSettings } from '@/types'
+import { fmtMoney } from '@/utils/formatters'
+import { calculateTxParts } from '@/utils/calculations'
+import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
 interface Props {
   transactions: Transaction[]

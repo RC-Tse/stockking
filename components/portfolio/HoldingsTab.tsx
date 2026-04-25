@@ -1,7 +1,10 @@
 'use client'
 
 import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Holding, Quote, UserSettings, codeOnly, fmtMoney, Transaction, CalendarEntry, calcFee, calcTax, getStockName, calculateTxParts } from '@/types'
+import { Holding, Quote, UserSettings, Transaction, CalendarEntry } from '@/types'
+import { codeOnly, calcFee, calcTax, calculateTxParts } from '@/utils/calculations'
+import { fmtMoney } from '@/utils/formatters'
+import { getStockName } from '@/utils/stock'
 import { 
   RefreshCw, 
   Target, 
@@ -20,10 +23,10 @@ import {
   EyeOff,
   PieChart as PieChartIcon
 } from 'lucide-react'
-import DatePicker from './DatePicker'
-import ConfirmModal from './ConfirmModal'
+import DatePicker from '@/components/ui/DatePicker'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts'
-import { usePortfolio } from './providers/PortfolioContext'
+import { usePortfolio } from '@/components/providers/PortfolioContext'
 
 const PIE_COLORS = [
   '#d4af37', '#e05050', '#42b07a', '#1C5D99', 
@@ -614,7 +617,6 @@ function TxRow({ t, settings, onUpdated, onDelete }: any) {
   const isBuy = t.action === 'BUY' || t.action === 'DCA'
   const finalShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = Number(price) || 0
-  const amount = finalShares * safePrice
   const actionToSave = isBuy ? (isDcaOpt ? 'DCA' : 'BUY') : 'SELL'
   const { fee, tax, net } = calculateTxParts(finalShares, safePrice, actionToSave, t.symbol, settings)
 
@@ -817,8 +819,5 @@ function MatchedPairRow({ m, symbol }: any) {
     </div>
   )
 }
-
-
-
 
 function Label({ children }: { children: React.ReactNode }) { return <label className="text-[10px] font-black opacity-30 uppercase tracking-widest ml-1 mb-1 block">{children}</label> }

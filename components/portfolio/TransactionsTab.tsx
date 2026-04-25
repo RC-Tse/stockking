@@ -1,21 +1,19 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
-import { Transaction, UserSettings, codeOnly, fmtMoney, getStockName, calcFee, calcTax, calculateTxParts } from '@/types'
-import { usePortfolio } from './providers/PortfolioContext'
+import { useState, useMemo, useEffect } from 'react'
+import { Transaction } from '@/types'
+import { codeOnly, calculateTxParts } from '@/utils/calculations'
+import { fmtMoney } from '@/utils/formatters'
+import { getStockName } from '@/utils/stock'
+import { usePortfolio } from '@/components/providers/PortfolioContext'
 import { 
   Download, 
-  TrendingUp, 
-  TrendingDown, 
-  Repeat, 
   Trash2, 
   Pencil, 
-  ChevronDown,
   Calendar,
-  BarChart2,
 } from 'lucide-react'
-import DatePicker from './DatePicker'
-import ConfirmModal from './ConfirmModal'
+import DatePicker from '@/components/ui/DatePicker'
+import ConfirmModal from '@/components/ui/ConfirmModal'
 
 interface Props {
   onRefresh: () => void
@@ -25,7 +23,7 @@ type TabMode = 'SELF' | 'REALIZED'
 type RangeMode = 'month' | '3months' | 'year' | 'all' | 'custom'
 
 export default function TransactionsTab({ onRefresh }: Props) {
-  const { stats } = usePortfolio()
+  const { stats, settings } = usePortfolio()
   const { fullHistoryStats } = stats
   const [tab, setTab] = useState<TabMode>('SELF')
   const [filter, setFilter] = useState('')
@@ -195,7 +193,7 @@ function RealizedStockCard({ s, expanded, onToggle, onUpdated, onDelete }: any) 
                 <span className="font-black text-[var(--t2)] opacity-90 text-[13px]">{(tx.shares ?? 0).toLocaleString()} 股 <span className="text-[10px] opacity-20">@</span> {(tx.price ?? 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center pl-1">
-                <span className="font-mono font-black text-[14px] ${tx.realizedCost! == undefined ? 'text-red-400' : 'text-green-400'}">{tx.realizedCost !== undefined ? `成本 ${fmtMoney(tx.realizedCost)}` : ''}</span>
+                <span className={`font-mono font-black text-[14px] ${tx.realizedCost >= 0 ? 'text-red-400' : 'text-green-400'}`}>{tx.realizedCost !== undefined ? `成本 ${fmtMoney(tx.realizedCost)}` : ''}</span>
               </div>
               {tx.matches?.map((m:any,i:number)=><div key={i} className="pl-4 border-l-2 border-white/10 text-[10px] text-[var(--t3)] italic py-0.5 ml-1">沖銷 {m.date} 買入 ({m.shares} 股)</div>)}
               {tx.type==='SELL' && (
@@ -248,7 +246,7 @@ function StatItem({ label, value, sub }: any) { return <div className="flex flex
 function DetailItem({ label, value }: any) { return <div><div className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest mb-1.5">{label}</div><div className="text-[15px] font-bold text-[var(--t1)] font-mono">{value}</div></div> }
 
 function EditForm({ tx, onCancel, onSaved }: any) {
-  const { stats, settings } = usePortfolio()
+  const { settings } = usePortfolio()
   const [date, setDate] = useState(tx.trade_date), [shares, setShares] = useState<number|''>(tx.shares), [price, setPrice] = useState<number|''>(tx.price), [note, setNote] = useState(tx.note || '')
   const [tradeType, setTradeType] = useState(tx.shares % 1000 === 0 ? 'FULL' : 'FRACTIONAL')
   const [lots, setLots] = useState<number | ''>(Math.floor(tx.shares / 1000) || 1)

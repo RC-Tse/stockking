@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getStockName } from '@/types'
+import { getStockName } from '@/utils/stock'
 
 export async function GET(req: NextRequest) {
   const rawSymbol = req.nextUrl.searchParams.get('symbol')?.toUpperCase()

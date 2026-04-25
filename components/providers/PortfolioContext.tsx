@@ -1,7 +1,8 @@
 'use client'
 
 import React, { createContext, useContext, useMemo } from 'react'
-import { Transaction, UserSettings, Holding, Quote, calcFee, calcTax, calcRawFee, calcRawTax, calculateTxParts } from '@/types'
+import { Transaction, UserSettings, Holding, Quote } from '@/types'
+import { calcFee, calcTax, calculateTxParts } from '@/utils/calculations'
 
 interface PortfolioStats {
   holdings: Holding[]

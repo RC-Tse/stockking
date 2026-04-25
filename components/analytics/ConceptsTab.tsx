@@ -1,7 +1,8 @@
 'use client'
 
 import { useState } from 'react'
-import { CONCEPT_GROUPS, Quote, codeOnly } from '@/types'
+import { CONCEPT_GROUPS, Quote } from '@/types'
+import { codeOnly } from '@/utils/calculations'
 
 interface Props {
   quotes: Record<string, Quote>

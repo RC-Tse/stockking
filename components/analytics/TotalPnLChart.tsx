@@ -6,9 +6,11 @@ import {
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 import { Calendar as CalendarIcon, RefreshCw } from 'lucide-react'
-import DatePicker from './DatePicker'
-import { Transaction, UserSettings, fmtMoney, calculateTxParts } from '@/types'
-import ErrorBoundary from './ErrorBoundary'
+import DatePicker from '@/components/ui/DatePicker'
+import { Transaction, UserSettings } from '@/types'
+import { fmtMoney } from '@/utils/formatters'
+import { calculateTxParts } from '@/utils/calculations'
+import ErrorBoundary from '@/components/ui/ErrorBoundary'
 
 interface Props {
   transactions: Transaction[]
@@ -194,14 +196,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     // Filter data to the window range.
     const filtered = chartData.filter(d => d.date >= startDate && d.date <= endDate)
     
-    // To ensure the chart starts AT the white line, we should ideally have a data point 
-    // exactly at startDate. If the first filtered data point is after startDate,
-    // we should prepend the first point's value at the startDate to ensure alignment.
-    if (filtered.length > 0 && filtered[0].date > startDate) {
-       // Optional: Add a virtual start point to anchor at the left.
-       // However, for total progress, usually the goal start is the first data day.
-    }
-
     const ticks: string[] = []
     if (filtered.length > 0) {
       ticks.push(filtered[0].date)
@@ -308,7 +302,6 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
 
       <div className="bg-[var(--bg-card)] border border-[var(--border-bright)] rounded-[48px] p-0 shadow-2xl relative overflow-hidden group">
         
-        {/* Yellow Legend Icon at Center Top */}
         <div className="absolute top-10 left-0 right-0 flex justify-center z-10 pointer-events-none">
           <div className="flex items-center gap-2">
             <div className="w-8 h-[2px] bg-accent rounded-full" />

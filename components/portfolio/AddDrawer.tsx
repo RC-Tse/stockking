@@ -1,19 +1,14 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { UserSettings, calcFee, calcTax, fmtMoney, DCAPlan, getStockName, calculateTxParts } from '@/types'
+import { UserSettings, DCAPlan } from '@/types'
+import { calculateTxParts } from '@/utils/calculations'
+import { fmtMoney } from '@/utils/formatters'
+import { getStockName } from '@/utils/stock'
 import { 
-  Plus, 
-  Pencil, 
-  ChevronDown, 
-  ChevronUp, 
-  BarChart2,
   RefreshCw,
-  TrendingDown,
-  TrendingUp,
-  Settings
 } from 'lucide-react'
-import DatePicker from './DatePicker'
+import DatePicker from '@/components/ui/DatePicker'
 
 interface Props {
   open: boolean
