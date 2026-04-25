@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
-import { calcFee, calcTax, DEFAULT_SETTINGS, UserSettings, calculateTxParts } from '@/types'
+import { DEFAULT_SETTINGS, UserSettings } from '@/types'
+import { calcFee, calcTax, calculateTxParts } from '@/utils/calculations'
 
 export async function GET() {
   const supabase = await createClient()
