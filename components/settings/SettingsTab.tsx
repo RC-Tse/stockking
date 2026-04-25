@@ -18,11 +18,11 @@ interface Props {
 type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL' | 'ANALYTICS'
 
 const THEMES = [
-  { id: 'dark',  name: '深色主題', colors: ['#0A0C10', '#232429', '#D4AF37'] },
-  { id: 'light', name: '淺色主題', colors: ['#F2EFE9', '#E3DDD3', '#B3B492'] },
-  { id: 'cool',  name: '冷色主題', colors: ['#050d1a', '#0f2040', '#0ea5e9'] },
-  { id: 'warm',  name: '暖色主題', colors: ['#120a04', '#2e1a0c', '#f59e0b'] },
-  { id: 'tech',  name: '科技主題', colors: ['#030c08', '#0c2018', '#10b981'] },
+  { id: 'dark',  name: '深色主題', colors: ['#07090e', '#141820', '#d4a830'] },
+  { id: 'light', name: '淺色主題', colors: ['#f1f1ee', '#d8d8d3', '#a07818'] },
+  { id: 'cool',  name: '冷色主題', colors: ['#cee3f2', '#a8c6de', '#0668a0'] },
+  { id: 'warm',  name: '暖色主題', colors: ['#fcefd6', '#e8cf9c', '#c06408'] },
+  { id: 'tech',  name: '科技主題', colors: ['#020704', '#091a0e', '#aaff00'] },
 ] as const
 
 export default function SettingsTab({ settings, onSignOut, onSave }: Props) {

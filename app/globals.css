@@ -5,86 +5,90 @@
 /* ── Design System ───────────────────────────────────────────── */
 
 :root {
-  /* 主題一：深色 dark (預設) */
-  --bg-base: #0a0c10;
-  --bg-surface: #10141c;
-  --bg-card: #232429;
-  --bg-hover: #2d2e35;
-  --border: rgba(255, 255, 255, 0.06);
-  --border-bright: rgba(212, 175, 55, 0.2);
-  --t1: #f0ece4;
-  --t2: #EAD8B1;
-  --t3: #a8a090;
-  --accent: #d4af37;
-  --accent-bright: #f0d060;
-  --accent-dim: rgba(212, 175, 55, 0.12);
+  /* ── 主題一：dark — 深夜金融・精緻高端 ─────────────────────── */
+  --bg-base:    #07090e;
+  --bg-surface: #0d1018;
+  --bg-card:    #141820;
+  --bg-hover:   #1c2230;
+  --border:        rgba(255, 255, 255, 0.05);
+  --border-bright: rgba(212, 175, 55,  0.22);
+  --t1: #f4f0e8;
+  --t2: #c8a85a;
+  --t3: #6e6558;
+  --accent:        #d4a830;
+  --accent-bright: #f0cc50;
+  --accent-dim:    rgba(212, 168, 48, 0.15);
 
-  /* 共有變數 (不變) */
-  --red: #e05050;
-  --red-dim: rgba(224, 80, 80, 0.15);
-  --grn: #42b07a;
-  --grn-dim: rgba(66, 176, 122, 0.15);
-  --flat: #707888;
+  /* ── 共有固定色（所有主題不得修改）─────────────────────────── */
+  --red:     #e05050;
+  --red-dim: rgba(224, 80,  80,  0.15);
+  --grn:     #42b07a;
+  --grn-dim: rgba(66,  176, 122, 0.15);
+  --flat:    #707888;
 }
 
 [data-theme="light"] {
-  --bg-base: #F2EFE9;
-  --bg-surface: #EBE7E0;
-  --bg-card: #E3DDD3;
-  --bg-hover: #D6CDBF;
-  --border: rgba(0, 0, 0, 0.05);
-  --border-bright: rgba(179, 180, 146, 0.4);
-  --t1: #2C2C2E;
-  --t2: #757570;
-  --t3: #A0A09A;
-  --accent: #B3B492;
-  --accent-bright: #8A8B70;
-  --accent-dim: rgba(179, 180, 146, 0.1);
+  /* ── 主題二：light — 石灰中性白・清爽低飽和 ────────────────── */
+  --bg-base:    #f1f1ee;
+  --bg-surface: #e5e5e1;
+  --bg-card:    #d8d8d3;
+  --bg-hover:   #cacac4;
+  --border:        rgba(0,   0,   0,   0.07);
+  --border-bright: rgba(140, 120, 30,  0.26);
+  --t1: #181818;
+  --t2: #484844;
+  --t3: #888882;
+  --accent:        #a07818;
+  --accent-bright: #c89820;
+  --accent-dim:    rgba(160, 120, 24, 0.12);
 }
 
 [data-theme="cool"] {
-  --bg-base: #050d1a;
-  --bg-surface: #0a1628;
-  --bg-card: #0f2040;
-  --bg-hover: #152a52;
-  --border: rgba(100, 200, 255, 0.07);
-  --border-bright: rgba(56, 189, 248, 0.3);
-  --t1: #e0f4ff;
-  --t2: #7dd3fc;
-  --t3: #4a8aad;
-  --accent: #0ea5e9;
-  --accent-bright: #38bdf8;
-  --accent-dim: rgba(14, 165, 233, 0.12);
+  /* ── 主題三：cool — 霧藍淺底・冷靜清澈 ─────────────────────── */
+  --bg-base:    #cee3f2;
+  --bg-surface: #bbd5ea;
+  --bg-card:    #a8c6de;
+  --bg-hover:   #94b6d0;
+  --border:        rgba(0,   80,  150, 0.10);
+  --border-bright: rgba(8,   110, 180, 0.32);
+  --t1: #08182a;
+  --t2: #245070;
+  --t3: #6090ae;
+  --accent:        #0668a0;
+  --accent-bright: #1690d0;
+  --accent-dim:    rgba(6,   104, 160, 0.16);
 }
 
 [data-theme="warm"] {
-  --bg-base: #120a04;
-  --bg-surface: #1e1008;
-  --bg-card: #2e1a0c;
-  --bg-hover: #3d2214;
-  --border: rgba(255, 200, 130, 0.07);
-  --border-bright: rgba(234, 160, 60, 0.3);
-  --t1: #fff8e8;
-  --t2: #fcd097;
-  --t3: #b8895a;
-  --accent: #f59e0b;
-  --accent-bright: #fbbf24;
-  --accent-dim: rgba(245, 158, 11, 0.12);
+  /* ── 主題四：warm — 蜂蜜琥珀底・飽和溫潤 ──────────────────── */
+  --bg-base:    #fcefd6;
+  --bg-surface: #f3e0b8;
+  --bg-card:    #e8cf9c;
+  --bg-hover:   #dbbe84;
+  --border:        rgba(120, 70,  0,   0.09);
+  --border-bright: rgba(190, 120, 20,  0.32);
+  --t1: #1c0e02;
+  --t2: #6a380e;
+  --t3: #a07038;
+  --accent:        #c06408;
+  --accent-bright: #e08820;
+  --accent-dim:    rgba(192, 100, 8,   0.16);
 }
 
 [data-theme="tech"] {
-  --bg-base: #030c08;
-  --bg-surface: #071410;
-  --bg-card: #0c2018;
-  --bg-hover: #122d22;
-  --border: rgba(0, 255, 128, 0.06);
-  --border-bright: rgba(16, 185, 129, 0.25);
-  --t1: #e0fff0;
-  --t2: #34d399;
-  --t3: #059669;
-  --accent: #10b981;
-  --accent-bright: #34d399;
-  --accent-dim: rgba(16, 185, 129, 0.12);
+  /* ── 主題五：tech — 極暗底+電氣萊姆・駭客 Matrix 風 ────────── */
+  --bg-base:    #020704;
+  --bg-surface: #050f08;
+  --bg-card:    #091a0e;
+  --bg-hover:   #0f2818;
+  --border:        rgba(180, 255, 80,  0.05);
+  --border-bright: rgba(160, 255, 60,  0.20);
+  --t1: #edffd8;
+  --t2: #a8e040;
+  --t3: #4a7020;
+  --accent:        #aaff00;
+  --accent-bright: #ccff44;
+  --accent-dim:    rgba(170, 255, 0,   0.12);
 }
 
 html {
@@ -159,7 +163,10 @@ img {
   transition: all 0.2s;
 }
 
-[data-theme="light"] .input-base {
+/* 淺色主題的輸入框用更深的底色以利辨識 */
+[data-theme="light"] .input-base,
+[data-theme="cool"] .input-base,
+[data-theme="warm"] .input-base {
   background: var(--bg-hover);
 }
 
@@ -184,6 +191,14 @@ img {
   border-radius: 12px;
   padding: 14px 24px;
   transition: all 0.2s;
+}
+
+/* 淺色主題 btn-secondary 改用深色半透明 */
+[data-theme="light"] .btn-secondary,
+[data-theme="cool"] .btn-secondary,
+[data-theme="warm"] .btn-secondary {
+  background: rgba(0, 0, 0, 0.06);
+  border: 1px solid rgba(0, 0, 0, 0.12);
 }
 
 .btn-danger {
