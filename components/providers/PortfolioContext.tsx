@@ -100,10 +100,10 @@ export function PortfolioProvider({
       const stock = fullHistoryStats[tx.symbol]
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
-        // 使用資料庫實際記錄的金額，確保與紀錄頁面的數字完全一致
+        // 使用資料庫已計算好的 net_amount（已取整），避免 DCA 小數點金額累積誤差
         const gross = tx.amount
         const fee = tx.fee
-        const absNet = gross + fee
+        const absNet = Math.round(-tx.net_amount)
 
         lots.push({
           shares: tx.shares,
@@ -242,7 +242,7 @@ export function PortfolioProvider({
         if (!tempInv[t.symbol]) tempInv[t.symbol] = []
         const lots = tempInv[t.symbol]
         if (t.action === 'BUY' || t.action === 'DCA') {
-          lots.push({ shares: t.shares, total_cost: t.amount + t.fee })
+          lots.push({ shares: t.shares, total_cost: Math.round(-t.net_amount) })
         } else if (t.action === 'SELL') {
           const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
           const totalCostBefore = lots.reduce((s, l) => s + l.total_cost, 0)
@@ -308,9 +308,7 @@ export function PortfolioProvider({
         // 等同「直接把手持紀錄加起來」，避免 WAC 跨批次分攤造成的高估
         const lotDetails = lots.map(l => {
           const { gross, absNet, fee, tax } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
-          const roundedCost = l.origShares > 0
-            ? Math.floor(l.shares / l.origShares * (l.principal + l.rawFee))
-            : l.total_cost
+          const roundedCost = l.total_cost
 
           return {
             ...l,

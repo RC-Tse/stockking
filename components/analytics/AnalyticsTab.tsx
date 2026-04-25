@@ -107,7 +107,7 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
         if (tx.action === 'BUY' || tx.action === 'DCA') {
           totalShares += tx.shares
-          totalCost += tx.amount + tx.fee
+          totalCost += Math.round(-tx.net_amount)
           isBuy = true
           txPrice = tx.price
           txShares += tx.shares

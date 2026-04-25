@@ -98,7 +98,7 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
         const t = sortedTxs[txIdx]
         if (!inventory[t.symbol]) inventory[t.symbol] = []
         if (t.action === 'BUY' || t.action === 'DCA') {
-          inventory[t.symbol].push({ shares: t.shares, cost: t.amount + t.fee })
+          inventory[t.symbol].push({ shares: t.shares, cost: Math.round(-t.net_amount) })
         } else if (t.action === 'DIVIDEND') {
           const dividendTotal = Math.floor(t.shares * t.price)
           const totalShares = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
