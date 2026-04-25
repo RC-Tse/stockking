@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useMemo } from 'react'
 import { Transaction, UserSettings, Holding, Quote } from '@/types'
-import { calcFee, calcTax, calculateTxParts } from '@/utils/calculations'
+import { calculateTxParts } from '@/utils/calculations'
 
 interface PortfolioStats {
   holdings: Holding[]
@@ -100,18 +100,20 @@ export function PortfolioProvider({
       const stock = fullHistoryStats[tx.symbol]
 
       if (tx.action === 'BUY' || tx.action === 'DCA') {
-        const { gross, fee, net } = calculateTxParts(tx.shares, tx.price, tx.action, tx.symbol, settings)
-        const absNet = Math.abs(net)
-        
-        lots.push({ 
-          shares: tx.shares, 
-          price: tx.price, 
-          principal: gross, 
-          rawFee: fee, 
-          origShares: tx.shares, 
-          date: tx.trade_date, 
-          id: tx.id, 
-          total_cost: absNet 
+        // 使用資料庫實際記錄的金額，確保與紀錄頁面的數字完全一致
+        const gross = tx.amount
+        const fee = tx.fee
+        const absNet = gross + fee
+
+        lots.push({
+          shares: tx.shares,
+          price: tx.price,
+          principal: gross,
+          rawFee: fee,
+          origShares: tx.shares,
+          date: tx.trade_date,
+          id: tx.id,
+          total_cost: absNet
         })
 
         if (!isSnapshotPass) {
@@ -120,10 +122,10 @@ export function PortfolioProvider({
         }
 
       } else if (tx.action === 'SELL') {
-        const gross_sell = Math.floor(tx.shares * tx.price)
-        const fee_sell = calcFee(tx.shares, tx.price, settings, true)
-        const tax_sell = calcTax(tx.shares, tx.price, tx.symbol, settings)
-        const net_sell = gross_sell - fee_sell - tax_sell
+        // 使用資料庫實際記錄的手續費與稅，確保損益與紀錄頁面完全對齊
+        const fee_sell = tx.fee
+        const tax_sell = tx.tax
+        const net_sell = tx.net_amount
         
         const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
         const totalCostBefore = lots.reduce((s, l) => s + l.total_cost, 0)
@@ -240,8 +242,7 @@ export function PortfolioProvider({
         if (!tempInv[t.symbol]) tempInv[t.symbol] = []
         const lots = tempInv[t.symbol]
         if (t.action === 'BUY' || t.action === 'DCA') {
-          const { net } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
-          lots.push({ shares: t.shares, total_cost: Math.abs(net) })
+          lots.push({ shares: t.shares, total_cost: t.amount + t.fee })
         } else if (t.action === 'SELL') {
           const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
           const totalCostBefore = lots.reduce((s, l) => s + l.total_cost, 0)
@@ -284,8 +285,8 @@ export function PortfolioProvider({
       if (cp > 0) {
         lots.forEach(l => {
           const lotCostRounded = l.total_cost
-              const grossMvRounded = Math.floor(l.shares * cp)
-          yearEndUnrealizedSnapshot += (grossMvRounded - lotCostRounded)
+              const { absNet: netMvRounded } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
+          yearEndUnrealizedSnapshot += (netMvRounded - lotCostRounded)
         })
       }
     })
@@ -312,14 +313,14 @@ export function PortfolioProvider({
             market_value: gross,
             net_market_value: absNet,
             total_cost: roundedCost,
-            unrealized_pnl: gross - roundedCost,
+            unrealized_pnl: absNet - roundedCost,
             sell_fee: fee,
             sell_tax: tax
           }
         })
 
         const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
-        const upnl = totalGross - summedCost
+        const upnl = totalNetMV - summedCost
 
         return [{
           symbol: sym,
@@ -362,7 +363,7 @@ export function PortfolioProvider({
 
     return {
       holdings: hList,
-      allTimeRealized: filteredAllTimeRealized,
+      allTimeRealized: allTimeRealized,
       totalRealizedCostBasis,
       yearlyRealized,
       yearlyRealizedCostBasis,
