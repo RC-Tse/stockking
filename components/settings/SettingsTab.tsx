@@ -18,12 +18,11 @@ interface Props {
 type View = 'MAIN' | 'CALC' | 'UI' | 'GOAL' | 'ANALYTICS'
 
 const THEMES = [
-  { id: 'dark',   name: '深色主題', colors: ['#0A0C10', '#232429', '#D4AF37'] },
-  { id: 'light',  name: '淺色主題', colors: ['#F2EFE9', '#E3DDD3', '#B3B492'] },
-  { id: 'blue',   name: '藍色主題', colors: ['#F2EFE9', '#003366', '#4682B4'] },
-  { id: 'green',  name: '綠色主題', colors: ['#080C07', '#1A2314', '#A4B494'] },
-  { id: 'rose',   name: '玫瑰主題', colors: ['#0C0809', '#2D1F21', '#D0A9AF'] },
-  { id: 'purple', name: '紫色主題', colors: ['#100818', '#3B2458', '#8B5CF6'] },
+  { id: 'dark',  name: '深色主題', colors: ['#0A0C10', '#232429', '#D4AF37'] },
+  { id: 'light', name: '淺色主題', colors: ['#F2EFE9', '#E3DDD3', '#B3B492'] },
+  { id: 'cool',  name: '冷色主題', colors: ['#050d1a', '#0f2040', '#0ea5e9'] },
+  { id: 'warm',  name: '暖色主題', colors: ['#120a04', '#2e1a0c', '#f59e0b'] },
+  { id: 'tech',  name: '科技主題', colors: ['#030c08', '#0c2018', '#10b981'] },
 ] as const
 
 export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
@@ -63,7 +62,7 @@ export default function SettingsTab({ settings, onSignOut, onSave }: Props) {
     document.documentElement.setAttribute('data-theme', themeId)
     const icon = document.querySelector('link[rel="apple-touch-icon"]')
     if (icon) {
-      const isLightIcon = themeId === 'light' || themeId === 'rose'
+      const isLightIcon = themeId === 'light'
       icon.setAttribute('href', isLightIcon ? '/icons/icon-192-light.svg' : '/icons/icon-192.svg')
     }
     await handleSave({ theme: themeId })

@@ -71,10 +71,9 @@ export default function DashboardClient({ user }: { user: AppUser }) {
     const iconLinks = document.querySelectorAll('link[rel="apple-touch-icon"], link[rel="icon"]')
     let iconPath = '/icons/icon-192.svg'
     if (t === 'light') iconPath = '/icons/icon-192-light.svg'
-    else if (t === 'blue') iconPath = '/icons/icon-blue.svg'
-    else if (t === 'purple') iconPath = '/icons/icon-purple.svg'
-    else if (t === 'rose') iconPath = '/icons/icon-rose.svg'
-    else if (t === 'green') iconPath = '/icons/icon-green.svg'
+    else if (t === 'cool') iconPath = '/icons/icon-blue.svg'
+    else if (t === 'warm') iconPath = '/icons/icon-rose.svg'
+    else if (t === 'tech') iconPath = '/icons/icon-green.svg'
 
     iconLinks.forEach(link => {
       link.setAttribute('href', iconPath)

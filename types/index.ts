@@ -116,7 +116,7 @@ export interface UserSettings {
   year_goals: Record<string, number> 
   total_goal: number
   total_goal_start_date: string
-  theme: 'dark' | 'light' | 'blue' | 'green' | 'rose' | 'purple'
+  theme: 'dark' | 'light' | 'cool' | 'warm' | 'tech'
   chart_default_range: ChartRange
   total_chart_default_range: TotalChartRange
   stock_chart_default_range: ChartRange
