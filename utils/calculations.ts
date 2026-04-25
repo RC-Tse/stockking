@@ -30,15 +30,20 @@ export function calcTax(shares: number, price: number, symbol: string, s: UserSe
   return Math.floor(calcRawTax(shares, price, symbol, s))
 }
 
-export function calculateTxParts(shares: number, price: number, action: 'BUY' | 'SELL' | 'DCA', symbol: string, settings: UserSettings) {
+export function calculateTxParts(shares: number, price: number, action: 'BUY' | 'SELL' | 'DCA' | 'DIVIDEND', symbol: string, settings: UserSettings) {
+  if (action === 'DIVIDEND') {
+    const gross = Math.floor(shares * price)
+    return { gross, fee: 0, tax: 0, net: gross, absNet: gross }
+  }
+
   const isDca = action === 'DCA'
   const isSell = action === 'SELL'
-  
+
   const gross = Math.floor(shares * price)
   const fee = calcFee(shares, price, settings, isSell, isDca)
   const tax = isSell ? calcTax(shares, price, symbol, settings) : 0
-  
+
   const net = isSell ? (gross - fee - tax) : (gross + fee)
-  
+
   return { gross, fee, tax, net: isSell ? net : -net, absNet: net }
 }

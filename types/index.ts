@@ -7,7 +7,7 @@ export interface Transaction {
   user_id: string
   symbol: string
   name_zh?: string
-  action: 'BUY' | 'SELL' | 'DCA'
+  action: 'BUY' | 'SELL' | 'DCA' | 'DIVIDEND'
   trade_date: string
   shares: number
   price: number

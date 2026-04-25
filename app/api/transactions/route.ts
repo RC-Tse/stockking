@@ -78,8 +78,9 @@ export async function PUT(req: NextRequest) {
 
   const sym = current.symbol
   // Allow switching between BUY and DCA, otherwise keep current.action
-  const action = (newAction === 'BUY' || newAction === 'DCA') && (current.action === 'BUY' || current.action === 'DCA') 
-    ? newAction 
+  const action = (newAction === 'BUY' || newAction === 'DCA') && (current.action === 'BUY' || current.action === 'DCA')
+    ? newAction
+    : current.action === 'DIVIDEND' ? 'DIVIDEND'
     : current.action
   const { gross, fee, tax, net: net_amount } = calculateTxParts(Number(shares), Number(price), action, sym, s)
 

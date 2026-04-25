@@ -23,7 +23,7 @@ interface Props {
 }
 
 type Mode = 'ORDER'
-type Action = 'BUY' | 'SELL'
+type Action = 'BUY' | 'SELL' | 'DIVIDEND'
 type TradeType = 'FULL' | 'FRACTIONAL'
 
 export default function AddDrawer({ open, settings, onClose, initialPlan, onSave, onSavePlan }: Props) {
@@ -79,7 +79,9 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
     } catch (err) { setStockName('') } finally { setFetchingName(false) }
   }
 
-  const actualShares = tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
+  const actualShares = action === 'DIVIDEND'
+    ? (Number(shares)||0)
+    : tradeType === 'FULL' ? (Number(lots)||0) * 1000 : (Number(shares)||0)
   const safePrice = typeof price === 'number' ? price : 0
   const { gross, fee, tax, net } = calculateTxParts(actualShares, safePrice, (isDca && action === 'BUY') ? 'DCA' : action, symbol, settings)
 
@@ -120,8 +122,11 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
 
             <div className="space-y-6">
               <div className="flex gap-2 p-1 bg-white/5 rounded-2xl">
-                {(['BUY','SELL'] as Action[]).map(a => (
-                  <button key={a} onClick={() => setAction(a)} className={`flex-1 py-3.5 rounded-xl text-sm font-black transition-all ${action === a ? (a === 'BUY' ? 'bg-red-500 text-white shadow-lg' : 'bg-green-500 text-white shadow-lg') : 'text-[var(--t2)] hover:bg-white/5'}`}>{a === 'BUY' ? '買入紀錄' : '賣出紀錄'}</button>
+                {(['BUY','SELL','DIVIDEND'] as Action[]).map(a => (
+                  <button key={a} onClick={() => { setAction(a); setLots(''); setShares(''); setPrice('') }}
+                    className={`flex-1 py-3.5 rounded-xl text-sm font-black transition-all ${action === a ? (a === 'BUY' ? 'bg-red-500 text-white shadow-lg' : a === 'SELL' ? 'bg-green-500 text-white shadow-lg' : 'bg-yellow-500 text-black shadow-lg') : 'text-[var(--t2)] hover:bg-white/5'}`}>
+                    {a === 'BUY' ? '買入紀錄' : a === 'SELL' ? '賣出紀錄' : '現金股利'}
+                  </button>
                 ))}
               </div>
               
@@ -134,22 +139,31 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
                 {stockName && <div className="px-2 text-sm font-black text-accent/80">{stockName}</div>}
               </div>
 
-              <div className="space-y-2">
-                <Label>交易單位</Label>
-                <div className="flex gap-2">
-                  {(['FULL','FRACTIONAL'] as TradeType[]).map(t => (
-                    <button key={t} onClick={() => setTradeType(t)} className={`flex-1 py-3 rounded-xl text-xs font-black border transition-all ${tradeType === t ? 'bg-accent/10 text-accent border-accent' : 'bg-white/5 text-[var(--t2)] border-transparent'}`}>{t === 'FULL' ? '整張 (1000股)' : '零股'}</button>
-                  ))}
+              {action !== 'DIVIDEND' && (
+                <div className="space-y-2">
+                  <Label>交易單位</Label>
+                  <div className="flex gap-2">
+                    {(['FULL','FRACTIONAL'] as TradeType[]).map(t => (
+                      <button key={t} onClick={() => setTradeType(t)} className={`flex-1 py-3 rounded-xl text-xs font-black border transition-all ${tradeType === t ? 'bg-accent/10 text-accent border-accent' : 'bg-white/5 text-[var(--t2)] border-transparent'}`}>{t === 'FULL' ? '整張 (1000股)' : '零股'}</button>
+                    ))}
+                  </div>
                 </div>
-              </div>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>{tradeType === 'FULL' ? '交易張數' : '交易股數'}</Label>
-                  <input type="number" inputMode="numeric" value={tradeType === 'FULL' ? lots : shares} onChange={e => { const v = e.target.value===''?'':Number(e.target.value); tradeType==='FULL'?setLots(v as any):setShares(v as any)}} className="input-base font-black font-mono text-xl py-4 text-center" placeholder="0" />
+                  <Label>{action === 'DIVIDEND' ? '配息時持股數' : tradeType === 'FULL' ? '交易張數' : '交易股數'}</Label>
+                  <input type="number" inputMode="numeric"
+                    value={action === 'DIVIDEND' ? shares : tradeType === 'FULL' ? lots : shares}
+                    onChange={e => {
+                      const v = e.target.value === '' ? '' : Number(e.target.value)
+                      if (action === 'DIVIDEND' || tradeType === 'FRACTIONAL') setShares(v as any)
+                      else setLots(v as any)
+                    }}
+                    className="input-base font-black font-mono text-xl py-4 text-center" placeholder="0" />
                 </div>
                 <div className="space-y-2">
-                  <Label>成交價格</Label>
+                  <Label>{action === 'DIVIDEND' ? '每股現金股利(元)' : '成交價格'}</Label>
                   <input type="number" inputMode="decimal" value={price} onChange={e => setPrice(e.target.value === '' ? '' : Number(e.target.value))} className="input-base font-black font-mono text-xl py-4 text-center" placeholder="0.00" />
                 </div>
               </div>
@@ -178,15 +192,28 @@ export default function AddDrawer({ open, settings, onClose, initialPlan, onSave
 
               {safePrice > 0 && actualShares > 0 && (
                 <div className="card-base p-5 space-y-4 bg-black/40 border-accent/20">
-                  <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">成交總額</span><span className="font-mono font-black">{fmtMoney(gross)}</span></div>
-                  <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">手續費 + 稅</span><span className="font-mono font-black">{fmtMoney(fee + tax)}</span></div>
-                  <div className="flex justify-between items-center pt-4 border-t border-white/5">
-                    <span className="text-base font-black text-[var(--t2)]">評估淨收支</span>
-                    <span className={`text-2xl font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>{net >= 0 ? '+' : ''}{fmtMoney(net)}</span>
-                  </div>
+                  {action === 'DIVIDEND' ? (
+                    <>
+                      <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">持有股數</span><span className="font-mono font-black">{actualShares.toLocaleString()} 股</span></div>
+                      <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">每股股利</span><span className="font-mono font-black">{safePrice} 元</span></div>
+                      <div className="flex justify-between items-center pt-4 border-t border-white/5">
+                        <span className="text-base font-black text-[var(--t2)]">現金股利總額</span>
+                        <span className="text-2xl font-black font-mono text-yellow-400">+{fmtMoney(gross)}</span>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">成交總額</span><span className="font-mono font-black">{fmtMoney(gross)}</span></div>
+                      <div className="flex justify-between items-center text-sm"><span className="opacity-40 font-bold">手續費 + 稅</span><span className="font-mono font-black">{fmtMoney(fee + tax)}</span></div>
+                      <div className="flex justify-between items-center pt-4 border-t border-white/5">
+                        <span className="text-base font-black text-[var(--t2)]">評估淨收支</span>
+                        <span className={`text-2xl font-black font-mono ${net >= 0 ? 'text-red-400' : 'text-green-400'}`}>{net >= 0 ? '+' : ''}{fmtMoney(net)}</span>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
-              <button onClick={submitOrder} disabled={saving || !symbol || actualShares <= 0 || safePrice <= 0} className="w-full btn-primary py-5 text-lg shadow-xl shadow-accent/20">{saving ? '處理中...' : '確認記錄交易'}</button>
+              <button onClick={submitOrder} disabled={saving || !symbol || actualShares <= 0 || safePrice <= 0} className="w-full btn-primary py-5 text-lg shadow-xl shadow-accent/20">{saving ? '處理中...' : action === 'DIVIDEND' ? '確認記錄股利' : '確認記錄交易'}</button>
             </div>
           </div>
         </div>

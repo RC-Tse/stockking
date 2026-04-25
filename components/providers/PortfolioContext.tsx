@@ -193,17 +193,37 @@ export function PortfolioProvider({
           stock.tax += tax_sell
           stock.realized += profit
           stock.count++
-          stock.history.push({ 
-            ...tx, 
-            type: 'SELL', 
-            matches, 
-            profit, 
-            net: matchedSellNetTotal, 
-            realizedCost: matchedBuyCostTotal, 
-            fee: fee_sell, 
+          stock.history.push({
+            ...tx,
+            type: 'SELL',
+            matches,
+            profit,
+            net: matchedSellNetTotal,
+            realizedCost: matchedBuyCostTotal,
+            fee: fee_sell,
             tax: tax_sell,
-            matchedBuyFee: matchedBuyFeeTotal 
+            matchedBuyFee: matchedBuyFeeTotal
           })
+        }
+
+      } else if (tx.action === 'DIVIDEND') {
+        // 國泰除息成本調降：新平均成本 = (舊平均成本 × 持股 − 配息金額) ÷ 持股
+        const dividendTotal = Math.floor(tx.shares * tx.price)
+        const totalShares = lots.reduce((s, l) => s + l.shares, 0)
+        if (totalShares > 0 && dividendTotal > 0) {
+          let remaining = dividendTotal
+          lots.forEach((l, i) => {
+            if (i === lots.length - 1) {
+              l.total_cost = Math.max(0, l.total_cost - remaining)
+            } else {
+              const reduction = Math.floor(dividendTotal * (l.shares / totalShares))
+              l.total_cost = Math.max(0, l.total_cost - reduction)
+              remaining -= reduction
+            }
+          })
+        }
+        if (!isSnapshotPass) {
+          stock.history.push({ ...tx, type: 'DIVIDEND', dividendTotal })
         }
       }
     }
@@ -220,7 +240,7 @@ export function PortfolioProvider({
         if (!tempInv[t.symbol]) tempInv[t.symbol] = []
         const lots = tempInv[t.symbol]
         if (t.action === 'BUY' || t.action === 'DCA') {
-          const { gross, fee, net } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
+          const { net } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
           lots.push({ shares: t.shares, total_cost: Math.abs(net) })
         } else if (t.action === 'SELL') {
           const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
@@ -230,13 +250,28 @@ export function PortfolioProvider({
           let rem = t.shares
           while (rem > 0 && lots.length > 0) {
             const take = Math.min(lots[0].shares, rem)
-            const mBuyCost = take === rem && take === totalSharesBefore 
-              ? totalCostBefore 
+            const mBuyCost = take === rem && take === totalSharesBefore
+              ? totalCostBefore
               : Math.floor(take * avgCostBefore)
             lots[0].shares -= take
             lots[0].total_cost -= mBuyCost
             rem -= take
             if (lots[0].shares <= 0) lots.shift()
+          }
+        } else if (t.action === 'DIVIDEND') {
+          const dividendTotal = Math.floor(t.shares * t.price)
+          const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
+          if (totalSharesBefore > 0 && dividendTotal > 0) {
+            let remaining = dividendTotal
+            lots.forEach((l, i) => {
+              if (i === lots.length - 1) {
+                l.total_cost = Math.max(0, l.total_cost - remaining)
+              } else {
+                const reduction = Math.floor(dividendTotal * (l.shares / totalSharesBefore))
+                l.total_cost = Math.max(0, l.total_cost - reduction)
+                remaining -= reduction
+              }
+            })
           }
         }
       }
@@ -249,8 +284,8 @@ export function PortfolioProvider({
       if (cp > 0) {
         lots.forEach(l => {
           const lotCostRounded = l.total_cost
-          const { absNet: netMvRounded } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
-          yearEndUnrealizedSnapshot += (netMvRounded - lotCostRounded)
+              const grossMvRounded = Math.floor(l.shares * cp)
+          yearEndUnrealizedSnapshot += (grossMvRounded - lotCostRounded)
         })
       }
     })
@@ -271,20 +306,20 @@ export function PortfolioProvider({
         const lotDetails = lots.map(l => {
           const { gross, absNet, fee, tax } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
           const roundedCost = l.total_cost
-          
+
           return {
             ...l,
             market_value: gross,
             net_market_value: absNet,
             total_cost: roundedCost,
-            unrealized_pnl: absNet - roundedCost,
+            unrealized_pnl: gross - roundedCost,
             sell_fee: fee,
             sell_tax: tax
           }
         })
 
         const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
-        const upnl = totalNetMV - summedCost
+        const upnl = totalGross - summedCost
 
         return [{
           symbol: sym,
