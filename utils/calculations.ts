@@ -14,7 +14,7 @@ export function calcRawFee(shares: number, price: number, s: UserSettings, isSel
   if (isDca) return s.dca_fee_min
   const rate = isSell ? s.sell_fee_rate : s.buy_fee_rate
   const discount = isSell ? s.sell_discount : s.buy_discount
-  return Math.max(1, shares * price * rate * discount)
+  return Math.max(s.fee_min, shares * price * rate * discount)
 }
 
 export function calcFee(shares: number, price: number, s: UserSettings, isSell = false, isDca = false): number {
