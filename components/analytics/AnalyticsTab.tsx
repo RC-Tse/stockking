@@ -4,7 +4,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import { Holding, Transaction, UserSettings, Quote } from '@/types'
 import { fmtMoney } from '@/utils/formatters'
 import { getStockName } from '@/utils/stock'
-import { codeOnly, calculateTxParts } from '@/utils/calculations'
+import { codeOnly } from '@/utils/calculations'
 import { useGesture } from '@use-gesture/react'
 import { motion, useSpring, useTransform, useMotionValue } from 'framer-motion'
 import { TrendingUp, RefreshCw, Calendar as CalendarIcon, Info, Newspaper, ExternalLink } from 'lucide-react'
@@ -104,19 +104,23 @@ export default function AnalyticsTab({ onRefresh }: Props) {
 
       while (txIdx < txs.length && txs[txIdx].trade_date <= h.date) {
         const tx = txs[txIdx]
-        const { absNet } = calculateTxParts(tx.shares, tx.price, tx.action, tx.symbol, settings)
-        
-        if (tx.action !== 'SELL') {
+
+        if (tx.action === 'BUY' || tx.action === 'DCA') {
           totalShares += tx.shares
-          totalCost += absNet
+          totalCost += tx.amount + tx.fee
           isBuy = true
           txPrice = tx.price
           txShares += tx.shares
+        } else if (tx.action === 'DIVIDEND') {
+          const dividendTotal = Math.floor(tx.shares * tx.price)
+          if (totalShares > 0 && dividendTotal > 0) {
+            totalCost = Math.max(0, totalCost - dividendTotal)
+          }
         } else {
           // Weighted Average: cost removed is based on the average before the sell
           const avgBefore = totalShares > 0 ? totalCost / totalShares : 0
           const mBuyCost = tx.shares === totalShares ? totalCost : Math.floor(tx.shares * avgBefore)
-          
+
           totalShares -= tx.shares
           totalCost -= mBuyCost
         }

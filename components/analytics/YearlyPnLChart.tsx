@@ -79,9 +79,23 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
     while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date < yearStartStr) {
       const t = sortedTxs[txIdx]
       if (!inventory[t.symbol]) inventory[t.symbol] = []
-      if (t.action !== 'SELL') {
-        const { absNet } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
-        inventory[t.symbol].push({ shares: t.shares, cost: absNet })
+      if (t.action === 'BUY' || t.action === 'DCA') {
+        inventory[t.symbol].push({ shares: t.shares, cost: t.amount + t.fee })
+      } else if (t.action === 'DIVIDEND') {
+        const dividendTotal = Math.floor(t.shares * t.price)
+        const totalShares = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
+        if (totalShares > 0 && dividendTotal > 0) {
+          let remaining = dividendTotal
+          inventory[t.symbol].forEach((l, i) => {
+            if (i === inventory[t.symbol].length - 1) {
+              l.cost = Math.max(0, l.cost - remaining)
+            } else {
+              const reduction = Math.floor(dividendTotal * (l.shares / totalShares))
+              l.cost = Math.max(0, l.cost - reduction)
+              remaining -= reduction
+            }
+          })
+        }
       } else {
         const totalSharesBefore = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
         const totalCostBefore = inventory[t.symbol].reduce((s, l) => s + l.cost, 0)
@@ -91,10 +105,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         while (rem > 0 && inventory[t.symbol].length > 0) {
           const lot = inventory[t.symbol][0]
           const take = Math.min(lot.shares, rem)
-          const mBuyCost = take === rem && take === totalSharesBefore 
-            ? totalCostBefore 
+          const mBuyCost = take === rem && take === totalSharesBefore
+            ? totalCostBefore
             : Math.floor(take * avgCostBefore)
-          
+
           lot.cost -= mBuyCost
           lot.shares -= take
           rem -= take
@@ -129,12 +143,26 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         while (txIdx < sortedTxs.length && sortedTxs[txIdx].trade_date === dStr) {
           const t = sortedTxs[txIdx]
           if (!inventory[t.symbol]) inventory[t.symbol] = []
-          if (t.action !== 'SELL') {
-            const { absNet } = calculateTxParts(t.shares, t.price, t.action, t.symbol, settings)
-            inventory[t.symbol].push({ shares: t.shares, cost: absNet })
+          if (t.action === 'BUY' || t.action === 'DCA') {
+            inventory[t.symbol].push({ shares: t.shares, cost: t.amount + t.fee })
+          } else if (t.action === 'DIVIDEND') {
+            const dividendTotal = Math.floor(t.shares * t.price)
+            const totalShares = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
+            if (totalShares > 0 && dividendTotal > 0) {
+              let remaining = dividendTotal
+              inventory[t.symbol].forEach((l, i) => {
+                if (i === inventory[t.symbol].length - 1) {
+                  l.cost = Math.max(0, l.cost - remaining)
+                } else {
+                  const reduction = Math.floor(dividendTotal * (l.shares / totalShares))
+                  l.cost = Math.max(0, l.cost - reduction)
+                  remaining -= reduction
+                }
+              })
+            }
           } else {
-            const { absNet: net_sell } = calculateTxParts(t.shares, t.price, 'SELL', t.symbol, settings)
-            
+            const net_sell = t.net_amount
+
             const totalSharesBefore = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
             const totalCostBefore = inventory[t.symbol].reduce((s, l) => s + l.cost, 0)
             const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
@@ -144,16 +172,16 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
             while (rem > 0 && inventory[t.symbol].length > 0) {
               const lot = inventory[t.symbol][0]
               const take = Math.min(lot.shares, rem)
-              
-              const mBuyCost = take === rem && take === totalSharesBefore 
-                ? totalCostBefore 
+
+              const mBuyCost = take === rem && take === totalSharesBefore
+                ? totalCostBefore
                 : Math.floor(take * avgCostBefore)
-                
+
               const mSellNet = take === rem ? sellProceedsRemaining : Math.floor(net_sell * (take / t.shares))
 
               cumulativeRealizedThisYear += (mSellNet - mBuyCost)
               sellProceedsRemaining -= mSellNet
-              
+
               lot.shares -= take
               lot.cost -= mBuyCost
               rem -= take
