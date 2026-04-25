@@ -107,6 +107,12 @@ export default function HoldingsTab({ onRefresh }: Props) {
     return holdings.find(h => h.symbol === selectedPieSym)
   }, [holdings, selectedPieSym])
 
+  const selectedHoldingDividend = useMemo(() => {
+    if (!selectedHolding) return 0
+    const hist = fullHistoryStats[selectedHolding.symbol]?.history || []
+    return hist.filter((t: any) => t.type === 'DIVIDEND').reduce((s: number, t: any) => s + (t.dividendTotal || 0), 0)
+  }, [selectedHolding, fullHistoryStats])
+
   const [expanded, setExpanded] = useState<string | null>(null)
   const [closedExpanded, setClosedExpanded] = useState(false)
 
@@ -296,6 +302,9 @@ export default function HoldingsTab({ onRefresh }: Props) {
                 <DetailBox label="平均成本" value={selectedHolding.avg_cost.toFixed(2)} />
                 <DetailBox label="持有成本" value={fmtMoney(selectedHolding.total_cost)} />
                 <DetailBox label="預估淨市值" value={fmtMoney(selectedHolding.net_market_value)} />
+                {selectedHoldingDividend > 0 && (
+                  <DetailBox label="總配息" value={`+${fmtMoney(Math.round(selectedHoldingDividend))}`} />
+                )}
               </div>
 
               <div className="pt-2 border-t border-white/5 flex justify-between items-end">
@@ -439,10 +448,16 @@ function HoldingItem({ h, q, settings, fullHistoryStats, isExpanded, onToggle, o
   const [clearedExpanded, setClearedExpanded] = useState(false)
 
   const stockStats = fullHistoryStats[h.symbol] || {}
-  
+
   const activeLots = h.lots || []
   const clearedTxs = useMemo(() => {
     return (stockStats.history || []).filter((t: any) => t.type === 'SELL').sort((a: any, b: any) => b.trade_date.localeCompare(a.trade_date))
+  }, [stockStats.history])
+
+  const totalDividend = useMemo(() => {
+    return (stockStats.history || [])
+      .filter((t: any) => t.type === 'DIVIDEND')
+      .reduce((s: number, t: any) => s + (t.dividendTotal || 0), 0)
   }, [stockStats.history])
 
   const realizedPnl = stockStats.realized || 0
@@ -488,6 +503,12 @@ function HoldingItem({ h, q, settings, fullHistoryStats, isExpanded, onToggle, o
             </div>
           </div>
         </div>
+        {totalDividend > 0 && (
+          <div className="flex items-center justify-between pt-3 border-t border-white/5">
+            <span className="text-[9px] font-black text-[var(--t2)] uppercase tracking-widest opacity-60">總配息</span>
+            <span className="text-[13px] font-black font-mono text-yellow-400">+{fmtMoney(Math.round(totalDividend))}</span>
+          </div>
+        )}
       </div>
 
       {isExpanded && (
