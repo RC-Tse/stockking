@@ -120,6 +120,8 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
           const totalSharesBefore = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
           const totalCostBefore = inventory[t.symbol].reduce((s, l) => s + l.cost, 0)
           const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
+          const isSellingAll = t.shares === totalSharesBefore
+          let buyCostAllocated = 0
 
           let rem = t.shares
           let sellProceedsRemaining = net_sell
@@ -127,9 +129,10 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
             const lot = inventory[t.symbol][0]
             const take = Math.min(lot.shares, rem)
 
-            const mBuyCost = take === rem && take === totalSharesBefore
-              ? totalCostBefore
+            const mBuyCost = (isSellingAll && take === rem)
+              ? totalCostBefore - buyCostAllocated
               : Math.floor(take * avgCostBefore)
+            buyCostAllocated += mBuyCost
 
             const mSellNet = take === rem ? sellProceedsRemaining : Math.floor(net_sell * (take / t.shares))
 
@@ -243,21 +246,27 @@ function TotalPnLChartContent({ transactions, settings }: Props) {
     const maxActual = vals.length > 0 ? Math.max(...vals) : 1000
     const minActual = vals.length > 0 ? Math.min(...vals) : 0
 
-    // Positive max = max actual with 5% headroom
     const rawPosMax = Math.max(maxActual, 100)
     const posMaxWithPad = rawPosMax * 1.05
 
-    // Step: divide into 5 equal segments, round up to clean 100s
-    let step = Math.ceil(posMaxWithPad / 5 / 100) * 100
-    if (step <= 0) step = 1000
-    while (step * 5 < posMaxWithPad) step += 100
+    // Nice step: find smallest [1,2,5]×10^n that covers posMaxWithPad/4
+    const roughStep = posMaxWithPad / 4
+    const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(roughStep, 1))))
+    const normalized = roughStep / magnitude
+    let niceNorm: number
+    if (normalized <= 1) niceNorm = 1
+    else if (normalized <= 2) niceNorm = 2
+    else if (normalized <= 5) niceNorm = 5
+    else niceNorm = 10
+    const step = Math.max(niceNorm * magnitude, 100)
 
-    // Negative tick: actual min with 5% extra, rounded down to nearest 100
-    const negRaw = minActual < 0 ? minActual * 1.05 : -step
-    const negTick = Math.floor(negRaw / 100) * 100
+    // Negative bound: round down to step boundary
+    const negTick = minActual < 0
+      ? Math.floor(minActual * 1.05 / step) * step
+      : -step
 
-    const ticks = [negTick, 0, step, step * 2, step * 3, step * 4, step * 5]
-    return { domain: [negTick, step * 5] as [number, number], ticks }
+    const ticks = [negTick, 0, step, step * 2, step * 3, step * 4]
+    return { domain: [negTick, step * 4] as [number, number], ticks }
   }, [filteredData])
 
   if (loading) return (

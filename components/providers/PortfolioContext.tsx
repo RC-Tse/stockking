@@ -130,6 +130,7 @@ export function PortfolioProvider({
         const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
         const totalCostBefore = lots.reduce((s, l) => s + l.total_cost, 0)
         const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
+        const isSellingAll = tx.shares === totalSharesBefore
 
         let sellRem = tx.shares
         let sellProceedsRemaining = net_sell
@@ -141,10 +142,10 @@ export function PortfolioProvider({
         while (sellRem > 0 && lots.length > 0) {
           const lot = lots[0]
           const take = Math.min(lot.shares, sellRem)
-          
-          // Weighted Average: cost basis is (take * avgCostBefore)
-          const mBuyCost = take === sellRem && take === totalSharesBefore 
-            ? totalCostBefore // Clear exactly if selling all
+
+          // When selling all shares, last portion uses exact remainder to avoid floor rounding
+          const mBuyCost = (isSellingAll && take === sellRem)
+            ? totalCostBefore - matchedBuyCostTotal
             : Math.floor(take * avgCostBefore)
             
           const mBuyFee = take === lot.shares
@@ -247,13 +248,16 @@ export function PortfolioProvider({
           const totalSharesBefore = lots.reduce((s, l) => s + l.shares, 0)
           const totalCostBefore = lots.reduce((s, l) => s + l.total_cost, 0)
           const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
+          const isSellingAll = t.shares === totalSharesBefore
+          let buyCostAllocated = 0
 
           let rem = t.shares
           while (rem > 0 && lots.length > 0) {
             const take = Math.min(lots[0].shares, rem)
-            const mBuyCost = take === rem && take === totalSharesBefore
-              ? totalCostBefore
+            const mBuyCost = (isSellingAll && take === rem)
+              ? totalCostBefore - buyCostAllocated
               : Math.floor(take * avgCostBefore)
+            buyCostAllocated += mBuyCost
             lots[0].shares -= take
             lots[0].total_cost -= mBuyCost
             rem -= take

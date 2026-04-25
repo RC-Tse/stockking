@@ -100,14 +100,17 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
         const totalSharesBefore = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
         const totalCostBefore = inventory[t.symbol].reduce((s, l) => s + l.cost, 0)
         const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
+        const isSellingAll = t.shares === totalSharesBefore
+        let buyCostAllocated = 0
 
         let rem = t.shares
         while (rem > 0 && inventory[t.symbol].length > 0) {
           const lot = inventory[t.symbol][0]
           const take = Math.min(lot.shares, rem)
-          const mBuyCost = take === rem && take === totalSharesBefore
-            ? totalCostBefore
+          const mBuyCost = (isSellingAll && take === rem)
+            ? totalCostBefore - buyCostAllocated
             : Math.floor(take * avgCostBefore)
+          buyCostAllocated += mBuyCost
 
           lot.cost -= mBuyCost
           lot.shares -= take
@@ -166,6 +169,8 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
             const totalSharesBefore = inventory[t.symbol].reduce((s, l) => s + l.shares, 0)
             const totalCostBefore = inventory[t.symbol].reduce((s, l) => s + l.cost, 0)
             const avgCostBefore = totalSharesBefore > 0 ? totalCostBefore / totalSharesBefore : 0
+            const isSellingAll = t.shares === totalSharesBefore
+            let buyCostAllocated = 0
 
             let rem = t.shares
             let sellProceedsRemaining = net_sell
@@ -173,9 +178,10 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
               const lot = inventory[t.symbol][0]
               const take = Math.min(lot.shares, rem)
 
-              const mBuyCost = take === rem && take === totalSharesBefore
-                ? totalCostBefore
+              const mBuyCost = (isSellingAll && take === rem)
+                ? totalCostBefore - buyCostAllocated
                 : Math.floor(take * avgCostBefore)
+              buyCostAllocated += mBuyCost
 
               const mSellNet = take === rem ? sellProceedsRemaining : Math.floor(net_sell * (take / t.shares))
 
@@ -386,29 +392,33 @@ function YearlyPnLChartContent({ transactions, settings, year }: Props) {
   const yDomain = useMemo(() => {
     const nonFuture = filteredData.filter(d => !d.isIntersection && !d.isFuture && d.actual !== null)
     const actuals = nonFuture.map(d => d.actual as number)
-    const ideals = nonFuture.map(d => d.ideal as number)
+    const ideals = filteredData.filter(d => !d.isIntersection).map(d => d.ideal as number)
 
     const maxActual = actuals.length > 0 ? Math.max(...actuals) : 0
     const minActual = actuals.length > 0 ? Math.min(...actuals) : 0
-    // Last ideal in the selected range (end of period ideal target)
     const lastIdeal = ideals.length > 0 ? Math.max(...ideals) : 0
 
-    // Positive max = higher of ideal-end or actual-max, with 5% headroom
     const rawPosMax = Math.max(lastIdeal, maxActual, 100)
     const posMaxWithPad = rawPosMax * 1.05
 
-    // Step: divide into 5 equal segments, round up to clean 100s
-    let step = Math.ceil(posMaxWithPad / 5 / 100) * 100
-    if (step <= 0) step = 1000
-    while (step * 5 < posMaxWithPad) step += 100
+    // Nice step: find smallest [1,2,5]×10^n that covers posMaxWithPad/4
+    const roughStep = posMaxWithPad / 4
+    const magnitude = Math.pow(10, Math.floor(Math.log10(Math.max(roughStep, 1))))
+    const normalized = roughStep / magnitude
+    let niceNorm: number
+    if (normalized <= 1) niceNorm = 1
+    else if (normalized <= 2) niceNorm = 2
+    else if (normalized <= 5) niceNorm = 5
+    else niceNorm = 10
+    const step = Math.max(niceNorm * magnitude, 100)
 
-    // Negative tick: actual min with 5% extra, rounded down to nearest 100
-    const negRaw = minActual < 0 ? minActual * 1.05 : -step
-    const negTick = Math.floor(negRaw / 100) * 100
+    // Negative bound: round down to step boundary
+    const negTick = minActual < 0
+      ? Math.floor(minActual * 1.05 / step) * step
+      : -step
 
-    const ticks = [negTick, 0, step, step * 2, step * 3, step * 4, step * 5]
-    // Domain: a bit extra below negTick, and step*5 already has 5% built in
-    return { domain: [negTick, step * 5] as [number, number], ticks }
+    const ticks = [negTick, 0, step, step * 2, step * 3, step * 4]
+    return { domain: [negTick, step * 4] as [number, number], ticks }
   }, [filteredData])
 
   if (loading) return (
