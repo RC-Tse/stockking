@@ -168,9 +168,9 @@ export default function HoldingsTab({ onRefresh }: Props) {
             <StatBox label="持有成本" value={showData ? fmtMoney(currentCost) : "••••••"} className="w-1/2 text-center" large />
             <div className="w-1/2 flex flex-col items-center border-l border-white/5 px-3">
               <div className="flex items-center gap-1 mb-1.5">
-                <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">預估市值</span>
+                <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">預估淨市值</span>
                 <span
-                  onClick={() => alert("預估市值 = 庫存股數 × 當前市價\n此數值與券商 App 顯示之「市值」一致。\n實際賣出所得尚需扣除手續費與交易稅。")}
+                  onClick={() => alert("預估淨市值 = (庫存股數 × 市價) − 預估賣出手續費 − 預估證交稅\n此為若現在賣出可實際入帳之金額估算。\n與券商「市值」欄位可能差 1～2 元（價格來源時差所致）。")}
                   className="text-[9px] text-[var(--accent)] border border-[var(--accent)]/30 rounded-full w-3.5 h-3.5 flex items-center justify-center font-black cursor-pointer flex-shrink-0 active:scale-90 transition-all"
                 >i</span>
               </div>
@@ -221,7 +221,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
               onClick={() => setChartMode('market')}
               className={`flex-1 py-1.5 text-[11px] font-black rounded-lg transition-colors z-10 ${chartMode === 'market' ? 'text-bg-base' : 'text-[var(--t3)]'}`}
             >
-              預估市值
+              預估淨市值
             </button>
           </div>
         </div>
@@ -262,7 +262,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-            <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase">{chartMode === 'cost' ? '總投入' : '預估市值合計'}</span>
+            <span className="text-[10px] font-black text-[var(--t2)] opacity-60 uppercase">{chartMode === 'cost' ? '總投入' : '預估淨市值合計'}</span>
             <span className="text-lg font-black text-[var(--t1)] font-mono">{fmtMoney(Math.round(chartTotal))}</span>
           </div>
         </div>
@@ -301,7 +301,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
                 <DetailBox label="持股數量" value={`${selectedHolding.shares.toLocaleString()} 股`} />
                 <DetailBox label="平均成本" value={selectedHolding.avg_cost.toFixed(2)} />
                 <DetailBox label="持有成本" value={fmtMoney(selectedHolding.total_cost)} />
-                <DetailBox label="預估市值" value={fmtMoney(selectedHolding.net_market_value)} />
+                <DetailBox label="預估淨市值" value={fmtMoney(selectedHolding.net_market_value)} />
                 {selectedHoldingDividend > 0 && (
                   <DetailBox label="總配息" value={`+${fmtMoney(Math.round(selectedHoldingDividend))}`} />
                 )}
@@ -491,7 +491,7 @@ function HoldingItem({ h, q, settings, fullHistoryStats, isExpanded, onToggle, o
         
         <div className="grid grid-cols-2 gap-4 pt-1">
           <div className="space-y-1">
-            <div className="text-[9px] font-black text-[var(--t2)] uppercase tracking-widest opacity-60">持有成本 / 預估市值</div>
+            <div className="text-[9px] font-black text-[var(--t2)] uppercase tracking-widest opacity-60">持有成本 / 預估淨市值</div>
             <div className="text-[15px] font-black text-[var(--t1)] font-mono flex items-baseline gap-1.5">
               {fmtMoney(Math.round(h.total_cost))} <span className="text-[10px] opacity-20">/</span> <span className="text-accent">{fmtMoney(Math.round(h.net_market_value))}</span>
             </div>
@@ -759,7 +759,7 @@ function ActiveLotRow({ lot, h, settings, onUpdated, onDelete }: any) {
           <span className="text-lg font-black font-mono text-[var(--t1)]">{fmtMoney(cost)}</span>
         </div>
         <div className="flex flex-col text-center">
-          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">預估市值</span>
+          <span className="text-[9px] font-black text-[var(--t2)] opacity-30 uppercase tracking-tighter mb-1">預估淨市值</span>
           <span className={`text-lg font-black font-mono ${netMv >= cost ? 'text-red-400' : 'text-green-400'}`}>{fmtMoney(netMv)}</span>
         </div>
         <div className="flex flex-col text-center">

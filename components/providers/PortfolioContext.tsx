@@ -317,16 +317,16 @@ export function PortfolioProvider({
           return {
             ...l,
             market_value: gross,
-            net_market_value: gross,
+            net_market_value: absNet,
             total_cost: roundedCost,
-            unrealized_pnl: gross - roundedCost,
+            unrealized_pnl: absNet - roundedCost,
             sell_fee: fee,
             sell_tax: tax
           }
         })
 
         const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
-        const upnl = totalGross - summedCost
+        const upnl = totalNetMV - summedCost
 
         return [{
           symbol: sym,
@@ -335,7 +335,7 @@ export function PortfolioProvider({
           total_cost: summedCost,
           current_price: cp,
           market_value: totalGross,
-          net_market_value: totalGross,
+          net_market_value: totalNetMV,
           sell_fee: totalSellFee,
           sell_tax: totalSellTax,
           unrealized_pnl: upnl,
