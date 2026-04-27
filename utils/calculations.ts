@@ -31,17 +31,20 @@ export function calcTax(shares: number, price: number, symbol: string, s: UserSe
 }
 
 export function calculateTxParts(shares: number, price: number, action: 'BUY' | 'SELL' | 'DCA' | 'DIVIDEND', symbol: string, settings: UserSettings) {
+  // 修正 Yahoo Finance API 浮點誤差（如 2258.0 傳回 2257.9999...）
+  const p = Math.round(price * 100) / 100
+
   if (action === 'DIVIDEND') {
-    const gross = Math.floor(shares * price)
+    const gross = Math.floor(shares * p)
     return { gross, fee: 0, tax: 0, net: gross, absNet: gross }
   }
 
   const isDca = action === 'DCA'
   const isSell = action === 'SELL'
 
-  const gross = Math.floor(shares * price)
-  const fee = calcFee(shares, price, settings, isSell, isDca)
-  const tax = isSell ? calcTax(shares, price, symbol, settings) : 0
+  const gross = Math.floor(shares * p)
+  const fee = calcFee(shares, p, settings, isSell, isDca)
+  const tax = isSell ? calcTax(shares, p, symbol, settings) : 0
 
   const net = isSell ? (gross - fee - tax) : (gross + fee)
 
