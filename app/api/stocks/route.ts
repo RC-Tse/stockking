@@ -18,11 +18,11 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
     const meta = result.meta
     const indicators = result.indicators?.quote?.[0] || {}
 
-    const price = meta.regularMarketPrice || 0
-    const prev = meta.previousClose || meta.chartPreviousClose || price || 0
-    const open = (indicators.open?.[0]) || price || 0
-    const high = (indicators.high?.[0]) || price || 0
-    const low = (indicators.low?.[0]) || price || 0
+    const price = Math.round((meta.regularMarketPrice || 0) * 100) / 100
+    const prev = Math.round((meta.previousClose || meta.chartPreviousClose || price || 0) * 100) / 100
+    const open = Math.round(((indicators.open?.[0]) || price || 0) * 100) / 100
+    const high = Math.round(((indicators.high?.[0]) || price || 0) * 100) / 100
+    const low = Math.round(((indicators.low?.[0]) || price || 0) * 100) / 100
     const volume = (indicators.volume?.[0]) || 0
 
     const change = Math.round((price - prev) * 100) / 100
