@@ -3,26 +3,37 @@ import { createClient } from '@/lib/supabase/server'
 import { DEFAULT_SETTINGS, UserSettings } from '@/types'
 import { calcFee, calcTax, calculateTxParts } from '@/utils/calculations'
 
+// 統一 TW 股票代號格式（補 .TW 後綴）避免買入/賣出代號不一致導致損益計算失敗
+function normalizeSym(sym: string): string {
+  const s = sym.trim().toUpperCase()
+  if (s.includes('.')) return s
+  if (/^\d[A-Z0-9]{3,5}$/.test(s)) return s + '.TW'
+  return s
+}
+
 export async function GET() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  
+
   const { data: txs, error } = await supabase.from('transactions').select('*').eq('user_id', user.id)
     .order('trade_date', { ascending: false }).order('created_at', { ascending: false })
-  
+
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   if (!txs || txs.length === 0) return NextResponse.json([])
 
+  // 正規化 symbol，確保同一股票在所有交易中格式一致
+  const normalized = txs.map(t => ({ ...t, symbol: normalizeSym(t.symbol) }))
+
   // Fetch Chinese names for these symbols
-  const syms = Array.from(new Set(txs.map(t => t.symbol)))
+  const syms = Array.from(new Set(normalized.map(t => t.symbol)))
   const { data: names } = await supabase
     .from('stock_names')
     .select('symbol, name_zh')
     .in('symbol', syms)
 
   const nameMap = Object.fromEntries(names?.map(n => [n.symbol, n.name_zh]) ?? [])
-  const enriched = txs.map(t => ({ ...t, name_zh: nameMap[t.symbol] }))
+  const enriched = normalized.map(t => ({ ...t, name_zh: nameMap[t.symbol] }))
 
   return NextResponse.json(enriched)
 }
@@ -35,7 +46,7 @@ export async function POST(req: NextRequest) {
   const { symbol, action, trade_date, shares, price, trade_type = 'FULL', note = '' } = body
   const { data: sr } = await supabase.from('settings').select('*').eq('user_id', user.id).single()
   const s: UserSettings = sr ?? DEFAULT_SETTINGS
-  const sym = symbol.trim().toUpperCase()
+  const sym = normalizeSym(symbol)
   const { gross, fee, tax, net: net_amount } = calculateTxParts(Number(shares), Number(price), action, sym, s)
   const { data, error } = await supabase.from('transactions')
     .insert({ user_id: user.id, symbol: sym, action, trade_date, shares: Number(shares), price: Number(price), amount: gross, fee, tax, net_amount, trade_type, note })
