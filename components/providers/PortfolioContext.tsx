@@ -295,9 +295,8 @@ export function PortfolioProvider({
         if (netShares <= 0) return []
         
         const q = quotes[sym]
-        // 昨日收盤價與券商「市值」欄位一致；即時價只用於顯示漲跌幅
-        const cp = q?.prev || q?.price || 0
-        const livePrice = q?.price || cp
+        const cp = q?.price || 0
+        const livePrice = cp
 
         const mvGross = Math.floor(netShares * cp)
 
