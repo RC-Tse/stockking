@@ -303,20 +303,24 @@ export function PortfolioProvider({
 
         const lotDetails = lots.map(l => {
           const lotGross = Math.floor(l.shares * cp)
+          const { absNet: lotNet, fee: lotFee, tax: lotTax } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
           const roundedCost = l.total_cost
           return {
             ...l,
             market_value: lotGross,
-            net_market_value: lotGross,
+            net_market_value: lotNet,
             total_cost: roundedCost,
-            unrealized_pnl: lotGross - roundedCost,
-            sell_fee: 0,
-            sell_tax: 0
+            unrealized_pnl: lotNet - roundedCost,
+            sell_fee: lotFee,
+            sell_tax: lotTax
           }
         })
 
         const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
-        const upnl = mvGross - summedCost
+        const totalNetMV = lotDetails.reduce((s, ld) => s + ld.net_market_value, 0)
+        const totalSellFee = lotDetails.reduce((s, ld) => s + ld.sell_fee, 0)
+        const totalSellTax = lotDetails.reduce((s, ld) => s + ld.sell_tax, 0)
+        const upnl = totalNetMV - summedCost
 
         return [{
           symbol: sym,
@@ -325,9 +329,9 @@ export function PortfolioProvider({
           total_cost: summedCost,
           current_price: livePrice,
           market_value: mvGross,
-          net_market_value: mvGross,
-          sell_fee: 0,
-          sell_tax: 0,
+          net_market_value: totalNetMV,
+          sell_fee: totalSellFee,
+          sell_tax: totalSellTax,
           unrealized_pnl: upnl,
           pnl_pct: summedCost ? (upnl / summedCost) * 100 : 0,
           lots: lotDetails,
