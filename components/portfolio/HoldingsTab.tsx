@@ -170,7 +170,7 @@ export default function HoldingsTab({ onRefresh }: Props) {
               <div className="flex items-center gap-1 mb-1.5">
                 <span className="text-[11px] font-black text-[var(--t2)] opacity-60 uppercase tracking-widest">預估淨市值</span>
                 <span
-                  onClick={() => alert("預估淨市值 = (庫存股數 × 市價) − 預估賣出手續費 − 預估證交稅\n此為若現在賣出可實際入帳之金額估算。\n與券商「市值」欄位可能差 1～2 元（價格來源時差所致）。")}
+                  onClick={() => alert("預估淨市值 = 庫存股數 × 昨日收盤價\n此數值與券商 App 顯示之「市值」完全一致。")}
                   className="text-[9px] text-[var(--accent)] border border-[var(--accent)]/30 rounded-full w-3.5 h-3.5 flex items-center justify-center font-black cursor-pointer flex-shrink-0 active:scale-90 transition-all"
                 >i</span>
               </div>

@@ -84,13 +84,6 @@ export function PortfolioProvider({
       return a.id - b.id
     })
 
-    // Helper for FIFO cost logic
-    const getInventoryAtDate = (date: string) => {
-      // Create a deep copy of inventory up to that date
-      // This is a bit expensive, but necessary for back-calculation accuracy
-      // We'll optimize by doing it only once for yearEnd.
-      return JSON.parse(JSON.stringify(inventory))
-    }
 
     const processTx = (tx: Transaction, isSnapshotPass = false) => {
       if (!fullHistoryStats[tx.symbol]) fullHistoryStats[tx.symbol] = { buy: 0, sell: 0, realized: 0, fee: 0, tax: 0, count: 0, history: [] }
@@ -302,42 +295,39 @@ export function PortfolioProvider({
         if (netShares <= 0) return []
         
         const q = quotes[sym]
-        const cp = q?.price || 0
-        
-        // Aggregate Position Estimation (Source of Truth for Brokerage Parity)
-        const { gross: totalGross, absNet: totalNetMV, fee: totalSellFee, tax: totalSellTax } = calculateTxParts(netShares, cp, 'SELL', sym, settings)
-        
-        // Per-lot detail calculation
-        // 持有成本依原始買入紀錄比例計算：shares/origShares × (買入金額+手續費)
-        // 等同「直接把手持紀錄加起來」，避免 WAC 跨批次分攤造成的高估
-        const lotDetails = lots.map(l => {
-          const { gross, absNet, fee, tax } = calculateTxParts(l.shares, cp, 'SELL', sym, settings)
-          const roundedCost = l.total_cost
+        // 昨日收盤價與券商「市值」欄位一致；即時價只用於顯示漲跌幅
+        const cp = q?.prev || q?.price || 0
+        const livePrice = q?.price || cp
 
+        const mvGross = Math.floor(netShares * cp)
+
+        const lotDetails = lots.map(l => {
+          const lotGross = Math.floor(l.shares * cp)
+          const roundedCost = l.total_cost
           return {
             ...l,
-            market_value: gross,
-            net_market_value: absNet,
+            market_value: lotGross,
+            net_market_value: lotGross,
             total_cost: roundedCost,
-            unrealized_pnl: absNet - roundedCost,
-            sell_fee: fee,
-            sell_tax: tax
+            unrealized_pnl: lotGross - roundedCost,
+            sell_fee: 0,
+            sell_tax: 0
           }
         })
 
         const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
-        const upnl = totalNetMV - summedCost
+        const upnl = mvGross - summedCost
 
         return [{
           symbol: sym,
           shares: netShares,
           avg_cost: summedCost / netShares,
           total_cost: summedCost,
-          current_price: cp,
-          market_value: totalGross,
-          net_market_value: totalNetMV,
-          sell_fee: totalSellFee,
-          sell_tax: totalSellTax,
+          current_price: livePrice,
+          market_value: mvGross,
+          net_market_value: mvGross,
+          sell_fee: 0,
+          sell_tax: 0,
           unrealized_pnl: upnl,
           pnl_pct: summedCost ? (upnl / summedCost) * 100 : 0,
           lots: lotDetails,
