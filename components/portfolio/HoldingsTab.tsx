@@ -472,7 +472,7 @@ function HoldingItem({ h, q, settings, fullHistoryStats, isExpanded, onToggle, o
             <div className="font-black text-[var(--t1)] text-[17px] tracking-tight">{nameZh}</div>
             <div className="flex items-center gap-2">
               <span className="text-[11px] font-bold text-[var(--t2)] opacity-90">
-                {(h.shares ?? 0).toLocaleString()} 股 · 收盤 {(h.current_price ?? 0).toFixed(2)}
+                {(h.shares ?? 0).toLocaleString()} 股 · 現價 {(h.current_price ?? 0).toFixed(2)}
               </span>
               {q?.change !== undefined && (() => {
                 const isUp = q.change > 0, isDown = q.change < 0
