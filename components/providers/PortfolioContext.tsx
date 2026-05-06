@@ -300,9 +300,6 @@ export function PortfolioProvider({
 
         const mvGross = Math.floor(netShares * cp)
 
-        // 券商以全部庫存股數一次計算手續費與稅，非 per-lot 加總
-        const { absNet: holdingNetMV, fee: holdingFee, tax: holdingTax } = calculateTxParts(netShares, cp, 'SELL', sym, settings)
-
         const lotDetails = lots.map(l => {
           const lotGross = Math.floor(l.shares * cp)
           const roundedCost = l.total_cost
@@ -318,9 +315,9 @@ export function PortfolioProvider({
         })
 
         const summedCost = lotDetails.reduce((s, ld) => s + ld.total_cost, 0)
-        const totalNetMV = holdingNetMV
-        const totalSellFee = holdingFee
-        const totalSellTax = holdingTax
+        const totalNetMV = mvGross
+        const totalSellFee = 0
+        const totalSellTax = 0
         const upnl = totalNetMV - summedCost
 
         return [{
