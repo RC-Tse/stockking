@@ -98,6 +98,24 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
   }
 }
 
+async function getTWSEClosePrices(): Promise<Record<string, number>> {
+  try {
+    const res = await fetch(TWSE_API, { next: { revalidate: 1800 } })
+    if (!res.ok) return {}
+    const list: any[] = await res.json()
+    const data: Record<string, number> = {}
+    for (const s of list) {
+      if (s.Code && s.ClosingPrice && s.ClosingPrice !== '--') {
+        const p = parseFloat(s.ClosingPrice.replace(',', ''))
+        if (!isNaN(p) && p > 0) data[s.Code] = p
+      }
+    }
+    return data
+  } catch {
+    return {}
+  }
+}
+
 async function getOrFetchNames(supabase: any, syms: string[]) {
   const { data: cached } = await supabase
     .from('stock_names')
@@ -157,20 +175,31 @@ export async function GET(req: NextRequest) {
   if (!syms.length) return NextResponse.json({}, { status: 400 })
 
   const supabase = await createClient()
-  const nameMap = await getOrFetchNames(supabase, syms)
+  const [nameMap, twseClose] = await Promise.all([
+    getOrFetchNames(supabase, syms),
+    date ? Promise.resolve({}) : getTWSEClosePrices()
+  ])
 
   const results = await Promise.all(
     syms.map(s => {
       const fetchSym = (!s.includes('.') && /^\d[A-Z0-9]{3,5}$/.test(s)) ? s + '.TW' : s
-      return date 
-        ? fetchYahooHistoricalQuote(fetchSym, date, nameMap[s]) 
+      return date
+        ? fetchYahooHistoricalQuote(fetchSym, date, nameMap[s])
         : fetchYahooQuote(fetchSym, nameMap[s])
     })
   )
   const data: Record<string, any> = {}
 
   results.forEach((q, i) => {
-    if (q) data[syms[i]] = q
+    if (!q) return
+    const sym = syms[i]
+    const code = sym.replace(/\.(TW|TWO)$/, '')
+    if (!date && (sym.endsWith('.TW') || sym.endsWith('.TWO')) && twseClose[code]) {
+      q.prev = twseClose[code]
+      q.change = Math.round((q.price - q.prev) * 100) / 100
+      q.change_pct = q.prev ? Math.round(q.change / q.prev * 10000) / 100 : 0
+    }
+    data[sym] = q
   })
 
   return NextResponse.json(data, { 
