@@ -177,7 +177,7 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient()
   const [nameMap, twseClose] = await Promise.all([
     getOrFetchNames(supabase, syms),
-    date ? Promise.resolve({}) : getTWSEClosePrices()
+    date ? Promise.resolve({} as Record<string, number>) : getTWSEClosePrices()
   ])
 
   const results = await Promise.all(
