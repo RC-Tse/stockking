@@ -51,7 +51,7 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
   try {
     const targetDate = new Date(date)
     const end = Math.floor(targetDate.getTime() / 1000) + 86400
-    const start = end - 86400 * 7 // Fetch 7 days to ensure we get at least two trading days
+    const start = end - 86400 * 7
 
     const res = await fetch(
       `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?period1=${start}&period2=${end}&interval=1d`,
@@ -64,7 +64,7 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
 
     const closes = result.indicators.quote[0].close
     const timestamps = result.timestamp || []
-    
+
     let targetIdx = -1
     for (let i = timestamps.length - 1; i >= 0; i--) {
       const d = new Date(timestamps[i] * 1000)
@@ -98,25 +98,37 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
   }
 }
 
-async function getTWSEClosePrices(): Promise<Record<string, number>> {
+// Fetch TWSE and TPEX lists once, reuse for name lookup + exchange detection + close prices
+async function fetchExchangeLists() {
   try {
-    const res = await fetch(TWSE_API, { next: { revalidate: 1800 } })
-    if (!res.ok) return {}
-    const list: any[] = await res.json()
-    const data: Record<string, number> = {}
-    for (const s of list) {
-      if (s.Code && s.ClosingPrice && s.ClosingPrice !== '--') {
-        const p = parseFloat(s.ClosingPrice.replace(',', ''))
-        if (!isNaN(p) && p > 0) data[s.Code] = p
-      }
+    const [twseRes, tpexRes] = await Promise.all([
+      fetch(TWSE_API, { next: { revalidate: 1800 } }),
+      fetch(TPEX_API, { next: { revalidate: 1800 } })
+    ])
+    return {
+      twseList: twseRes.ok ? await twseRes.json() as any[] : [],
+      tpexList: tpexRes.ok ? await tpexRes.json() as any[] : []
     }
-    return data
   } catch {
-    return {}
+    return { twseList: [], tpexList: [] }
   }
 }
 
-async function getOrFetchNames(supabase: any, syms: string[]) {
+// Determine correct Yahoo Finance symbol (.TW for TWSE, .TWO for TPEX)
+function resolveYahooSym(code: string, twseCodes: Set<string>, tpexCodes: Set<string>): string {
+  if (code.includes('.')) return code
+  if (!/^\d[A-Z0-9]{3,5}$/.test(code)) return code
+  if (twseCodes.has(code)) return code + '.TW'
+  if (tpexCodes.has(code)) return code + '.TWO'
+  return code + '.TW' // fallback
+}
+
+async function getOrFetchNames(
+  supabase: any,
+  syms: string[],
+  twseList: any[],
+  tpexList: any[]
+) {
   const { data: cached } = await supabase
     .from('stock_names')
     .select('symbol, name_zh')
@@ -127,32 +139,25 @@ async function getOrFetchNames(supabase: any, syms: string[]) {
 
   if (missing.length > 0) {
     try {
-      const [twseRes, tpexRes] = await Promise.all([
-        fetch(TWSE_API, { next: { revalidate: 86400 } }),
-        fetch(TPEX_API, { next: { revalidate: 86400 } })
-      ])
-      
-      const twseList = twseRes.ok ? await twseRes.json() : []
-      const tpexList = tpexRes.ok ? await tpexRes.json() : []
-      
       const toInsert: { symbol: string; name_zh: string }[] = []
-      
+
       missing.forEach(s => {
-        const fetchSym = (!s.includes('.') && /^\d[A-Z0-9]{3,5}$/.test(s)) ? s + '.TW' : s
-        const code = fetchSym.split('.')[0]
+        const code = s.replace(/\.(TW|TWO)$/, '')
         let name = ''
-        if (fetchSym.endsWith('.TW')) {
-          name = twseList.find((i: any) => i.Code === code)?.Name
-        } else if (fetchSym.endsWith('.TWO')) {
-          name = tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)?.CompanyName || tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)?.Name
+
+        // Check TWSE first, then TPEX
+        name = twseList.find((i: any) => i.Code === code)?.Name || ''
+        if (!name) {
+          const tpexMatch = tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)
+          name = tpexMatch?.CompanyName || tpexMatch?.Name || ''
         }
-        
+
         if (name) {
           nameMap[s] = name
           toInsert.push({ symbol: s, name_zh: name })
         }
       })
-      
+
       if (toInsert.length > 0) {
         await supabase.from('stock_names').upsert(toInsert)
       }
@@ -160,7 +165,7 @@ async function getOrFetchNames(supabase: any, syms: string[]) {
       console.error('Fetch names error:', e)
     }
   }
-  
+
   return nameMap
 }
 
@@ -175,26 +180,42 @@ export async function GET(req: NextRequest) {
   if (!syms.length) return NextResponse.json({}, { status: 400 })
 
   const supabase = await createClient()
-  const [nameMap, twseClose] = await Promise.all([
-    getOrFetchNames(supabase, syms),
-    date ? Promise.resolve({} as Record<string, number>) : getTWSEClosePrices()
-  ])
+
+  // Single fetch for both exchange detection and name lookup
+  const { twseList, tpexList } = await fetchExchangeLists()
+  const twseCodes = new Set(twseList.map((s: any) => s.Code).filter(Boolean))
+  const tpexCodes = new Set(tpexList.map((s: any) => s.SecumId || s.SecuritiesCompanyCode).filter(Boolean))
+
+  // Extract TWSE official close prices
+  const twseClose: Record<string, number> = {}
+  if (!date) {
+    for (const s of twseList) {
+      if (s.Code && s.ClosingPrice && s.ClosingPrice !== '--') {
+        const p = parseFloat(s.ClosingPrice.replace(',', ''))
+        if (!isNaN(p) && p > 0) twseClose[s.Code] = p
+      }
+    }
+  }
+
+  const nameMap = await getOrFetchNames(supabase, syms, twseList, tpexList)
 
   const results = await Promise.all(
     syms.map(s => {
-      const fetchSym = (!s.includes('.') && /^\d[A-Z0-9]{3,5}$/.test(s)) ? s + '.TW' : s
+      const fetchSym = resolveYahooSym(s, twseCodes, tpexCodes)
       return date
         ? fetchYahooHistoricalQuote(fetchSym, date, nameMap[s])
         : fetchYahooQuote(fetchSym, nameMap[s])
     })
   )
+
   const data: Record<string, any> = {}
 
   results.forEach((q, i) => {
     if (!q) return
     const sym = syms[i]
     const code = sym.replace(/\.(TW|TWO)$/, '')
-    if (!date && (sym.endsWith('.TW') || sym.endsWith('.TWO')) && twseClose[code]) {
+    // Override prev with TWSE official close for listed stocks
+    if (!date && twseCodes.has(code) && twseClose[code]) {
       q.prev = twseClose[code]
       q.change = Math.round((q.price - q.prev) * 100) / 100
       q.change_pct = q.prev ? Math.round(q.change / q.prev * 10000) / 100 : 0
@@ -202,7 +223,7 @@ export async function GET(req: NextRequest) {
     data[sym] = q
   })
 
-  return NextResponse.json(data, { 
-    headers: { 'Cache-Control': 'public, s-maxage=30' } 
+  return NextResponse.json(data, {
+    headers: { 'Cache-Control': 'public, s-maxage=30' }
   })
 }
