@@ -118,9 +118,15 @@ async function fetchExchangeLists() {
 function resolveYahooSym(code: string, twseCodes: Set<string>, tpexCodes: Set<string>): string {
   if (code.includes('.')) return code
   if (!/^\d[A-Z0-9]{3,5}$/.test(code)) return code
+  // API-based detection (most accurate)
   if (twseCodes.has(code)) return code + '.TW'
   if (tpexCodes.has(code)) return code + '.TWO'
-  return code + '.TW' // fallback
+  // Heuristic fallback when API lists unavailable:
+  // 7xxx, 8xxx, and most 3xxx-6xxx odd ranges tend to be TPEX
+  const num = parseInt(code)
+  if (num >= 8000 && num <= 8999) return code + '.TWO'
+  if (num >= 7000 && num <= 7999) return code + '.TWO'
+  return code + '.TW'
 }
 
 async function getOrFetchNames(
@@ -200,11 +206,17 @@ export async function GET(req: NextRequest) {
   const nameMap = await getOrFetchNames(supabase, syms, twseList, tpexList)
 
   const results = await Promise.all(
-    syms.map(s => {
+    syms.map(async s => {
       const fetchSym = resolveYahooSym(s, twseCodes, tpexCodes)
-      return date
-        ? fetchYahooHistoricalQuote(fetchSym, date, nameMap[s])
-        : fetchYahooQuote(fetchSym, nameMap[s])
+      const result = date
+        ? await fetchYahooHistoricalQuote(fetchSym, date, nameMap[s])
+        : await fetchYahooQuote(fetchSym, nameMap[s])
+      // If primary exchange fails, try the other one
+      if (!result && !date && /^\d[A-Z0-9]{3,5}$/.test(s) && !s.includes('.')) {
+        const altSym = fetchSym.endsWith('.TW') ? s + '.TWO' : s + '.TW'
+        return fetchYahooQuote(altSym, nameMap[s])
+      }
+      return result
     })
   )
 
