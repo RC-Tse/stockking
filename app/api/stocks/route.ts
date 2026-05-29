@@ -140,61 +140,54 @@ async function cacheNames(supabase: any, syms: string[], twse: Map<string, any>,
   return nameMap
 }
 
-// Fetch quote for a Taiwan stock: try primary exchange, then alt, then fallback to official close
+// Build a guaranteed quote from official API data (TWSE or TPEX)
+function buildOfficialQuote(code: string, nameZh: string, twse: Map<string, any>, tpex: Map<string, any>): any | null {
+  const twseData = twse.get(code)
+  const tpexData = tpex.get(code)
+  const close = parsePrice(twseData?.ClosingPrice) || parsePrice(tpexData?.Close)
+  if (close <= 0) return null
+  const name = nameZh || twseData?.Name || tpexData?.CompanyName || code
+  return {
+    symbol: code,
+    name_zh: name,
+    price: close,
+    prev: close,
+    open: parsePrice(twseData?.OpeningPrice) || parsePrice(tpexData?.Open) || close,
+    high: parsePrice(twseData?.HighestPrice) || parsePrice(tpexData?.High) || close,
+    low: parsePrice(twseData?.LowestPrice) || parsePrice(tpexData?.Low) || close,
+    change: 0,
+    change_pct: 0,
+    volume: 0,
+    trade_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+  }
+}
+
+// Fetch quote for a Taiwan stock: official API is guaranteed baseline, Yahoo adds live price
 async function fetchTwStockQuote(
   code: string,
   nameZh: string,
   twse: Map<string, any>,
   tpex: Map<string, any>
 ): Promise<any | null> {
-  // Determine exchange from official lists first; heuristic as fallback
-  let primary: string
-  let alt: string
-  if (twse.has(code)) {
-    primary = code + '.TW'; alt = code + '.TWO'
-  } else if (tpex.has(code)) {
-    primary = code + '.TWO'; alt = code + '.TW'
-  } else {
-    // Heuristic: 7xxx-9xxx tend to be TPEX
-    const num = parseInt(code)
-    if (!isNaN(num) && num >= 7000) {
-      primary = code + '.TWO'; alt = code + '.TW'
-    } else {
-      primary = code + '.TW'; alt = code + '.TWO'
-    }
-  }
+  const isTwse = twse.has(code)
+  const isTpex = tpex.has(code)
 
-  // Try primary Yahoo symbol
-  let q = await fetchYahooQuote(primary, nameZh)
+  // Build guaranteed baseline from official data first
+  const official = buildOfficialQuote(code, nameZh, twse, tpex)
 
-  // Try alternative exchange if primary failed
-  if (!q) q = await fetchYahooQuote(alt, nameZh)
+  // Determine Yahoo Finance symbol
+  let yahooSym: string
+  if (isTwse) yahooSym = code + '.TW'
+  else if (isTpex) yahooSym = code + '.TWO'
+  else yahooSym = (parseInt(code) >= 7000 ? code + '.TWO' : code + '.TW')
 
-  // Final fallback: use official API close price directly (no live price, but always works)
-  if (!q) {
-    const twseData = twse.get(code)
-    const tpexData = tpex.has(code) ? tpex.get(code) : null
-    const close = parsePrice(twseData?.ClosingPrice) || parsePrice(tpexData?.Close)
-    const name = nameZh || twseData?.Name || tpexData?.CompanyName || code
-    if (close > 0) {
-      q = {
-        symbol: code,
-        name_zh: name,
-        price: close,
-        prev: close,
-        open: parsePrice(twseData?.OpeningPrice || tpexData?.Open),
-        high: parsePrice(twseData?.HighestPrice || tpexData?.High),
-        low: parsePrice(twseData?.LowestPrice || tpexData?.Low),
-        change: 0,
-        change_pct: 0,
-        volume: 0,
-        trade_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
-      }
-    }
-  }
+  // Try Yahoo Finance for live price; fall back to official data on failure
+  let q = await fetchYahooQuote(yahooSym, official?.name_zh || nameZh)
+  if (!q) q = await fetchYahooQuote(yahooSym.endsWith('.TW') ? code + '.TWO' : code + '.TW', official?.name_zh || nameZh)
+  if (!q) q = official  // guaranteed result if stock is in official APIs
 
   // Override prev with official TWSE close price for accuracy
-  if (q && twse.has(code)) {
+  if (q && isTwse) {
     const officialClose = parsePrice(twse.get(code)?.ClosingPrice)
     if (officialClose > 0) {
       q.prev = officialClose
