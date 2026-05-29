@@ -19,6 +19,7 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
     const indicators = result.indicators?.quote?.[0] || {}
 
     const price = Math.round((meta.regularMarketPrice || 0) * 100) / 100
+    if (!price) return null  // Reject results with no valid price (wrong exchange or delisted)
     const prev = Math.round((meta.previousClose || meta.chartPreviousClose || price || 0) * 100) / 100
     const open = Math.round(((indicators.open?.[0]) || price || 0) * 100) / 100
     const high = Math.round(((indicators.high?.[0]) || price || 0) * 100) / 100
@@ -186,13 +187,28 @@ async function fetchTwStockQuote(
   if (!q) q = await fetchYahooQuote(yahooSym.endsWith('.TW') ? code + '.TWO' : code + '.TW', official?.name_zh || nameZh)
   if (!q) q = official  // guaranteed result if stock is in official APIs
 
-  // Override prev with official TWSE close price for accuracy
-  if (q && isTwse) {
-    const officialClose = parsePrice(twse.get(code)?.ClosingPrice)
-    if (officialClose > 0) {
-      q.prev = officialClose
-      q.change = Math.round((q.price - officialClose) * 100) / 100
-      q.change_pct = officialClose ? Math.round(q.change / officialClose * 10000) / 100 : 0
+  if (q) {
+    // Always use bare code as symbol (not Yahoo's exchange-suffixed symbol)
+    q.symbol = code
+    // Fill in official name if Yahoo returned empty
+    if (!q.name_zh) q.name_zh = official?.name_zh || nameZh || code
+    // Override prev with official TWSE close price for accuracy
+    if (isTwse) {
+      const officialClose = parsePrice(twse.get(code)?.ClosingPrice)
+      if (officialClose > 0) {
+        q.prev = officialClose
+        q.change = Math.round((q.price - officialClose) * 100) / 100
+        q.change_pct = officialClose ? Math.round(q.change / officialClose * 10000) / 100 : 0
+      }
+    }
+    // Override prev with official TPEX close price for accuracy
+    if (isTpex) {
+      const officialClose = parsePrice(tpex.get(code)?.Close)
+      if (officialClose > 0) {
+        q.prev = officialClose
+        q.change = Math.round((q.price - officialClose) * 100) / 100
+        q.change_pct = officialClose ? Math.round(q.change / officialClose * 10000) / 100 : 0
+      }
     }
   }
 
