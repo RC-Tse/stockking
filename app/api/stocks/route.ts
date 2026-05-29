@@ -24,7 +24,6 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
     const high = Math.round(((indicators.high?.[0]) || price || 0) * 100) / 100
     const low = Math.round(((indicators.low?.[0]) || price || 0) * 100) / 100
     const volume = (indicators.volume?.[0]) || 0
-
     const change = Math.round((price - prev) * 100) / 100
     const change_pct = prev ? Math.round(change / prev * 10000) / 100 : 0
 
@@ -41,8 +40,7 @@ async function fetchYahooQuote(symbol: string, nameZh?: string) {
       volume,
       trade_date: new Date(meta.regularMarketTime * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
     }
-  } catch (err) {
-    console.error(`Error fetching ${symbol}:`, err)
+  } catch {
     return null
   }
 }
@@ -67,175 +65,180 @@ async function fetchYahooHistoricalQuote(symbol: string, date: string, nameZh?: 
 
     let targetIdx = -1
     for (let i = timestamps.length - 1; i >= 0; i--) {
-      const d = new Date(timestamps[i] * 1000)
-      const dStr = d.toISOString().split('T')[0]
-      if (dStr <= date && closes[i] !== null) {
-        targetIdx = i
-        break
-      }
+      const dStr = new Date(timestamps[i] * 1000).toISOString().split('T')[0]
+      if (dStr <= date && closes[i] !== null) { targetIdx = i; break }
     }
-
     if (targetIdx === -1) return null
 
     const price = closes[targetIdx]
     const prevPrice = targetIdx > 0 ? closes[targetIdx - 1] : null
     const change = prevPrice !== null ? Math.round((price - prevPrice) * 100) / 100 : 0
     const change_pct = (prevPrice !== null && prevPrice !== 0) ? Math.round(change / prevPrice * 10000) / 100 : 0
-    const trade_date = new Date(timestamps[targetIdx] * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
 
     return {
       symbol,
       name_zh: nameZh,
-      trade_date,
+      trade_date: new Date(timestamps[targetIdx] * 1000).toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }),
       price: Math.round(price * 100) / 100,
       prev: prevPrice !== null ? Math.round(prevPrice * 100) / 100 : null,
       change,
       change_pct
     }
-  } catch (err) {
-    console.error(`Error fetching historical ${symbol} for ${date}:`, err)
+  } catch {
     return null
   }
 }
 
-// Fetch TWSE and TPEX lists once, reuse for name lookup + exchange detection + close prices
+// Fetch both official exchange lists once; reuse for name/price/exchange detection
 async function fetchExchangeLists() {
   try {
     const [twseRes, tpexRes] = await Promise.all([
       fetch(TWSE_API, { next: { revalidate: 1800 } }),
       fetch(TPEX_API, { next: { revalidate: 1800 } })
     ])
-    return {
-      twseList: twseRes.ok ? await twseRes.json() as any[] : [],
-      tpexList: tpexRes.ok ? await tpexRes.json() as any[] : []
-    }
+    const twseList: any[] = twseRes.ok ? await twseRes.json() : []
+    const tpexList: any[] = tpexRes.ok ? await tpexRes.json() : []
+    return { twseList, tpexList }
   } catch {
     return { twseList: [], tpexList: [] }
   }
 }
 
-// Determine correct Yahoo Finance symbol (.TW for TWSE, .TWO for TPEX)
-function resolveYahooSym(code: string, twseCodes: Set<string>, tpexCodes: Set<string>): string {
-  if (code.includes('.')) return code
-  if (!/^\d[A-Z0-9]{3,5}$/.test(code)) return code
-  // API-based detection (most accurate)
-  if (twseCodes.has(code)) return code + '.TW'
-  if (tpexCodes.has(code)) return code + '.TWO'
-  // Heuristic fallback when API lists unavailable:
-  // 7xxx, 8xxx, and most 3xxx-6xxx odd ranges tend to be TPEX
-  const num = parseInt(code)
-  if (num >= 8000 && num <= 8999) return code + '.TWO'
-  if (num >= 7000 && num <= 7999) return code + '.TWO'
-  return code + '.TW'
+function buildMaps(twseList: any[], tpexList: any[]) {
+  const twse = new Map<string, any>()
+  const tpex = new Map<string, any>()
+  for (const s of twseList) if (s.Code) twse.set(s.Code, s)
+  for (const s of tpexList) if (s.SecuritiesCompanyCode) tpex.set(s.SecuritiesCompanyCode, s)
+  return { twse, tpex }
 }
 
-async function getOrFetchNames(
-  supabase: any,
-  syms: string[],
-  twseList: any[],
-  tpexList: any[]
-) {
+function parsePrice(val: string | undefined): number {
+  if (!val || val === '--') return 0
+  const p = parseFloat(val.replace(',', ''))
+  return isNaN(p) ? 0 : p
+}
+
+// Cache names from official lists to DB
+async function cacheNames(supabase: any, syms: string[], twse: Map<string, any>, tpex: Map<string, any>) {
   const { data: cached } = await supabase
-    .from('stock_names')
-    .select('symbol, name_zh')
-    .in('symbol', syms)
+    .from('stock_names').select('symbol, name_zh').in('symbol', syms)
+  const nameMap: Record<string, string> = Object.fromEntries(cached?.map((n: any) => [n.symbol, n.name_zh]) ?? [])
 
-  const nameMap = Object.fromEntries(cached?.map((n: any) => [n.symbol, n.name_zh]) ?? [])
-  const missing = syms.filter(s => !nameMap[s])
+  const toInsert: { symbol: string; name_zh: string }[] = []
+  for (const s of syms) {
+    if (nameMap[s]) continue
+    const code = s.replace(/\.(TW|TWO)$/, '')
+    const name = twse.get(code)?.Name || tpex.get(code)?.CompanyName || ''
+    if (name) {
+      nameMap[s] = name
+      toInsert.push({ symbol: s, name_zh: name })
+    }
+  }
+  if (toInsert.length > 0) {
+    await supabase.from('stock_names').upsert(toInsert).catch(() => {})
+  }
+  return nameMap
+}
 
-  if (missing.length > 0) {
-    try {
-      const toInsert: { symbol: string; name_zh: string }[] = []
-
-      missing.forEach(s => {
-        const code = s.replace(/\.(TW|TWO)$/, '')
-        let name = ''
-
-        // Check TWSE first, then TPEX
-        name = twseList.find((i: any) => i.Code === code)?.Name || ''
-        if (!name) {
-          const tpexMatch = tpexList.find((i: any) => i.SecumId === code || i.SecuritiesCompanyCode === code)
-          name = tpexMatch?.CompanyName || tpexMatch?.Name || ''
-        }
-
-        if (name) {
-          nameMap[s] = name
-          toInsert.push({ symbol: s, name_zh: name })
-        }
-      })
-
-      if (toInsert.length > 0) {
-        await supabase.from('stock_names').upsert(toInsert)
-      }
-    } catch (e) {
-      console.error('Fetch names error:', e)
+// Fetch quote for a Taiwan stock: try primary exchange, then alt, then fallback to official close
+async function fetchTwStockQuote(
+  code: string,
+  nameZh: string,
+  twse: Map<string, any>,
+  tpex: Map<string, any>
+): Promise<any | null> {
+  // Determine exchange from official lists first; heuristic as fallback
+  let primary: string
+  let alt: string
+  if (twse.has(code)) {
+    primary = code + '.TW'; alt = code + '.TWO'
+  } else if (tpex.has(code)) {
+    primary = code + '.TWO'; alt = code + '.TW'
+  } else {
+    // Heuristic: 7xxx-9xxx tend to be TPEX
+    const num = parseInt(code)
+    if (!isNaN(num) && num >= 7000) {
+      primary = code + '.TWO'; alt = code + '.TW'
+    } else {
+      primary = code + '.TW'; alt = code + '.TWO'
     }
   }
 
-  return nameMap
+  // Try primary Yahoo symbol
+  let q = await fetchYahooQuote(primary, nameZh)
+
+  // Try alternative exchange if primary failed
+  if (!q) q = await fetchYahooQuote(alt, nameZh)
+
+  // Final fallback: use official API close price directly (no live price, but always works)
+  if (!q) {
+    const twseData = twse.get(code)
+    const tpexData = tpex.has(code) ? tpex.get(code) : null
+    const close = parsePrice(twseData?.ClosingPrice) || parsePrice(tpexData?.Close)
+    const name = nameZh || twseData?.Name || tpexData?.CompanyName || code
+    if (close > 0) {
+      q = {
+        symbol: code,
+        name_zh: name,
+        price: close,
+        prev: close,
+        open: parsePrice(twseData?.OpeningPrice || tpexData?.Open),
+        high: parsePrice(twseData?.HighestPrice || tpexData?.High),
+        low: parsePrice(twseData?.LowestPrice || tpexData?.Low),
+        change: 0,
+        change_pct: 0,
+        volume: 0,
+        trade_date: new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' })
+      }
+    }
+  }
+
+  // Override prev with official TWSE close price for accuracy
+  if (q && twse.has(code)) {
+    const officialClose = parsePrice(twse.get(code)?.ClosingPrice)
+    if (officialClose > 0) {
+      q.prev = officialClose
+      q.change = Math.round((q.price - officialClose) * 100) / 100
+      q.change_pct = officialClose ? Math.round(q.change / officialClose * 10000) / 100 : 0
+    }
+  }
+
+  return q
 }
 
 export async function GET(req: NextRequest) {
   const syms = (req.nextUrl.searchParams.get('symbols') ?? '')
-    .split(',')
-    .map(s => s.trim().toUpperCase())
-    .filter(Boolean)
-
+    .split(',').map(s => s.trim().toUpperCase()).filter(Boolean)
   const date = req.nextUrl.searchParams.get('date')
-
   if (!syms.length) return NextResponse.json({}, { status: 400 })
 
   const supabase = await createClient()
-
-  // Single fetch for both exchange detection and name lookup
   const { twseList, tpexList } = await fetchExchangeLists()
-  const twseCodes = new Set(twseList.map((s: any) => s.Code).filter(Boolean))
-  const tpexCodes = new Set(tpexList.map((s: any) => s.SecumId || s.SecuritiesCompanyCode).filter(Boolean))
-
-  // Extract TWSE official close prices
-  const twseClose: Record<string, number> = {}
-  if (!date) {
-    for (const s of twseList) {
-      if (s.Code && s.ClosingPrice && s.ClosingPrice !== '--') {
-        const p = parseFloat(s.ClosingPrice.replace(',', ''))
-        if (!isNaN(p) && p > 0) twseClose[s.Code] = p
-      }
-    }
-  }
-
-  const nameMap = await getOrFetchNames(supabase, syms, twseList, tpexList)
+  const { twse, tpex } = buildMaps(twseList, tpexList)
+  const nameMap = await cacheNames(supabase, syms, twse, tpex)
 
   const results = await Promise.all(
-    syms.map(async s => {
-      const fetchSym = resolveYahooSym(s, twseCodes, tpexCodes)
-      const result = date
-        ? await fetchYahooHistoricalQuote(fetchSym, date, nameMap[s])
-        : await fetchYahooQuote(fetchSym, nameMap[s])
-      // If primary exchange fails, try the other one
-      if (!result && !date && /^\d[A-Z0-9]{3,5}$/.test(s) && !s.includes('.')) {
-        const altSym = fetchSym.endsWith('.TW') ? s + '.TWO' : s + '.TW'
-        return fetchYahooQuote(altSym, nameMap[s])
+    syms.map(s => {
+      const code = s.replace(/\.(TW|TWO)$/, '')
+      const name = nameMap[s] || ''
+
+      if (date) {
+        // Historical: use Yahoo only, determine suffix from maps
+        const suffix = twse.has(code) ? '.TW' : tpex.has(code) ? '.TWO' : (parseInt(code) >= 7000 ? '.TWO' : '.TW')
+        return fetchYahooHistoricalQuote(code + suffix, date, name)
       }
-      return result
+
+      // Non-Taiwan symbol (e.g. AAPL, BTC-USD): pass through as-is
+      if (s.includes('.') || !/^\d[A-Z0-9]{3,5}$/.test(s)) {
+        return fetchYahooQuote(s, name)
+      }
+
+      return fetchTwStockQuote(code, name, twse, tpex)
     })
   )
 
   const data: Record<string, any> = {}
+  results.forEach((q, i) => { if (q) data[syms[i]] = q })
 
-  results.forEach((q, i) => {
-    if (!q) return
-    const sym = syms[i]
-    const code = sym.replace(/\.(TW|TWO)$/, '')
-    // Override prev with TWSE official close for listed stocks
-    if (!date && twseCodes.has(code) && twseClose[code]) {
-      q.prev = twseClose[code]
-      q.change = Math.round((q.price - q.prev) * 100) / 100
-      q.change_pct = q.prev ? Math.round(q.change / q.prev * 10000) / 100 : 0
-    }
-    data[sym] = q
-  })
-
-  return NextResponse.json(data, {
-    headers: { 'Cache-Control': 'public, s-maxage=30' }
-  })
+  return NextResponse.json(data, { headers: { 'Cache-Control': 'public, s-maxage=30' } })
 }
